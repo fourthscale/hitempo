@@ -5,23 +5,15 @@ import { z } from "zod";
 
 import { getActiveOrg } from "@/lib/auth/context";
 import { getSenderName } from "@/lib/auth/sender-name";
-import { getBrandBrief } from "@/db/queries/brand";
-import { getCompanyById } from "@/db/queries/companies";
-import { getContactById } from "@/db/queries/contacts";
-import { getRecentInteractionsForPrompt, logInteraction } from "@/db/queries/interactions";
+import { logInteraction } from "@/db/queries/interactions";
 import { completeTask } from "@/db/queries/tasks";
 import {
-  getRecentMessagesByContact,
-  insertMessage,
   updateMessageStatus,
   updateMessageContent,
   getMessageById,
   type MessageStatusUpdate,
 } from "@/db/queries/messages";
-import { LlmGenerationServiceFactory } from "@/lib/ai/llm-generation-service-factory";
-import { buildOutboundMessagePrompt } from "@/lib/ai/prompts/outbound-message-prompt";
-import { extractSubjectAndBody } from "@/lib/messages/extract-subject";
-import { BrandBriefMissingError } from "@/lib/ai/errors";
+import { MessageGenerationOrchestratorFactory } from "@/lib/messages/message-generation-orchestrator-factory";
 import {
   parseChannelIntent,
   messageIntentToInteractionType,
@@ -71,130 +63,39 @@ export type GenerateMessageResult = {
 export async function generateMessageAction(
   formData: FormData,
 ): Promise<GenerateMessageResult> {
-  // 1. Validate input
+  // 1. Validate input.
   const parsed = generateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new Error("invalid_input");
   const input = parsed.data;
   const { channel, intent } = parseChannelIntent(input.channelIntent);
-  const locale = input.locale as MessageLocale;
 
-  // 2. Auth + sender
+  // 2. Auth + sender (derived from user metadata).
   const { activeOrganization, user } = await getActiveOrg();
   const sender = getSenderName(user);
 
-  // 3. Fetch context in parallel
-  const [contact, company, brief, interactionsList, previousMsgs] = await Promise.all([
-    getContactById(activeOrganization.id, input.contactId),
-    getCompanyById(activeOrganization.id, input.companyId),
-    getBrandBrief(activeOrganization.id),
-    getRecentInteractionsForPrompt(activeOrganization.id, input.companyId),
-    getRecentMessagesByContact(activeOrganization.id, input.contactId, 5),
-  ]);
-
-  if (!contact) throw new Error("contact_not_found");
-  if (!company) throw new Error("company_not_found");
-
-  // 4. Validate brand brief for the target locale
-  const briefLocale = brief?.[locale];
-  if (!briefLocale || !briefLocale.positioning) {
-    throw new BrandBriefMissingError(locale);
-  }
-
-  // 5. Build the signal context (or omit if the user toggled it off, OR if
-  //    no signal is present on the company in the first place).
-  const companySignal =
-    input.includeSignal && company.signalType && company.signalDetectedAt
-      ? {
-          type: company.signalType,
-          detectedAt: company.signalDetectedAt,
-          ageDays: Math.floor(
-            (Date.now() - new Date(company.signalDetectedAt).getTime()) / (24 * 60 * 60 * 1000),
-          ),
-        }
-      : null;
-
-  // 6. Build prompt
-  const { systemPrompt, userPrompt } = buildOutboundMessagePrompt({
-    brandBrief: briefLocale,
-    company: {
-      name: company.name,
-      industry: company.industry,
-      standing: company.standing,
-      score: company.score,
-    },
-    signal: companySignal,
-    contact: {
-      firstName: contact.firstName,
-      lastName: contact.lastName,
-      jobTitle: contact.jobTitle,
-      preferredLanguage: contact.preferredLanguage ?? locale,
-      relevance: contact.relevance,
-    },
-    interactions: interactionsList.map((i) => ({
-      occurredAt: i.occurredAt,
-      type: i.type,
-      channel: i.channel,
-      outcome: i.outcome,
-      summary: i.summary,
-      interestLevel: i.interestLevel,
-    })),
-    previousMessages: previousMsgs.map((m) => ({
-      createdAt: m.createdAt,
-      channel: m.channel as MessageChannel,
-      intent: m.intent as MessageIntent,
-      content: m.content,
-    })),
-    sender,
-    intent,
-    channel,
-    locale,
-    orientation: input.orientation || undefined,
-  });
-
-  // 7. Call the LLM via the Facade (auto-logs to llm_usage)
-  const svc = LlmGenerationServiceFactory.getInstance();
-  const { result, usage } = await svc.generate({
-    input: { systemPrompt, userPrompt },
-    context: {
-      organizationId: activeOrganization.id,
-      userId: user.id,
-      type: "outbound_message",
-    },
-  });
-
-  // 8. Parse subject + body for email ; LinkedIn = body only
-  const { subject, body } = extractSubjectAndBody(result.content, channel, locale);
-
-  // 9. Insert the message row, FK to llm_usage
-  const inserted = await insertMessage(activeOrganization.id, {
+  // 3. Delegate the whole pipeline to the orchestrator Facade.
+  const orchestrator = MessageGenerationOrchestratorFactory.getInstance();
+  const result = await orchestrator.generate({
+    organizationId: activeOrganization.id,
+    userId: user.id,
     contactId: input.contactId,
     companyId: input.companyId,
     taskId: input.taskId && input.taskId !== "" ? input.taskId : null,
-    userId: user.id,
     channel,
     intent,
-    locale,
-    orientation: input.orientation && input.orientation !== "" ? input.orientation : null,
-    content: result.content,
-    llmUsageId: usage.id,
+    locale: input.locale as MessageLocale,
+    includeSignal: input.includeSignal,
+    orientation:
+      input.orientation && input.orientation !== "" ? input.orientation : null,
+    sender,
   });
 
-  // 10. Patch the llm_usage backref now that we have the message ID
-  await svc.linkUsageToEntity(usage.id, "message", inserted.id);
-
-  // 11. Revalidate the surfaces that show messages
+  // 4. Revalidate the surfaces that show messages.
   revalidatePath(`/contacts/${input.contactId}`);
   revalidatePath(`/companies/${input.companyId}`);
   if (input.taskId) revalidatePath("/tasks");
 
-  return {
-    messageId: inserted.id,
-    channel,
-    subject,
-    body,
-    tokensIn: result.tokensIn,
-    tokensOut: result.tokensOut,
-  };
+  return result;
 }
 
 // ---------------------------------------------------------------------------
