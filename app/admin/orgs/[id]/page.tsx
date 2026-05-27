@@ -1,0 +1,218 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getTranslations, getLocale } from "next-intl/server";
+import { Pencil, Trash2 } from "lucide-react";
+import {
+  getOrgWithMembers,
+  inviteUserToOrgAction,
+  removeMemberFromOrgAction,
+  softDeleteOrgAction,
+} from "@/lib/actions/admin";
+import { selectOrgAction } from "@/lib/auth/actions";
+import { PageHeader } from "@/components/app/page-header";
+import { ConfirmForm } from "@/components/app/confirm-form";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+const ROLE_OPTIONS = ["owner", "admin", "commercial", "viewer"] as const;
+type Role = (typeof ROLE_OPTIONS)[number];
+
+export default async function AdminOrgDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const result = await getOrgWithMembers(id);
+  if (!result) notFound();
+  const { org, members } = result;
+
+  const locale = await getLocale();
+  const t = await getTranslations("admin.orgs");
+  const tDetail = await getTranslations("admin.orgs.detail");
+  const tInvite = await getTranslations("admin.orgs.detail.memberInvite");
+  const tRoles = await getTranslations("admin.orgs.detail.roles");
+  const tCols = await getTranslations("admin.orgs.detail.memberColumns");
+  const tDelete = await getTranslations("admin.orgs.delete");
+
+  const enterOrg = selectOrgAction.bind(null, org.id);
+
+  return (
+    <div className="max-w-[1000px] mx-auto">
+      <PageHeader
+        title={org.name}
+        subtitle={`${tDetail("subtitle")} · ${org.slug}`}
+        right={
+          <div className="flex items-center gap-2">
+            <form action={enterOrg}>
+              <Button type="submit" size="sm" variant="outline">
+                {t("select")}
+              </Button>
+            </form>
+            <Link href={`/admin/orgs/${org.id}/edit`}>
+              <Button type="button" size="sm" variant="outline">
+                <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                Edit
+              </Button>
+            </Link>
+            {!org.deletedAt && (
+              <ConfirmForm action={softDeleteOrgAction} message={tDelete("confirm")}>
+                <input type="hidden" name="id" value={org.id} />
+                <Button
+                  type="submit"
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  {tDelete("trigger")}
+                </Button>
+              </ConfirmForm>
+            )}
+          </div>
+        }
+      />
+
+      {org.deletedAt && (
+        <div className="mb-4 rounded-md border border-rose-300 bg-rose-50 px-4 py-2 text-sm text-rose-900">
+          {t("deletedBadge")} · {new Date(org.deletedAt).toLocaleString(locale)}
+        </div>
+      )}
+
+      {/* Org info */}
+      <Card className="p-6 mb-6">
+        <h2 className="font-serif text-base font-bold mb-4">{tDetail("infoTitle")}</h2>
+        <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <InfoRow label="Plan" value={org.plan} />
+          <InfoRow label="Default locale" value={org.defaultLocale} />
+          <InfoRow
+            label="Supported locales"
+            value={(org.supportedLocales ?? []).join(", ")}
+          />
+          <InfoRow
+            label="Created"
+            value={new Date(org.createdAt).toLocaleString(locale)}
+          />
+        </dl>
+      </Card>
+
+      {/* Members */}
+      <Card className="p-0 overflow-hidden mb-6">
+        <div className="p-5 border-b border-border">
+          <h2 className="font-serif text-base font-bold">{tDetail("membersTitle")}</h2>
+        </div>
+        {members.length === 0 ? (
+          <p className="px-5 py-8 text-sm text-muted-foreground text-center">
+            {tDetail("membersEmpty")}
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-secondary/40 text-muted-foreground text-xs">
+              <tr className="text-left">
+                <th className="px-4 py-2 font-medium">{tCols("name")}</th>
+                <th className="px-4 py-2 font-medium">{tCols("email")}</th>
+                <th className="px-4 py-2 font-medium">{tCols("role")}</th>
+                <th className="px-4 py-2 font-medium">{tCols("joined")}</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {members.map((m) => {
+                const displayName =
+                  [m.firstName, m.lastName].filter(Boolean).join(" ") || "—";
+                return (
+                  <tr key={m.userId} className="hover:bg-secondary/30">
+                    <td className="px-4 py-3">{displayName}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{m.email ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      <span className="capitalize text-xs px-1.5 py-0.5 rounded bg-secondary">
+                        {tRoles(m.role as Role)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {new Date(m.joinedAt).toLocaleDateString(locale)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <ConfirmForm
+                        action={removeMemberFromOrgAction}
+                        message={tDetail("removeConfirm")}
+                      >
+                        <input type="hidden" name="orgId" value={org.id} />
+                        <input type="hidden" name="userId" value={m.userId} />
+                        <Button
+                          type="submit"
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:bg-red-50"
+                        >
+                          {tDetail("remove")}
+                        </Button>
+                      </ConfirmForm>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* Invite */}
+      <Card className="p-6">
+        <h2 className="font-serif text-base font-bold">{tInvite("title")}</h2>
+        <p className="text-sm text-muted-foreground mt-1 mb-4">
+          {tInvite("subtitle")}
+        </p>
+        <form action={inviteUserToOrgAction} className="space-y-4">
+          <input type="hidden" name="orgId" value={org.id} />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="email">{tInvite("email")}</Label>
+              <Input id="email" name="email" type="email" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="role">{tInvite("role")}</Label>
+              <select
+                id="role"
+                name="role"
+                defaultValue="commercial"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {ROLE_OPTIONS.map((r) => (
+                  <option key={r} value={r}>
+                    {tRoles(r)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="firstName">{tInvite("firstName")}</Label>
+              <Input id="firstName" name="firstName" maxLength={100} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="lastName">{tInvite("lastName")}</Label>
+              <Input id="lastName" name="lastName" maxLength={100} />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <Button type="submit">{tInvite("submit")}</Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div>
+      <dt className="text-xs uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="text-foreground mt-0.5">{value ?? "—"}</dd>
+    </div>
+  );
+}

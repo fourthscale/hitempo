@@ -1,0 +1,662 @@
+{
+  "taskType": {
+    "email": "Email",
+    "linkedin": "LinkedIn",
+    "phone": "Appel",
+    "visit": "Visite",
+    "follow_up": "Relance",
+    "research": "Recherche",
+    "other": "Autre"
+  },
+  "taskPriority": {
+    "low": "Faible",
+    "medium": "Moyenne",
+    "high": "Haute",
+    "urgent": "Urgent"
+  },
+  "interactionType": {
+    "first_contact": "Premier contact",
+    "follow_up": "Relance",
+    "call": "Appel",
+    "visit": "Visite",
+    "linkedin": "LinkedIn",
+    "meeting": "Réunion",
+    "demo": "Démo",
+    "proposal_sent": "Proposition envoyée",
+    "note": "Note"
+  },
+  "interactionChannel": {
+    "email": "Email",
+    "linkedin": "LinkedIn",
+    "phone": "Téléphone",
+    "in_person": "En personne",
+    "video": "Vidéo",
+    "other": "Autre"
+  },
+  "messageIntent": {
+    "first_contact": "Premier contact",
+    "follow_up": "Relance",
+    "meeting_request": "Demande de RDV",
+    "proposal_send": "Proposition",
+    "reconnect": "Reprise de contact",
+    "other": "Autre"
+  },
+  "messageChannel": {
+    "email": "Email",
+    "linkedin": "LinkedIn"
+  },
+  "interactionOutcome": {
+    "no_response": "Pas de réponse",
+    "positive_reply": "Réponse positive",
+    "negative_reply": "Réponse négative",
+    "out_of_office": "Absent",
+    "wrong_contact": "Mauvais contact",
+    "rdv_scheduled": "RDV planifié",
+    "opted_out": "Désabonné"
+  },
+  "common": {
+    "appName": "hitempo",
+    "tagline": "Le tempo de la prospection B2B"
+  },
+  "auth": {
+    "login": {
+      "title": "Connexion à hitempo",
+      "email": "Email",
+      "password": "Mot de passe",
+      "submit": "Se connecter",
+      "forgot": "Mot de passe oublié ?",
+      "info": {
+        "password_set": "Mot de passe défini. Connecte-toi avec tes nouveaux identifiants."
+      },
+      "errors": {
+        "invalid_input": "Vérifie ton email et ton mot de passe.",
+        "invalid_credentials": "Email ou mot de passe incorrect.",
+        "revoked": "Ton accès a été révoqué. Contacte ton administrateur si tu pensais avoir encore accès.",
+        "unknown": "Quelque chose s'est mal passé. Réessaye."
+      }
+    },
+    "forgot": {
+      "title": "Réinitialiser ton mot de passe",
+      "email": "Email",
+      "submit": "Envoyer le lien",
+      "sent": "Si un compte existe pour cet email, un lien de réinitialisation est en route.",
+      "backToLogin": "Retour à la connexion"
+    },
+    "reset": {
+      "title": "Choisis un nouveau mot de passe",
+      "password": "Nouveau mot de passe",
+      "submit": "Mettre à jour le mot de passe",
+      "errors": {
+        "weak_password": "Le mot de passe doit faire au moins 6 caractères.",
+        "session_expired": "Ton lien a expiré. Redemandes-en un."
+      }
+    }
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "companies": "Entreprises",
+    "contacts": "Contacts",
+    "tasks": "Tâches",
+    "sequences": "Séquences",
+    "field": "Terrain",
+    "messagesNav": "Messages",
+    "reporting": "Reporting",
+    "settings": "Paramètres",
+    "switchOrg": "Changer d'org",
+    "platformAdmins": "Admins plateforme",
+    "signOut": "Se déconnecter"
+  },
+  "admin": {
+    "nav": {
+      "orgs": "Organisations",
+      "platformAdmins": "Admins plateforme"
+    },
+    "orgs": {
+      "title": "Toutes les organisations",
+      "subtitle": "Choisis une org à inspecter. Tu agiras pour son compte jusqu'à ce que tu sortes.",
+      "select": "Entrer",
+      "open": "Ouvrir",
+      "new": "Nouvelle organisation",
+      "deletedBadge": "supprimée",
+      "columns": {
+        "name": "Nom",
+        "slug": "Slug",
+        "plan": "Plan",
+        "created": "Créée le"
+      },
+      "create": {
+        "title": "Nouvelle organisation",
+        "subtitle": "Initialise un nouveau tenant sur la plateforme.",
+        "fields": {
+          "name": "Nom",
+          "slug": "Slug",
+          "slugHint": "Identifiant URL-friendly. Généré automatiquement depuis le nom si laissé vide.",
+          "plan": "Plan",
+          "defaultLocale": "Langue par défaut",
+          "supportedLocales": "Langues supportées",
+          "supportedLocalesHint": "Séparées par virgule, ex: fr,en"
+        },
+        "submit": "Créer l'organisation",
+        "cancel": "Annuler"
+      },
+      "edit": {
+        "title": "Modifier l'organisation",
+        "subtitle": "Mets à jour le plan, les langues et les méta-données.",
+        "submit": "Enregistrer",
+        "cancel": "Annuler"
+      },
+      "delete": {
+        "trigger": "Supprimer l'organisation",
+        "confirm": "Sûr ? L'organisation sera marquée comme supprimée. Les données restent en base."
+      },
+      "detail": {
+        "subtitle": "Membres et paramètres de ce tenant.",
+        "infoTitle": "Informations",
+        "membersTitle": "Membres",
+        "membersEmpty": "Aucun membre. Invite-en un ci-dessous.",
+        "membersAdd": "Inviter un membre",
+        "memberColumns": {
+          "name": "Nom",
+          "email": "Email",
+          "role": "Rôle",
+          "joined": "Rejoint le",
+          "actions": ""
+        },
+        "memberInvite": {
+          "title": "Inviter un nouveau membre",
+          "subtitle": "Un email d'invitation sera envoyé. L'utilisateur définit son mot de passe à la première connexion.",
+          "email": "Email",
+          "firstName": "Prénom",
+          "lastName": "Nom",
+          "role": "Rôle",
+          "submit": "Envoyer l'invitation",
+          "submitting": "Envoi…"
+        },
+        "remove": "Retirer",
+        "removeConfirm": "Retirer ce membre de l'org ? Son compte auth reste — seule l'appartenance est supprimée.",
+        "roles": {
+          "owner": "Propriétaire",
+          "admin": "Admin",
+          "commercial": "Commercial",
+          "viewer": "Lecteur"
+        }
+      }
+    },
+    "platformAdmins": {
+      "title": "Admins plateforme",
+      "subtitle": "Utilisateurs avec accès admin cross-org.",
+      "rootBadge": "root",
+      "columns": {
+        "name": "Nom",
+        "email": "Email",
+        "note": "Note",
+        "grantedBy": "Accordé par",
+        "grantedAt": "Accordé le",
+        "actions": ""
+      },
+      "promote": {
+        "title": "Promouvoir un admin plateforme",
+        "subtitle": "Si l'email n'existe pas encore, une invitation sera envoyée.",
+        "email": "Email",
+        "firstName": "Prénom",
+        "lastName": "Nom",
+        "note": "Note (optionnel)",
+        "submit": "Promouvoir",
+        "submitting": "Promotion…"
+      },
+      "revoke": "Révoquer",
+      "revokeConfirm": "Révoquer l'accès admin plateforme ? Les éventuelles appartenances à des orgs sont conservées.",
+      "revokeSelfBlocked": "Tu ne peux pas révoquer ton propre accès admin — demande à un autre admin."
+    },
+    "impersonation": {
+      "banner": "Mode admin plateforme — tu consultes <strong>{orgName}</strong>",
+      "exit": "Sortir"
+    }
+  },
+  "topbar": {
+    "searchPlaceholder": "Rechercher entreprise, contact, action...",
+    "notifications": "Notifications",
+    "newCompany": "Nouvelle entreprise"
+  },
+  "pages": {
+    "dashboard": {
+      "greeting": "Bonjour {name}",
+      "subtitle": "{date} · <em>{actions, plural, one {# action vous attend} other {# actions vous attendent}}</em>",
+      "sideHeader": "Semaine {week} · Micro-zone : {zone}",
+      "sideSubheader": "{count} nouveaux prospects sourcés cette semaine",
+      "kpis": {
+        "actionsToday": "Actions du jour",
+        "actionsTodayDetail": "{emails} emails · {calls} appels · {visits} visites",
+        "overdue": "Relances en retard",
+        "overdueDetail": "Plus ancienne : {days, plural, one {# jour} other {# jours}}",
+        "hotTargets": "Cibles chaudes",
+        "hotTargetsDetail": "Score > 75 · à traiter cette semaine",
+        "responseRate": "Taux de réponse 30j",
+        "responseRateDetail": "+{points} pts vs mois précédent"
+      },
+      "today": {
+        "title": "À traiter aujourd'hui",
+        "sortHint": "Triées par priorité IA",
+        "viewAll": "Voir toutes les tâches",
+        "empty": "Rien à traiter aujourd'hui.",
+        "emptyAction": "Créer une tâche →"
+      },
+      "topTargets": {
+        "title": "Top cibles cette semaine",
+        "empty": "Aucune entreprise scorée pour l'instant."
+      },
+      "recentActivity": {
+        "title": "Activité récente",
+        "empty": "Aucune interaction enregistrée."
+      },
+      "placeholder": "Les vraies données arriveront au fil des prochains sprints."
+    },
+    "companies": {
+      "placeholder": "Le CRUD entreprises arrive au sprint 04.",
+      "count": "{count, plural, =0 {Aucun résultat} one {1 résultat} other {# résultats}}",
+      "new": "Nouvelle entreprise",
+      "importCsv": "Importer CSV",
+      "importCsvSoon": "L'import CSV arrive au sprint 09",
+      "filtersSoon": "Les filtres arrivent avec les segments / micro-zones",
+      "moreFilters": "Plus de filtres",
+      "paginationShowing": "{shown} sur {total} affichés",
+      "createSubmit": "Créer l'entreprise",
+      "updateSubmit": "Enregistrer",
+      "editTitle": "Modifier {name}",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "backToList": "Retour à la liste",
+      "backToDetail": "Retour au détail",
+      "breadcrumb": "Entreprises",
+      "stars": "étoiles",
+      "employees": "employés",
+      "empty": "Aucune entreprise pour l'instant.",
+      "emptyAction": "Créer la première →",
+      "columns": {
+        "company": "Entreprise",
+        "segment": "Segment",
+        "microZone": "Micro-zone",
+        "name": "Nom",
+        "industry": "Secteur",
+        "score": "Score",
+        "signal": "Signal",
+        "contactPrio": "Contact prio",
+        "status": "Statut",
+        "nextAction": "Prochaine action"
+      },
+      "actions": {
+        "call": "Appeler",
+        "task": "Tâche",
+        "aiMessage": "Générer message IA",
+        "soon": "Arrive dans un sprint ultérieur",
+        "tasksSoon": "Les tâches arrivent au sprint 05",
+        "aiSoon": "La génération IA arrive au sprint 07"
+      },
+      "signal": {
+        "label": "Signal déclencheur",
+        "source": "Source :"
+      },
+      "info": {
+        "title": "Informations entreprise",
+        "address": "Adresse principale",
+        "noPrimarySite": "— Aucun site principal défini",
+        "standing": "Standing",
+        "size": "Taille",
+        "legalName": "Raison sociale",
+        "primaryLocale": "Langue principale",
+        "addedAt": "Ajoutée le",
+        "relationship": "Relation",
+        "industry": "Secteur"
+      },
+      "priorityContact": {
+        "title": "Contact prioritaire",
+        "viewContact": "Voir",
+        "lang": "Langue",
+        "relevance": "Pertinence",
+        "empty": "Aucun contact prioritaire. Clique sur Modifier pour en choisir un.",
+        "emptyNoContacts": "Aucun contact rattaché à cette entreprise.",
+        "change": "Modifier",
+        "define": "Définir",
+        "save": "Enregistrer",
+        "cancel": "Annuler",
+        "none": "— Aucun contact prioritaire",
+        "dialogTitle": "Contact prioritaire",
+        "dialogDescription": "Choisis le contact à mettre en avant comme point de contact principal pour cette entreprise.",
+        "selectLabel": "Contact"
+      },
+      "scoreBreakdown": {
+        "title": "Détail du score",
+        "standing": "Maturité de la relation",
+        "signal": "Signal actif",
+        "engagement": "Engagement",
+        "tasks": "Tâches ouvertes",
+        "contact": "Contact prioritaire",
+        "computedAt": "Calculé",
+        "noScore": "Pas encore scoré — interagissez ou mettez à jour la fiche pour déclencher le calcul.",
+        "recompute": "Recalculer"
+      },
+      "fieldNotes": {
+        "title": "Notes terrain",
+        "add": "Ajouter",
+        "empty": "Aucune note terrain pour l'instant.",
+        "soon": "Les notes multiples arrivent avec les interactions (sprint 05)"
+      },
+      "nextAction": {
+        "title": "Prochaine action",
+        "placeholder": "La prochaine action s'affichera ici une fois les tâches en place (sprint 05)."
+      },
+      "recentActivity": {
+        "title": "Activité récente",
+        "placeholder": "La timeline arrive avec les interactions (sprint 05)."
+      },
+      "fields": {
+        "name": "Nom",
+        "legalName": "Raison sociale",
+        "website": "Site web",
+        "linkedin": "LinkedIn",
+        "industry": "Secteur",
+        "sizeEstimate": "Taille",
+        "standing": "Standing (1-5 étoiles)",
+        "relationshipType": "Relation",
+        "primaryLocale": "Langue principale",
+        "status": "Statut",
+        "signalType": "Type de signal",
+        "signalSource": "Source du signal",
+        "notes": "Notes",
+        "parent": "Entreprise parente (groupe)",
+        "parentNone": "— Indépendante (pas de parent)"
+      },
+      "group": {
+        "title": "Relations · Groupe",
+        "viewRoot": "Voir tout le groupe",
+        "viewRootForSiblings": "Voir l'entreprise mère pour la liste",
+        "parentLabel": "Parent :",
+        "rootLabel": "Tête de groupe :",
+        "rootBadge": "Tête de groupe",
+        "rootSubtitle": "{count, plural, =0 {Aucune filiale} one {# filiale} other {# filiales}}",
+        "otherMembers": "Filiales",
+        "stats": {
+          "companies": "Entreprises",
+          "sites": "Sites",
+          "activeProspects": "Prospects actifs"
+        }
+      },
+      "sites": {
+        "title": "Sites",
+        "empty": "Aucun site pour l'instant.",
+        "addNew": "Nouveau site",
+        "addSubmit": "Créer le site",
+        "cancel": "Annuler",
+        "delete": "Supprimer",
+        "columns": {
+          "name": "Nom",
+          "type": "Type",
+          "address": "Adresse",
+          "primary": "Principal"
+        },
+        "fields": {
+          "name": "Nom",
+          "type": "Type",
+          "address": "Adresse",
+          "postalCode": "Code postal",
+          "city": "Ville",
+          "country": "Pays (ISO2)",
+          "isPrimary": "Site principal"
+        }
+      }
+    },
+    "contacts": {
+      "placeholder": "Le CRUD contacts arrive au sprint 04.",
+      "titleSection": "Contacts",
+      "count": "{count, plural, =0 {Aucun contact} one {1 contact} other {# contacts}}",
+      "new": "Nouveau contact",
+      "createSubmit": "Créer le contact",
+      "updateSubmit": "Enregistrer",
+      "editTitle": "Modifier {name}",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "backToList": "Retour à la liste",
+      "backToDetail": "Retour au détail",
+      "empty": "Aucun contact pour l'instant.",
+      "emptyForCompany": "Aucun contact rattaché à cette entreprise.",
+      "emptyAction": "Créer le premier →",
+      "columns": {
+        "name": "Nom",
+        "company": "Entreprise",
+        "role": "Rôle",
+        "email": "Email",
+        "relevance": "Pertinence",
+        "status": "Statut"
+      },
+      "fields": {
+        "company": "Entreprise",
+        "site": "Site",
+        "siteNone": "— Pas attaché à un site spécifique",
+        "siteUnavailable": "Sélectionne d'abord une entreprise",
+        "firstName": "Prénom",
+        "lastName": "Nom",
+        "jobTitle": "Fonction",
+        "role": "Rôle",
+        "email": "Email",
+        "phone": "Téléphone",
+        "linkedin": "LinkedIn",
+        "preferredLanguage": "Langue préférée",
+        "preferredChannel": "Canal préféré",
+        "relevance": "Pertinence",
+        "status": "Statut",
+        "notes": "Notes"
+      }
+    },
+    "tasks": {
+      "title": "Tâches",
+      "subtitle": "{overdue, plural, =0 {} one {# en retard · } other {# en retard · }}{today} aujourd'hui · {total} actives au total",
+      "subtitleNoOverdue": "{today} aujourd'hui · {total} actives au total",
+      "newTask": "Nouvelle tâche",
+      "tabs": {
+        "all": "Toutes",
+        "today": "Aujourd'hui",
+        "week": "Cette semaine",
+        "later": "À venir"
+      },
+      "filters": {
+        "type": "Type",
+        "microZone": "Micro-zone",
+        "me": "Moi",
+        "allMembers": "Tous",
+        "statusActive": "Actives",
+        "statusPending": "À faire",
+        "statusInProgress": "En cours",
+        "statusCompleted": "Terminées"
+      },
+      "views": {
+        "list": "Liste",
+        "kanban": "Kanban",
+        "calendar": "Calendrier"
+      },
+      "groups": {
+        "overdue": "EN RETARD",
+        "today": "AUJOURD'HUI",
+        "tomorrow": "DEMAIN",
+        "week": "CETTE SEMAINE",
+        "later": "À VENIR",
+        "noDate": "SANS ÉCHÉANCE"
+      },
+      "markDone": "Marquer fait",
+      "delete": "Supprimer",
+      "actions": {
+        "statusSection": "Statut",
+        "pending": "À faire",
+        "inProgress": "En cours",
+        "completed": "Terminée",
+        "logInteraction": "Enregistrer une interaction",
+        "edit": "Modifier",
+        "delete": "Supprimer"
+      },
+      "empty": "Rien ici. Profites-en.",
+      "emptyGroup": "Aucune tâche sur cette période.",
+      "footer": {
+        "doneThisWeek": "{count, plural, one {# tâche faite} other {# tâches faites}} cette semaine",
+        "vsLastWeek": "↑ +{count} vs semaine dernière",
+        "responseRate": "{rate}% taux de réponse moyen",
+        "sortedBy": "Triées par : priorité IA → urgence → score"
+      },
+      "overdueBadge": "{days, plural, one {# jour de retard} other {# jours de retard}}",
+      "searchPlaceholder": "Rechercher une tâche...",
+      "signalPrefix": "Signal : {signal}",
+      "assigneeMe": "Moi",
+      "assigneeMeSuffix": "(moi)",
+      "breadcrumb": "Tâches",
+      "fields": {
+        "type": "Type",
+        "title": "Titre",
+        "description": "Description",
+        "priority": "Priorité",
+        "dueAt": "Échéance",
+        "company": "Entreprise",
+        "contact": "Contact",
+        "assignee": "Assigné à",
+        "noCompany": "— Aucune entreprise",
+        "noContact": "— Aucun contact",
+        "selectCompanyFirst": "Sélectionne d'abord une entreprise."
+      },
+      "create": {
+        "title": "Nouvelle tâche",
+        "submit": "Créer la tâche",
+        "cancel": "Annuler"
+      },
+      "edit": {
+        "title": "Modifier la tâche",
+        "submit": "Enregistrer"
+      }
+    },
+    "interactions": {
+      "title": "Historique des interactions",
+      "logNew": "+ Enregistrer une interaction",
+      "empty": "Aucune interaction pour l'instant.",
+      "fields": {
+        "type": "Type",
+        "channel": "Canal",
+        "outcome": "Résultat",
+        "summary": "Résumé",
+        "occurredAt": "Date",
+        "interestLevel": "Intérêt (0-5)"
+      },
+      "submit": "Enregistrer",
+      "cancel": "Annuler",
+      "setOutcome": "Définir le résultat",
+      "clearOutcome": "Effacer le résultat"
+    },
+    "settings": {
+      "placeholder": "D'autres paramètres arriveront dans un sprint ultérieur.",
+      "brandSectionTitle": "Voix de marque",
+      "brandSectionDescription": "Configurez la manière dont l'IA écrit en votre nom.",
+      "brandSectionLink": "Éditer la voix de marque",
+      "brand": {
+        "title": "Voix de marque",
+        "subtitle": "Utilisée par l'IA d'hitempo pour générer des messages alignés avec votre marque. Remplissez au moins une langue pour activer la génération dans cette langue.",
+        "tabFr": "Français",
+        "tabEn": "English",
+        "fields": {
+          "positioning": "Positionnement",
+          "positioningHint": "Une ou deux phrases : qui vous êtes et pour qui. Colonne vertébrale du prompt système.",
+          "toneOfVoice": "Ton et voix",
+          "toneOfVoiceHint": "Adjectifs décrivant la voix. Un par ligne — par ex. chaleureux, expert, concis.",
+          "forbiddenWords": "Mots interdits",
+          "forbiddenWordsHint": "Mots ou expressions que l'IA ne doit jamais utiliser. Un par ligne.",
+          "signatureExpressions": "Expressions signature",
+          "signatureExpressionsHint": "Expressions caractéristiques de votre marque à privilégier. Une par ligne.",
+          "valueProps": "Propositions de valeur",
+          "valuePropsHint": "Trois à cinq arguments en bullets. Un par ligne.",
+          "proofPoints": "Preuves sociales",
+          "proofPointsHint": "Preuves sociales mobilisables. Une par ligne — par ex. clients phares."
+        },
+        "save": "Enregistrer la voix de marque",
+        "saved": "Enregistré",
+        "listPlaceholder": "Un par ligne"
+      }
+    },
+    "messages": {
+      "modalTitle": "Génération IA",
+      "modalSubtitleArrow": "→",
+      "paramsHeader": "Paramètres",
+      "resultHeader": "Message généré",
+      "fields": {
+        "channelIntent": "Type de message",
+        "signalDetected": "Signal détecté",
+        "signalInclude": "Mentionner dans le message",
+        "signalAge": "{days}j",
+        "language": "Langue",
+        "languageHint": "Langue préférée de {contact}",
+        "brandBriefActive": "Brief de marque actif",
+        "brandBriefEdit": "Modifier le brief →",
+        "brandBriefMissingTitle": "Aucun brief pour {locale}",
+        "brandBriefMissingDescription": "Configurez votre voix de marque pour activer la génération dans cette langue.",
+        "brandBriefMissingCta": "Ouvrir les paramètres →",
+        "subject": "Objet",
+        "body": "Corps du message",
+        "orientation": "Orientation pour la régénération",
+        "orientationPlaceholder": "ex : plus court, mentionne le contact précédent"
+      },
+      "channelIntentOptions": {
+        "email-first_contact":      "Email — Premier contact",
+        "email-follow_up":          "Email — Relance",
+        "email-meeting_request":    "Email — Demande de RDV",
+        "email-proposal_send":      "Email — Proposition",
+        "email-reconnect":          "Email — Reprise de contact",
+        "linkedin-first_contact":   "LinkedIn — Premier contact",
+        "linkedin-follow_up":       "LinkedIn — Relance",
+        "linkedin-meeting_request": "LinkedIn — Demande de RDV",
+        "linkedin-reconnect":       "LinkedIn — Reprise de contact"
+      },
+      "languageOption": {
+        "fr": "Français",
+        "en": "English"
+      },
+      "actions": {
+        "generate": "Générer",
+        "generating": "Génération en cours…",
+        "regenerate": "Régénérer",
+        "regenerateConfirm": "Appliquer",
+        "regenerateCancel": "Annuler",
+        "edit": "Modifier",
+        "preview": "Aperçu",
+        "copy": "Copier",
+        "copied": "Copié dans le presse-papier",
+        "logInteraction": "Logger l'envoi",
+        "logInteractionDone": "Logué",
+        "markTaskDone": "Marquer la tâche comme faite",
+        "markTaskDoneDone": "Tâche terminée",
+        "close": "Fermer",
+        "fromTask": "Générer un message",
+        "fromContact": "Générer un message"
+      },
+      "emptyState": "Choisis tes paramètres et clique sur Générer.",
+      "legend": {
+        "personalize": "Variables personnalisées",
+        "signalInjected": "Signal injecté"
+      },
+      "metadata": {
+        "generatedAgo": "Généré · {tokens} tokens"
+      },
+      "errors": {
+        "brandBriefMissing": "Brief de marque non configuré pour {locale}.",
+        "generationFailed": "La génération a échoué. Réessaie.",
+        "noContact": "Cette tâche n'a pas de contact — la génération a besoin d'un contact."
+      }
+    },
+    "sites": {
+      "breadcrumbCompanies": "Entreprises",
+      "primary": "Principal",
+      "primaryFlag": "Contact principal",
+      "setPrimary": "Définir principal",
+      "addressTitle": "Adresse",
+      "noAddress": "Aucune adresse renseignée.",
+      "noContacts": "Aucun contact rattaché à ce site.",
+      "siteInfo": "Infos site",
+      "type": "Type",
+      "standing": "Standing",
+      "primaryContact": "Contact principal",
+      "notes": "Notes"
+    }
+  }
+}
