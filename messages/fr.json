@@ -230,6 +230,8 @@
         },
         "remove": "Retirer",
         "removeConfirm": "Retirer ce membre de l'org ? Son compte auth reste — seule l'appartenance est supprimée.",
+        "pendingBadge": "En attente",
+        "resend": "Renvoyer l'invitation",
         "roles": {
           "owner": "Propriétaire",
           "admin": "Admin",
@@ -262,7 +264,9 @@
       },
       "revoke": "Révoquer",
       "revokeConfirm": "Révoquer l'accès admin plateforme ? Les éventuelles appartenances à des orgs sont conservées.",
-      "revokeSelfBlocked": "Tu ne peux pas révoquer ton propre accès admin — demande à un autre admin."
+      "revokeSelfBlocked": "Tu ne peux pas révoquer ton propre accès admin — demande à un autre admin.",
+      "pendingBadge": "En attente",
+      "resend": "Renvoyer l'invitation"
     },
     "impersonation": {
       "banner": "Mode admin plateforme — tu consultes <strong>{orgName}</strong>",

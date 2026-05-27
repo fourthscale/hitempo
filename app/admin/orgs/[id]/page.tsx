@@ -6,6 +6,7 @@ import {
   getOrgWithMembers,
   inviteUserToOrgAction,
   removeMemberFromOrgAction,
+  resendInvitationAction,
   softDeleteOrgAction,
 } from "@/lib/actions/admin";
 import { selectOrgAction } from "@/lib/auth/actions";
@@ -125,7 +126,16 @@ export default async function AdminOrgDetailPage({
                 return (
                   <tr key={m.userId} className="hover:bg-secondary/30">
                     <td className="px-4 py-3">{displayName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{m.email ?? "—"}</td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <span>{m.email ?? "—"}</span>
+                        {!m.isConfirmed && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">
+                            {tDetail("pendingBadge")}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <span className="capitalize text-xs px-1.5 py-0.5 rounded bg-secondary">
                         {tRoles(m.role as Role)}
@@ -135,20 +145,31 @@ export default async function AdminOrgDetailPage({
                       {new Date(m.joinedAt).toLocaleDateString(locale)}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <ConfirmForm
-                        action={removeMemberFromOrgAction}
-                        message={tDetail("removeConfirm")}
-                      >
-                        <input type="hidden" name="orgId" value={org.id} />
-                        <input type="hidden" name="userId" value={m.userId} />
-                        <SubmitButton
-                          size="sm"
-                          variant="ghost"
-                          className="text-red-600 hover:bg-red-50"
+                      <div className="inline-flex items-center gap-1">
+                        {!m.isConfirmed && m.email && (
+                          <form action={resendInvitationAction}>
+                            <input type="hidden" name="email" value={m.email} />
+                            <input type="hidden" name="orgId" value={org.id} />
+                            <SubmitButton size="sm" variant="ghost">
+                              {tDetail("resend")}
+                            </SubmitButton>
+                          </form>
+                        )}
+                        <ConfirmForm
+                          action={removeMemberFromOrgAction}
+                          message={tDetail("removeConfirm")}
                         >
-                          {tDetail("remove")}
-                        </SubmitButton>
-                      </ConfirmForm>
+                          <input type="hidden" name="orgId" value={org.id} />
+                          <input type="hidden" name="userId" value={m.userId} />
+                          <SubmitButton
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50"
+                          >
+                            {tDetail("remove")}
+                          </SubmitButton>
+                        </ConfirmForm>
+                      </div>
                     </td>
                   </tr>
                 );

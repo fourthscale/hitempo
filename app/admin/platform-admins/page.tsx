@@ -2,6 +2,7 @@ import { getTranslations, getLocale } from "next-intl/server";
 import {
   listPlatformAdmins,
   promotePlatformAdminAction,
+  resendInvitationAction,
   revokePlatformAdminAction,
 } from "@/lib/actions/admin";
 import { getCurrentContext } from "@/lib/auth/context";
@@ -47,7 +48,16 @@ export default async function AdminPlatformAdminsPage() {
               return (
                 <tr key={a.userId} className="hover:bg-secondary/30">
                   <td className="px-4 py-3">{displayName}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{a.email ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <span>{a.email ?? "—"}</span>
+                      {!a.isConfirmed && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">
+                          {t("pendingBadge")}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
                     {a.note ?? "—"}
                   </td>
@@ -58,28 +68,38 @@ export default async function AdminPlatformAdminsPage() {
                     {new Date(a.createdAt).toLocaleDateString(locale)}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {isSelf ? (
-                      <span
-                        className="text-xs text-muted-foreground"
-                        title={t("revokeSelfBlocked")}
-                      >
-                        —
-                      </span>
-                    ) : (
-                      <ConfirmForm
-                        action={revokePlatformAdminAction}
-                        message={t("revokeConfirm")}
-                      >
-                        <input type="hidden" name="userId" value={a.userId} />
-                        <SubmitButton
-                          size="sm"
-                          variant="ghost"
-                          className="text-red-600 hover:bg-red-50"
+                    <div className="inline-flex items-center gap-1">
+                      {!a.isConfirmed && a.email && (
+                        <form action={resendInvitationAction}>
+                          <input type="hidden" name="email" value={a.email} />
+                          <SubmitButton size="sm" variant="ghost">
+                            {t("resend")}
+                          </SubmitButton>
+                        </form>
+                      )}
+                      {isSelf ? (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title={t("revokeSelfBlocked")}
                         >
-                          {t("revoke")}
-                        </SubmitButton>
-                      </ConfirmForm>
-                    )}
+                          —
+                        </span>
+                      ) : (
+                        <ConfirmForm
+                          action={revokePlatformAdminAction}
+                          message={t("revokeConfirm")}
+                        >
+                          <input type="hidden" name="userId" value={a.userId} />
+                          <SubmitButton
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50"
+                          >
+                            {t("revoke")}
+                          </SubmitButton>
+                        </ConfirmForm>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

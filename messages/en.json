@@ -230,6 +230,8 @@
         },
         "remove": "Remove",
         "removeConfirm": "Remove this member from the org? Their auth account stays — only the membership is dropped.",
+        "pendingBadge": "Pending",
+        "resend": "Resend invitation",
         "roles": {
           "owner": "Owner",
           "admin": "Admin",
@@ -262,7 +264,9 @@
       },
       "revoke": "Revoke",
       "revokeConfirm": "Revoke platform admin access? They'll keep any org memberships they currently have.",
-      "revokeSelfBlocked": "You can't revoke your own platform admin access — ask another admin."
+      "revokeSelfBlocked": "You can't revoke your own platform admin access — ask another admin.",
+      "pendingBadge": "Pending",
+      "resend": "Resend invitation"
     },
     "impersonation": {
       "banner": "Platform admin mode — currently viewing <strong>{orgName}</strong>",

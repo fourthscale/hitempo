@@ -13,7 +13,8 @@ import {
   platformAdminAudit,
 } from "@/db/schema";
 import { getCurrentContext } from "@/lib/auth/context";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { AuthUserServiceFactory } from "@/lib/auth/auth-user-service-factory";
+import { AuthDeleteUserError } from "@/lib/auth/auth-errors";
 
 // ---------------------------------------------------------------------------
 // Guard
@@ -60,50 +61,15 @@ function parseSupportedLocales(raw: string | undefined): ("fr" | "en")[] {
 }
 
 /**
- * Looks up an auth user by email. Returns the Supabase user if found, else null.
- * The Supabase admin API has no direct `getByEmail` ; we list and filter.
- */
-async function findAuthUserByEmail(email: string) {
-  const supabase = getSupabaseAdmin();
-  // `listUsers` is paginated ; for our scale (<1k users) one page suffices.
-  const { data, error } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-  if (error) throw new Error(`list_users_failed: ${error.message}`);
-  const target = data.users.find(
-    (u) => u.email?.toLowerCase() === email.toLowerCase(),
-  );
-  return target ?? null;
-}
-
-/**
- * Invites a new auth user by email. Sends the Supabase invitation email
- * (magic link → password setup). Returns the newly created auth user.
- */
-async function inviteAuthUser(
-  email: string,
-  metadata: { firstName?: string; lastName?: string },
-) {
-  const supabase = getSupabaseAdmin();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
-    data: {
-      ...(metadata.firstName ? { firstName: metadata.firstName } : {}),
-      ...(metadata.lastName ? { lastName: metadata.lastName } : {}),
-    },
-    redirectTo: `${siteUrl}/reset-password`,
-  });
-  if (error) throw new Error(`invite_failed: ${error.message}`);
-  if (!data.user) throw new Error("invite_failed: no user returned");
-  return data.user;
-}
-
-/**
  * Deletes the underlying Supabase auth user if they no longer have any reason
  * to exist : no org memberships and no platform_admin row.
  *
  * Called automatically by revoke / remove flows so we don't accumulate ghost
  * accounts that can log in but see only an error page.
  *
- * Returns true iff the user was actually deleted.
+ * Returns true iff the user was actually deleted. Failures from the Auth
+ * service are swallowed (logged) — the orphan auth user is annoying but
+ * not corrupting, and the parent action shouldn't fail because of it.
  */
 async function deleteAuthUserIfOrphan(userId: string): Promise<boolean> {
   const db = getAdminDb();
@@ -120,99 +86,16 @@ async function deleteAuthUserIfOrphan(userId: string): Promise<boolean> {
   });
   if (stillAdmin) return false;
 
-  const supabase = getSupabaseAdmin();
-  const { error } = await supabase.auth.admin.deleteUser(userId);
-  if (error) {
-    // Don't crash the parent action — log and let the admin handle stale rows
-    // manually if needed. The orphan auth user is annoying but not corrupting.
-    console.warn(`[admin] failed to delete orphan auth user ${userId}: ${error.message}`);
-    return false;
-  }
-  return true;
-}
-
-/**
- * Returns the auth user matching this email, creating or refreshing as needed :
- *
- *   - User not found → invite (creates user + sends email).
- *   - User found, never confirmed → update metadata + regenerate an invite link
- *     so a fresh email is sent. Useful when the first attempt was made without
- *     name fields (or when the recipient lost the email).
- *   - User found and confirmed → update metadata only ; no email re-send because
- *     they already have a working login. Whatever role / privilege we layer on
- *     top via the caller (org membership, platform_admin, …) takes effect on
- *     their next request — the cycle "promote → revoke → promote again" works
- *     transparently because the auth user is never deleted.
- *
- * Metadata fields are overwritten with any non-empty value passed in — what
- * the admin typed in the form wins over stale values.
- */
-async function getOrInviteAuthUser(
-  email: string,
-  metadata: { firstName?: string; lastName?: string },
-) {
-  const supabase = getSupabaseAdmin();
-  const existing = await findAuthUserByEmail(email);
-
-  if (!existing) {
-    const fresh = await inviteAuthUser(email, metadata);
-    return { user: fresh, invited: true as const, reinvited: false as const };
-  }
-
-  // Build the metadata patch — overwrite when caller provided a non-empty value.
-  const currentMeta = (existing.user_metadata ?? {}) as Record<string, unknown>;
-  const nextMeta = { ...currentMeta };
-  let metaChanged = false;
-  if (metadata.firstName && currentMeta.firstName !== metadata.firstName) {
-    nextMeta.firstName = metadata.firstName;
-    metaChanged = true;
-  }
-  if (metadata.lastName && currentMeta.lastName !== metadata.lastName) {
-    nextMeta.lastName = metadata.lastName;
-    metaChanged = true;
-  }
-
-  if (metaChanged) {
-    const { error } = await supabase.auth.admin.updateUserById(existing.id, {
-      user_metadata: nextMeta,
-    });
-    if (error) throw new Error(`update_metadata_failed: ${error.message}`);
-  }
-
-  // Notify the user that something changed on their account.
-  // - Unconfirmed user → regenerate invite link (covers "they lost the email"
-  //   or "we added missing name fields and want a fresh attempt").
-  // - Confirmed user → generate a magic-link so they get an email pulling
-  //   them back to the app and see their new role / membership. This is the
-  //   only signal hitempo emits on re-promote without a dedicated transactional
-  //   email system.
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  let reinvited = false;
-  if (!existing.email_confirmed_at) {
-    const { error } = await supabase.auth.admin.generateLink({
-      type: "invite",
-      email,
-      options: { redirectTo: `${siteUrl}/reset-password` },
-    });
-    if (error) throw new Error(`reinvite_failed: ${error.message}`);
-    reinvited = true;
-  } else {
-    const { error } = await supabase.auth.admin.generateLink({
-      type: "magiclink",
-      email,
-      options: { redirectTo: `${siteUrl}/dashboard` },
-    });
-    if (error) {
-      // Rate-limit hits land here — non-fatal, just log.
-      console.warn(`[admin] magiclink for ${email} skipped: ${error.message}`);
+  try {
+    await AuthUserServiceFactory.getInstance().deleteById(userId);
+    return true;
+  } catch (err) {
+    if (err instanceof AuthDeleteUserError) {
+      console.warn(`[admin] ${err.message}`);
+      return false;
     }
+    throw err;
   }
-
-  return {
-    user: { ...existing, user_metadata: nextMeta },
-    invited: false as const,
-    reinvited,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -318,10 +201,17 @@ export async function inviteUserToOrgAction(formData: FormData) {
   if (!parsed.success) throw new Error("invalid_input");
   const d = parsed.data;
 
-  const { user } = await getOrInviteAuthUser(d.email, {
-    firstName: d.firstName || undefined,
-    lastName: d.lastName || undefined,
-  });
+  const outcome = await AuthUserServiceFactory.getInstance().getOrInviteOrRefresh(
+    d.email,
+    {
+      firstName: d.firstName || undefined,
+      lastName: d.lastName || undefined,
+    },
+  );
+  const user = outcome.user;
+  if (outcome.status === "noop" && outcome.warning) {
+    console.warn(`[admin] magic-link skipped for ${d.email}: ${outcome.warning}`);
+  }
 
   // Check if membership already exists in this org.
   const existing = await getAdminDb().query.organizationMembers.findFirst({
@@ -392,6 +282,29 @@ export async function removeMemberFromOrgAction(formData: FormData) {
   revalidatePath(`/admin/orgs/${d.orgId}`);
 }
 
+const resendInvitationSchema = z.object({
+  email: z.string().email(),
+  /** Optional — when set, only that page is revalidated ; otherwise both are. */
+  orgId: z.string().uuid().optional().or(z.literal("")),
+});
+
+/**
+ * Re-sends an invitation email to a user who hasn't accepted yet.
+ * Used by both `/admin/orgs/[id]` (members) and `/admin/platform-admins`
+ * lists for unconfirmed users.
+ */
+export async function resendInvitationAction(formData: FormData) {
+  await requirePlatformAdmin();
+  const parsed = resendInvitationSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error("invalid_input");
+  const d = parsed.data;
+
+  await AuthUserServiceFactory.getInstance().sendInviteLink(d.email);
+
+  if (d.orgId) revalidatePath(`/admin/orgs/${d.orgId}`);
+  revalidatePath("/admin/platform-admins");
+}
+
 // ---------------------------------------------------------------------------
 // Platform admins
 // ---------------------------------------------------------------------------
@@ -409,10 +322,17 @@ export async function promotePlatformAdminAction(formData: FormData) {
   if (!parsed.success) throw new Error("invalid_input");
   const d = parsed.data;
 
-  const { user } = await getOrInviteAuthUser(d.email, {
-    firstName: d.firstName || undefined,
-    lastName: d.lastName || undefined,
-  });
+  const outcome = await AuthUserServiceFactory.getInstance().getOrInviteOrRefresh(
+    d.email,
+    {
+      firstName: d.firstName || undefined,
+      lastName: d.lastName || undefined,
+    },
+  );
+  const user = outcome.user;
+  if (outcome.status === "noop" && outcome.warning) {
+    console.warn(`[admin] magic-link skipped for ${d.email}: ${outcome.warning}`);
+  }
   const db = getAdminDb();
 
   // Idempotent : if already admin, nothing happens (audit row still emitted
@@ -493,6 +413,8 @@ export type OrgMember = {
   lastName: string | null;
   role: "owner" | "admin" | "commercial" | "viewer";
   joinedAt: Date;
+  /** True iff the user has accepted their invite and confirmed their email. */
+  isConfirmed: boolean;
 };
 
 export async function getOrgWithMembers(orgId: string) {
@@ -513,10 +435,10 @@ export async function getOrgWithMembers(orgId: string) {
     .from(organizationMembers)
     .where(eq(organizationMembers.organizationId, orgId));
 
-  // Resolve auth users in bulk so we can show emails in the UI.
-  const supabase = getSupabaseAdmin();
-  const { data: list } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-  const usersById = new Map(list.users.map((u) => [u.id, u]));
+  // Resolve auth users in bulk via the service — one paginated listUsers call.
+  const usersById = await AuthUserServiceFactory.getInstance().bulkResolve(
+    memberRows.map((m) => m.userId),
+  );
 
   const members: OrgMember[] = memberRows.map((m) => {
     const u = usersById.get(m.userId);
@@ -528,6 +450,7 @@ export async function getOrgWithMembers(orgId: string) {
       lastName: typeof meta.lastName === "string" ? meta.lastName : null,
       role: m.role,
       joinedAt: m.joinedAt,
+      isConfirmed: Boolean(u?.email_confirmed_at),
     };
   });
 
@@ -543,6 +466,8 @@ export type PlatformAdminRow = {
   grantedBy: string | null;
   grantedByEmail: string | null;
   createdAt: Date;
+  /** True iff the user has accepted their invite and confirmed their email. */
+  isConfirmed: boolean;
 };
 
 export async function listPlatformAdmins(): Promise<PlatformAdminRow[]> {
@@ -559,10 +484,15 @@ export async function listPlatformAdmins(): Promise<PlatformAdminRow[]> {
     .from(platformAdmins)
     .orderBy(asc(platformAdmins.grantedAt));
 
-  // Resolve emails for both target users and granters.
-  const supabase = getSupabaseAdmin();
-  const { data: list } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-  const usersById = new Map(list.users.map((u) => [u.id, u]));
+  // Resolve emails for both target users and granters via one bulk call.
+  const ids = new Set<string>();
+  for (const r of rows) {
+    ids.add(r.userId);
+    if (r.grantedBy) ids.add(r.grantedBy);
+  }
+  const usersById = await AuthUserServiceFactory.getInstance().bulkResolve(
+    Array.from(ids),
+  );
 
   return rows.map((r) => {
     const target = usersById.get(r.userId);
@@ -577,6 +507,7 @@ export async function listPlatformAdmins(): Promise<PlatformAdminRow[]> {
       grantedBy: r.grantedBy,
       grantedByEmail: granter?.email ?? null,
       createdAt: r.createdAt,
+      isConfirmed: Boolean(target?.email_confirmed_at),
     };
   });
 }
