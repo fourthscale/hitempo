@@ -1,35 +1,36 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import * as schema from "./schema";
+/**
+ * Backwards-compatible facade over `lib/db/db-client.ts`.
+ *
+ * The class layer (`DbClient` + `DbClientFactory`) is the real implementation ;
+ * this module keeps the historical named exports (`getDb`, `getAdminDb`, `db`)
+ * so the ~100 existing call sites don't need to change.
+ *
+ * New code can also import directly from `@/lib/db/db-client-factory`.
+ */
 
-type Db = ReturnType<typeof drizzle<typeof schema>>;
+import { DbClientFactory } from "@/lib/db/db-client-factory";
+import type { Db } from "@/lib/db/db-client";
 
-let _db: Db | null = null;
+export type { Db };
+
+/** RLS-bound pool. The pool 95% of queries should use. */
 export function getDb(): Db {
-  if (_db) return _db;
-  const url = process.env.SUPABASE_POSTGRES_URL;
-  if (!url) {
-    throw new Error("SUPABASE_POSTGRES_URL is required");
-  }
-  const client = postgres(url, { prepare: false });
-  _db = drizzle(client, { schema });
-  return _db;
+  return DbClientFactory.getInstance().getRls();
 }
 
-// Admin client (RLS bypassed) — server-only, never imported from client code.
-let _adminDb: Db | null = null;
+/**
+ * Service-role pool (RLS bypassed). Server-only, never reachable from
+ * client code. Reserved for trusted jobs (Inngest workers, migrations,
+ * narrowly-scoped admin actions).
+ */
 export function getAdminDb(): Db {
-  if (_adminDb) return _adminDb;
-  const url = process.env.SUPABASE_POSTGRES_DIRECT_URL;
-  if (!url) {
-    throw new Error("SUPABASE_POSTGRES_DIRECT_URL is required");
-  }
-  const adminClient = postgres(url, { prepare: false });
-  _adminDb = drizzle(adminClient, { schema });
-  return _adminDb;
+  return DbClientFactory.getInstance().getAdmin();
 }
 
-// Convenience proxy: lazy-resolved on first use. Server-only.
+/**
+ * Lazy proxy : resolves the RLS pool on first property access. Convenient
+ * for top-level imports where the pool isn't needed at module-init time.
+ */
 export const db = new Proxy({} as Db, {
   get(_target, prop) {
     return (getDb() as unknown as Record<PropertyKey, unknown>)[prop];

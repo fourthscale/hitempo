@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, or, count, max } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { companies, interactions, tasks } from "@/db/schema";
-import type { ScoringInputs } from "@/lib/scoring/compute";
+import type { ScoringInputs } from "@/lib/scoring/scoring-types";
 
 export async function getScoringInputsByCompany(
   orgId: string,
