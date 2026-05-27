@@ -6,8 +6,12 @@ import type { MessageLocale } from "./types";
  *
  * Matching is case-insensitive and substring-based — `rénovation` matches
  * `rénovations`, `rénover`, `rénové` because they all start with `rénov`.
- * We list explicit stems rather than building them programmatically to keep
- * the behavior obvious and the tests deterministic.
+ * Each locale list aims for the *shortest distinct stems* : longer forms
+ * that are already prefixed by another entry don't need to be listed since
+ * the annotator does substring matching with longest-match-wins on overlap.
+ *
+ * Both accented and unaccented variants are kept where users routinely
+ * type without accents (`rénov` + `renov`) — we don't normalize input.
  *
  * Anything not in the map falls back to the raw `signalType` string.
  */
@@ -17,16 +21,22 @@ const KEYWORDS: Record<string, Record<MessageLocale, string[]>> = {
     en: ["renov"],
   },
   opening: {
-    fr: ["ouvertur", "ouverture", "ouvrir", "inaugurat"],
-    en: ["opening", "open", "inaugurat"],
+    // "ouvertur" already covers "ouverture", "ouvertures"
+    fr: ["ouvertur", "ouvrir", "inaugurat"],
+    // "open" already covers "opening", "opens", "opened"
+    en: ["open", "inaugurat"],
   },
   fundraising: {
+    // Keep "levée de fonds" before "levée" so the longer phrase wins on overlap
     fr: ["levée de fonds", "levée", "financement", "investisseur"],
-    en: ["fundraising", "funding", "raised", "investor"],
+    // "fund" covers "fundraising", "funding"
+    en: ["fund", "raised", "investor"],
   },
   expansion: {
+    // "extension" is distinct (no overlap with "expansion")
     fr: ["expansion", "agrandiss", "extension"],
-    en: ["expansion", "expanding", "extension"],
+    // "expand" covers "expanding", "expansion"
+    en: ["expand", "extension"],
   },
   rebranding: {
     fr: ["rebranding", "refonte", "nouvelle identité"],

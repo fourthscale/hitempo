@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { companies, contacts, sites } from "@/db/schema";
 
@@ -103,10 +103,19 @@ export async function getCompanyWithDetails(orgId: string, companyId: string) {
 }
 
 /**
- * Stats for the "Relations · Groupe" card: sites, active prospects, and L&G clients
- * across the whole group (root company + its direct children).
+ * Stats for the "Relations · Groupe" card : sites, active prospects, and
+ * clients across the whole group (root company + its direct children).
  *
- * Group root is `parent` if the current company has one, otherwise the company itself.
+ * Group root is `parent` if the current company has one, otherwise the
+ * company itself — that's the caller's responsibility (we just trust
+ * `rootCompanyId`).
+ *
+ * Two DB roundtrips :
+ *   1. group members — root OR parent === root, filtered at SQL level
+ *   2. site count — `COUNT(*) WHERE company_id IN (...)` at SQL level
+ *
+ * Previously fetched every company + every site of the org and filtered
+ * in JS (O(org size) instead of O(group size)).
  */
 export async function getGroupStats(
   orgId: string,
@@ -114,8 +123,8 @@ export async function getGroupStats(
 ): Promise<{ groupSize: number; sites: number; activeProspects: number; clients: number }> {
   const db = getDb();
 
-  // All companies in the group (root + its direct children).
-  const groupCompanies = await db
+  // 1. Pull the root + its direct children in a single query.
+  const groupMembers = await db
     .select({
       id: companies.id,
       status: companies.status,
@@ -126,48 +135,33 @@ export async function getGroupStats(
       and(
         eq(companies.organizationId, orgId),
         isNull(companies.deletedAt),
-        // root OR parent === root
-        // Drizzle doesn't have OR helper imported here, use sql.raw fallback
+        or(
+          eq(companies.id, rootCompanyId),
+          eq(companies.parentId, rootCompanyId),
+        ),
       ),
     );
 
-  // Filter in JS for simplicity (small list).
-  const inGroup = groupCompanies.filter(
-    (c) => c.id === rootCompanyId,
-  );
-  // Also fetch children of root
-  const children = await db
-    .select({
-      id: companies.id,
-      status: companies.status,
-      relationshipType: companies.relationshipType,
-    })
-    .from(companies)
-    .where(
-      and(
-        eq(companies.organizationId, orgId),
-        eq(companies.parentId, rootCompanyId),
-        isNull(companies.deletedAt),
-      ),
-    );
-
-  const all = [...inGroup, ...children];
-  const groupIds = all.map((c) => c.id);
-
-  const groupSize = all.length;
-  const activeProspects = all.filter(
+  const groupIds = groupMembers.map((c) => c.id);
+  const groupSize = groupMembers.length;
+  const activeProspects = groupMembers.filter(
     (c) => !["client", "former_client", "not_interested"].includes(c.status),
   ).length;
-  const clients = all.filter((c) => c.relationshipType === "client").length;
+  const clients = groupMembers.filter((c) => c.relationshipType === "client").length;
 
-  // Count sites across the group
+  // 2. Count sites at the SQL level — IN (...) filtered by org for RLS belt-and-braces.
   let sitesCount = 0;
   if (groupIds.length > 0) {
-    const sitesRows = await db
-      .select({ companyId: sites.companyId })
+    const [row] = await db
+      .select({ c: count() })
       .from(sites)
-      .where(eq(sites.organizationId, orgId));
-    sitesCount = sitesRows.filter((s) => groupIds.includes(s.companyId)).length;
+      .where(
+        and(
+          eq(sites.organizationId, orgId),
+          inArray(sites.companyId, groupIds),
+        ),
+      );
+    sitesCount = row?.c ?? 0;
   }
 
   return {

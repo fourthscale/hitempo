@@ -8,6 +8,7 @@ import { sites } from "@/db/schema";
 import { getActiveOrg } from "@/lib/auth/context";
 import { InvalidInputError } from "./user-facing-action-error";
 import { withActionError } from "./wrap-action-error";
+import { emptyStringsToNull } from "./normalize";
 
 const siteSchemaBase = {
   companyId: z.string().uuid(),
@@ -31,18 +32,12 @@ const siteSchemaBase = {
 const createSiteSchema = z.object(siteSchemaBase);
 const updateSiteSchema = z.object({ id: z.string().uuid(), ...siteSchemaBase });
 
-function emptyToNull<T extends Record<string, unknown>>(input: T) {
-  const out: Record<string, unknown> = { ...input };
-  for (const k of Object.keys(out)) if (out[k] === "") out[k] = null;
-  return out;
-}
-
 async function _createSiteAction(formData: FormData) {
   const parsed = createSiteSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
-  const data = emptyToNull(parsed.data);
+  const data = emptyStringsToNull(parsed.data);
   const db = getDb();
 
   // Convention: the FIRST site of a company is auto-primary. Subsequent ones
@@ -97,7 +92,7 @@ async function _updateSiteAction(formData: FormData) {
   if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
-  const data = emptyToNull(parsed.data);
+  const data = emptyStringsToNull(parsed.data);
   const db = getDb();
   const wantsPrimary = Boolean(data.isPrimary);
 

@@ -10,6 +10,7 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { recomputeCompanyScore } from "@/lib/scoring/recompute";
 import { InvalidInputError } from "./user-facing-action-error";
 import { withActionError } from "./wrap-action-error";
+import { emptyStringsToNull } from "./normalize";
 
 const baseSchema = {
   name: z.string().min(1).max(200),
@@ -37,22 +38,13 @@ const baseSchema = {
 const createSchema = z.object(baseSchema);
 const updateSchema = z.object({ id: z.string().uuid(), ...baseSchema });
 
-function normalize<T extends Record<string, unknown>>(input: T) {
-  // empty strings → null for nullable text columns
-  const out: Record<string, unknown> = { ...input };
-  for (const key of Object.keys(out)) {
-    if (out[key] === "") out[key] = null;
-  }
-  return out;
-}
-
 async function _createCompanyAction(formData: FormData) {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     throw new InvalidInputError(parsed.error);
   }
   const { activeOrganization } = await getActiveOrg();
-  const data = normalize(parsed.data);
+  const data = emptyStringsToNull(parsed.data);
 
   const [row] = await getDb()
     .insert(companies)
@@ -87,7 +79,7 @@ async function _updateCompanyAction(formData: FormData) {
     throw new InvalidInputError(parsed.error);
   }
   const { activeOrganization } = await getActiveOrg();
-  const data = normalize(parsed.data);
+  const data = emptyStringsToNull(parsed.data);
 
   // Guard against creating a self-loop (parentId === own id)
   const parentId =

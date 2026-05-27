@@ -9,6 +9,7 @@ import { contacts } from "@/db/schema";
 import { getActiveOrg } from "@/lib/auth/context";
 import { InvalidInputError } from "./user-facing-action-error";
 import { withActionError } from "./wrap-action-error";
+import { emptyStringsToNull } from "./normalize";
 
 const baseSchema = {
   companyId: z.string().uuid(),
@@ -43,18 +44,12 @@ const baseSchema = {
 const createSchema = z.object(baseSchema);
 const updateSchema = z.object({ id: z.string().uuid(), ...baseSchema });
 
-function emptyToNull<T extends Record<string, unknown>>(input: T) {
-  const out: Record<string, unknown> = { ...input };
-  for (const k of Object.keys(out)) if (out[k] === "") out[k] = null;
-  return out;
-}
-
 async function _createContactAction(formData: FormData) {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
-  const data = emptyToNull(parsed.data);
+  const data = emptyStringsToNull(parsed.data);
 
   const [row] = await getDb()
     .insert(contacts)
@@ -89,7 +84,7 @@ async function _updateContactAction(formData: FormData) {
   if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
-  const data = emptyToNull(parsed.data);
+  const data = emptyStringsToNull(parsed.data);
 
   await getDb()
     .update(contacts)

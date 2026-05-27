@@ -56,7 +56,7 @@ export default async function AdminOrgDetailPage({
             <Link href={`/admin/orgs/${org.id}/edit`}>
               <Button type="button" size="sm" variant="outline">
                 <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                Edit
+                {t("edit_action")}
               </Button>
             </Link>
             {!org.deletedAt && (
@@ -86,14 +86,14 @@ export default async function AdminOrgDetailPage({
       <Card className="p-6 mb-6">
         <h2 className="font-serif text-base font-bold mb-4">{tDetail("infoTitle")}</h2>
         <dl className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <InfoRow label="Plan" value={org.plan} />
-          <InfoRow label="Default locale" value={org.defaultLocale} />
+          <InfoRow label={tDetail("infoLabels.plan")} value={org.plan} />
+          <InfoRow label={tDetail("infoLabels.defaultLocale")} value={org.defaultLocale} />
           <InfoRow
-            label="Supported locales"
+            label={tDetail("infoLabels.supportedLocales")}
             value={(org.supportedLocales ?? []).join(", ")}
           />
           <InfoRow
-            label="Created"
+            label={tDetail("infoLabels.created")}
             value={new Date(org.createdAt).toLocaleString(locale)}
           />
         </dl>

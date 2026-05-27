@@ -220,9 +220,16 @@
         "trigger": "Delete organization",
         "confirm": "Are you sure? The organization will be marked as deleted. Data remains in the database."
       },
+      "edit_action": "Edit",
       "detail": {
         "subtitle": "Members and settings of this tenant.",
         "infoTitle": "Organization info",
+        "infoLabels": {
+          "plan": "Plan",
+          "defaultLocale": "Default locale",
+          "supportedLocales": "Supported locales",
+          "created": "Created"
+        },
         "membersTitle": "Members",
         "membersEmpty": "No members yet. Invite one below.",
         "membersAdd": "Invite a member",

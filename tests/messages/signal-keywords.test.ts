@@ -13,13 +13,16 @@ describe("getSignalKeywords", () => {
   });
 
   it("returns FR-specific stems for opening", () => {
+    // "ouvertur" is the shortest distinct stem and covers "ouverture",
+    // "ouvertures" via substring matching downstream.
     const out = getSignalKeywords("opening", "fr");
-    expect(out).toEqual(expect.arrayContaining(["ouvertur", "ouverture"]));
+    expect(out).toEqual(expect.arrayContaining(["ouvertur", "ouvrir"]));
   });
 
   it("returns fundraising keywords distinct per locale", () => {
     expect(getSignalKeywords("fundraising", "fr")).toContain("levée de fonds");
-    expect(getSignalKeywords("fundraising", "en")).toContain("fundraising");
+    // "fund" is the shortest distinct stem and covers "fundraising", "funding".
+    expect(getSignalKeywords("fundraising", "en")).toContain("fund");
   });
 
   it("returns empty array for null/undefined/empty signalType", () => {

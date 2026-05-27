@@ -220,9 +220,16 @@
         "trigger": "Supprimer l'organisation",
         "confirm": "Sûr ? L'organisation sera marquée comme supprimée. Les données restent en base."
       },
+      "edit_action": "Modifier",
       "detail": {
         "subtitle": "Membres et paramètres de ce tenant.",
         "infoTitle": "Informations",
+        "infoLabels": {
+          "plan": "Plan",
+          "defaultLocale": "Langue par défaut",
+          "supportedLocales": "Langues supportées",
+          "created": "Créée le"
+        },
         "membersTitle": "Membres",
         "membersEmpty": "Aucun membre. Invite-en un ci-dessous.",
         "membersAdd": "Inviter un membre",
