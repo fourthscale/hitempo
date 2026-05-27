@@ -73,9 +73,27 @@ export async function updatePasswordAction(formData: FormData) {
   }
 
   const supabase = await createClient();
+
+  // Defensive: confirm we actually have a session before attempting updateUser.
+  // updateUser({ password }) requires an authenticated session (recovery or
+  // invite flow leaves the user with one after setSession on the client).
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !userData?.user) {
+    console.error("[updatePassword] no active session", {
+      userErr: userErr?.message,
+      hasUser: Boolean(userData?.user),
+    });
+    redirect("/reset-password?error=session_expired");
+  }
+
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
 
   if (error) {
+    console.error("[updatePassword] updateUser failed", {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    });
     redirect("/reset-password?error=session_expired");
   }
 
