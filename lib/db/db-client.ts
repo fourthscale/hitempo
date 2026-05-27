@@ -7,6 +7,9 @@ import { DbMissingUrlError } from "./db-errors";
 /** The concrete Drizzle handle exposed to callers. */
 export type Db = ReturnType<typeof drizzle<typeof schema>>;
 
+/** Internal pair so dispose() can `.end()` the underlying postgres pool. */
+type Pool = { db: Db; raw: ReturnType<typeof postgres> };
+
 /**
  * Centralized database access — encapsulates the two postgres pools the app
  * needs (RLS-bound for user-facing queries, service-role for trusted jobs)
@@ -23,8 +26,8 @@ export type Db = ReturnType<typeof drizzle<typeof schema>>;
  * `dispose()` between cases to drop the cached pools.
  */
 export class DbClient {
-  private rls: Db | null = null;
-  private admin: Db | null = null;
+  private rls: Pool | null = null;
+  private admin: Pool | null = null;
 
   constructor(
     private readonly rlsUrlVar: string,
@@ -36,9 +39,9 @@ export class DbClient {
    * This is the pool that 95% of queries in user-facing code should use.
    */
   public getRls(): Db {
-    if (this.rls) return this.rls;
+    if (this.rls) return this.rls.db;
     this.rls = openPool(this.rlsUrlVar);
-    return this.rls;
+    return this.rls.db;
   }
 
   /**
@@ -47,27 +50,33 @@ export class DbClient {
    * actions explicitly scoped, migrations. Never reachable from client code.
    */
   public getAdmin(): Db {
-    if (this.admin) return this.admin;
+    if (this.admin) return this.admin.db;
     this.admin = openPool(this.adminUrlVar);
-    return this.admin;
+    return this.admin.db;
   }
 
   /**
-   * Drops the cached handles so the next call rebuilds them. Useful in tests
-   * (rebuild against a different URL between cases). In production the
-   * factory keeps a single instance for the lifetime of the process.
+   * Closes the underlying postgres connection pools and drops the cached
+   * handles. Tests should call this in `afterEach` to avoid saturating the
+   * local postgres connection slots. In production it's only invoked by
+   * `DbClientFactory.reset()` (also test-only) — the long-lived process
+   * keeps a single live pair of pools.
    */
-  public dispose(): void {
+  public async dispose(): Promise<void> {
+    const closing: Promise<void>[] = [];
+    if (this.rls) closing.push(this.rls.raw.end());
+    if (this.admin) closing.push(this.admin.raw.end());
     this.rls = null;
     this.admin = null;
+    await Promise.all(closing);
   }
 }
 
-function openPool(envVar: string): Db {
+function openPool(envVar: string): Pool {
   const url = process.env[envVar];
   if (!url) {
     throw new DbMissingUrlError(envVar);
   }
-  const client = postgres(url, { prepare: false });
-  return drizzle(client, { schema });
+  const raw = postgres(url, { prepare: false });
+  return { db: drizzle(raw, { schema }), raw };
 }

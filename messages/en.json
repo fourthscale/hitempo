@@ -110,6 +110,21 @@
       "ref": "Error reference"
     }
   },
+  "actionErrors": {
+    "title": "Action failed",
+    "close": "Got it",
+    "invalid_input": "Some required fields are missing or invalid. Please review and try again.",
+    "invalid_slug": "The organization name doesn't produce a valid URL slug. Please use letters and numbers.",
+    "already_member": "{email} is already a member of this organization.",
+    "already_member_generic": "This user is already a member of this organization.",
+    "cannot_revoke_self": "You can't revoke your own platform admin access — ask another admin to do it.",
+    "forbidden": "You don't have permission to perform this action.",
+    "forbidden_not_platform_admin": "This action is reserved for platform administrators.",
+    "message_not_found": "This message couldn't be found. It may have been deleted.",
+    "interaction_insert_failed": "We couldn't log this interaction. Please try again.",
+    "not_found_generic": "The item you tried to act on wasn't found. It may have been deleted.",
+    "not_found_interaction": "This interaction couldn't be found. It may have been deleted."
+  },
   "common": {
     "appName": "hitempo",
     "tagline": "The tempo of B2B prospection"

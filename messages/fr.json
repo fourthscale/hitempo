@@ -110,6 +110,21 @@
       "ref": "Référence d'erreur"
     }
   },
+  "actionErrors": {
+    "title": "L'action a échoué",
+    "close": "OK",
+    "invalid_input": "Certains champs requis sont absents ou invalides. Vérifie le formulaire et réessaie.",
+    "invalid_slug": "Le nom de l'organisation ne produit pas d'identifiant URL valide. Utilise des lettres et chiffres.",
+    "already_member": "{email} est déjà membre de cette organisation.",
+    "already_member_generic": "Cet utilisateur est déjà membre de cette organisation.",
+    "cannot_revoke_self": "Tu ne peux pas révoquer tes propres droits admin — demande à un autre admin de le faire.",
+    "forbidden": "Tu n'as pas l'autorisation d'effectuer cette action.",
+    "forbidden_not_platform_admin": "Cette action est réservée aux administrateurs de la plateforme.",
+    "message_not_found": "Ce message est introuvable. Il a peut-être été supprimé.",
+    "interaction_insert_failed": "Impossible d'enregistrer cette interaction. Réessaie.",
+    "not_found_generic": "L'élément sur lequel tu as agi est introuvable. Il a peut-être été supprimé.",
+    "not_found_interaction": "Cette interaction est introuvable. Elle a peut-être été supprimée."
+  },
   "common": {
     "appName": "hitempo",
     "tagline": "Le tempo de la prospection B2B"

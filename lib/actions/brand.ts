@@ -7,6 +7,8 @@ import { getDb } from "@/db/client";
 import { organizations } from "@/db/schema";
 import { getActiveOrg } from "@/lib/auth/context";
 import type { BrandBrief, BrandBriefLocale } from "@/lib/brand/brand-brief";
+import { InvalidInputError } from "./user-facing-action-error";
+import { withActionError } from "./wrap-action-error";
 
 /**
  * Brand brief editor sends one form field per (locale × field). List-type
@@ -73,9 +75,9 @@ function buildLocale(data: Parsed, locale: "fr" | "en"): BrandBriefLocale | unde
   };
 }
 
-export async function updateBrandBriefAction(formData: FormData): Promise<void> {
+async function _updateBrandBriefAction(formData: FormData): Promise<void> {
   const parsed = updateSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
 
@@ -94,3 +96,5 @@ export async function updateBrandBriefAction(formData: FormData): Promise<void> 
   revalidatePath("/settings/brand");
   revalidatePath("/settings");
 }
+
+export const updateBrandBriefAction = withActionError(_updateBrandBriefAction);

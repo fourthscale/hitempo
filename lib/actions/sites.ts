@@ -6,6 +6,8 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { sites } from "@/db/schema";
 import { getActiveOrg } from "@/lib/auth/context";
+import { InvalidInputError } from "./user-facing-action-error";
+import { withActionError } from "./wrap-action-error";
 
 const siteSchemaBase = {
   companyId: z.string().uuid(),
@@ -35,9 +37,9 @@ function emptyToNull<T extends Record<string, unknown>>(input: T) {
   return out;
 }
 
-export async function createSiteAction(formData: FormData) {
+async function _createSiteAction(formData: FormData) {
   const parsed = createSiteSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
   const data = emptyToNull(parsed.data);
@@ -90,9 +92,9 @@ export async function createSiteAction(formData: FormData) {
   revalidatePath(`/companies/${parsed.data.companyId}`);
 }
 
-export async function updateSiteAction(formData: FormData) {
+async function _updateSiteAction(formData: FormData) {
   const parsed = updateSiteSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
   const data = emptyToNull(parsed.data);
@@ -138,7 +140,7 @@ export async function updateSiteAction(formData: FormData) {
 /**
  * Sets the primary contact for a site. Pass empty string for contactId to clear.
  */
-export async function setSitePrimaryContactAction(formData: FormData) {
+async function _setSitePrimaryContactAction(formData: FormData) {
   const siteId = z.string().uuid().safeParse(formData.get("siteId"));
   const rawContact = formData.get("contactId");
   const contactId =
@@ -146,7 +148,7 @@ export async function setSitePrimaryContactAction(formData: FormData) {
       ? null
       : z.string().uuid().parse(rawContact);
 
-  if (!siteId.success) throw new Error("invalid_input");
+  if (!siteId.success) throw new InvalidInputError(siteId.error);
   const { activeOrganization } = await getActiveOrg();
 
   await getDb()
@@ -159,10 +161,10 @@ export async function setSitePrimaryContactAction(formData: FormData) {
   revalidatePath(`/sites/${siteId.data}`);
 }
 
-export async function deleteSiteAction(formData: FormData) {
+async function _deleteSiteAction(formData: FormData) {
   const id = z.string().uuid().safeParse(formData.get("id"));
   const companyId = z.string().uuid().safeParse(formData.get("companyId"));
-  if (!id.success || !companyId.success) throw new Error("invalid_id");
+  if (!id.success || !companyId.success) throw new InvalidInputError(id.success ? companyId.error : id.error);
 
   const { activeOrganization } = await getActiveOrg();
 
@@ -174,3 +176,12 @@ export async function deleteSiteAction(formData: FormData) {
 
   revalidatePath(`/companies/${companyId.data}`);
 }
+
+// ---------------------------------------------------------------------------
+// Wrapped exports — see lib/actions/wrap-action-error.ts
+// ---------------------------------------------------------------------------
+
+export const createSiteAction = withActionError(_createSiteAction);
+export const updateSiteAction = withActionError(_updateSiteAction);
+export const setSitePrimaryContactAction = withActionError(_setSitePrimaryContactAction);
+export const deleteSiteAction = withActionError(_deleteSiteAction);

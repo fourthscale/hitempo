@@ -5,6 +5,8 @@ import { z } from "zod";
 import { getActiveOrg } from "@/lib/auth/context";
 import { logInteraction, updateInteractionOutcome } from "@/db/queries/interactions";
 import { recomputeCompanyScore } from "@/lib/scoring/recompute";
+import { InvalidInputError, NotFoundError } from "./user-facing-action-error";
+import { withActionError } from "./wrap-action-error";
 
 const interactionTypeEnum = z.enum([
   "first_contact", "follow_up", "call", "visit", "linkedin",
@@ -33,9 +35,9 @@ const logSchema = z.object({
   occurredAt: z.string().min(1),
 });
 
-export async function logInteractionAction(formData: FormData) {
+async function _logInteractionAction(formData: FormData) {
   const parsed = logSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization, user } = await getActiveOrg();
   const d = parsed.data;
@@ -76,9 +78,9 @@ const updateOutcomeSchema = z.object({
   outcome: interactionOutcomeEnum.or(z.literal("")),
 });
 
-export async function updateInteractionOutcomeAction(formData: FormData): Promise<void> {
+async function _updateInteractionOutcomeAction(formData: FormData): Promise<void> {
   const parsed = updateOutcomeSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
   const outcome = parsed.data.outcome === "" ? null : parsed.data.outcome;
@@ -88,10 +90,13 @@ export async function updateInteractionOutcomeAction(formData: FormData): Promis
     parsed.data.interactionId,
     outcome,
   );
-  if (!row) throw new Error("interaction_not_found");
+  if (!row) throw new NotFoundError("interaction", parsed.data.interactionId);
 
   if (row.contactId) revalidatePath(`/contacts/${row.contactId}`);
   revalidatePath(`/companies/${row.companyId}`);
   if (row.taskId) revalidatePath("/tasks");
   revalidatePath("/dashboard");
 }
+
+export const logInteractionAction = withActionError(_logInteractionAction);
+export const updateInteractionOutcomeAction = withActionError(_updateInteractionOutcomeAction);

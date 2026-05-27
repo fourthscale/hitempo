@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentContext } from "@/lib/auth/context";
 import { Sidebar } from "@/components/app/sidebar";
 import { Topbar } from "@/components/app/topbar";
+import { ActionErrorModal } from "@/components/app/action-error-modal";
 
 export default async function AdminLayout({
   children,
@@ -27,6 +28,7 @@ export default async function AdminLayout({
           {children}
         </main>
       </div>
+      <ActionErrorModal />
     </div>
   );
 }

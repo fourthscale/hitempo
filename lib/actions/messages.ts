@@ -21,6 +21,11 @@ import {
   type MessageIntent,
   type MessageLocale,
 } from "@/lib/messages/types";
+import {
+  InvalidInputError,
+  MessageActionInteractionInsertFailedError,
+  MessageActionMessageNotFoundError,
+} from "./message-action-errors";
 
 // ---------------------------------------------------------------------------
 // generateMessageAction
@@ -65,7 +70,7 @@ export async function generateMessageAction(
 ): Promise<GenerateMessageResult> {
   // 1. Validate input.
   const parsed = generateSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
   const input = parsed.data;
   const { channel, intent } = parseChannelIntent(input.channelIntent);
 
@@ -109,7 +114,7 @@ const statusSchema = z.object({
 
 export async function updateMessageStatusAction(formData: FormData): Promise<void> {
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
   const { activeOrganization } = await getActiveOrg();
 
   await updateMessageStatus(
@@ -170,11 +175,11 @@ export async function logSentInteractionAction(
   formData: FormData,
 ): Promise<LogSentInteractionResult> {
   const parsed = logSentSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization, user } = await getActiveOrg();
   const msg = await getMessageById(activeOrganization.id, parsed.data.messageId);
-  if (!msg) throw new Error("message_not_found");
+  if (!msg) throw new MessageActionMessageNotFoundError(parsed.data.messageId);
 
   const summary =
     msg.channel === "email" && msg.content.startsWith("Objet:")
@@ -196,7 +201,7 @@ export async function logSentInteractionAction(
     summary: summary || null,
     occurredAt: new Date(),
   });
-  if (!interaction) throw new Error("interaction_insert_failed");
+  if (!interaction) throw new MessageActionInteractionInsertFailedError();
 
   // Mark the message as sent so the row reflects reality.
   await updateMessageStatus(activeOrganization.id, msg.id, "sent");
@@ -219,11 +224,11 @@ export async function logSentInteractionAction(
 
 export async function updateMessageContentAction(formData: FormData): Promise<void> {
   const parsed = contentSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
   const { activeOrganization } = await getActiveOrg();
 
   const existing = await getMessageById(activeOrganization.id, parsed.data.messageId);
-  if (!existing) throw new Error("message_not_found");
+  if (!existing) throw new MessageActionMessageNotFoundError(parsed.data.messageId);
 
   const reassembled =
     existing.channel === "email" && parsed.data.subject

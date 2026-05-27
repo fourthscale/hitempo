@@ -11,10 +11,23 @@ import { DbMissingUrlError } from "@/lib/db/db-errors";
 const RLS_VAR = "SUPABASE_POSTGRES_URL";
 const ADMIN_VAR = "SUPABASE_POSTGRES_DIRECT_URL";
 
+// Track every client we instantiate so afterEach can release the underlying
+// postgres pool — otherwise the local Supabase saturates its connection
+// slots and the unrelated RLS tests start failing.
+const opened: DbClient[] = [];
+
+function track(c: DbClient): DbClient {
+  opened.push(c);
+  return c;
+}
+
+afterEach(async () => {
+  await Promise.all(opened.splice(0).map((c) => c.dispose()));
+});
+
 describe("DbClient", () => {
   it("opens the RLS pool only on first getRls() call (lazy)", () => {
-    const client = new DbClient(RLS_VAR, ADMIN_VAR);
-    // No connection attempt yet — constructor is side-effect-free.
+    const client = track(new DbClient(RLS_VAR, ADMIN_VAR));
     const rls = client.getRls();
     expect(rls).toBeDefined();
     // Second call returns the same cached handle.
@@ -22,19 +35,19 @@ describe("DbClient", () => {
   });
 
   it("opens the admin pool only on first getAdmin() call (lazy)", () => {
-    const client = new DbClient(RLS_VAR, ADMIN_VAR);
+    const client = track(new DbClient(RLS_VAR, ADMIN_VAR));
     const admin = client.getAdmin();
     expect(admin).toBeDefined();
     expect(client.getAdmin()).toBe(admin);
   });
 
   it("getRls() and getAdmin() return distinct handles", () => {
-    const client = new DbClient(RLS_VAR, ADMIN_VAR);
+    const client = track(new DbClient(RLS_VAR, ADMIN_VAR));
     expect(client.getRls()).not.toBe(client.getAdmin());
   });
 
   it("throws DbMissingUrlError when the RLS env var is empty", () => {
-    const client = new DbClient("__UNSET_VAR_FOR_RLS__", ADMIN_VAR);
+    const client = track(new DbClient("__UNSET_VAR_FOR_RLS__", ADMIN_VAR));
     let caught: unknown;
     try {
       client.getRls();
@@ -47,26 +60,26 @@ describe("DbClient", () => {
   });
 
   it("throws DbMissingUrlError when the admin env var is empty", () => {
-    const client = new DbClient(RLS_VAR, "__UNSET_VAR_FOR_ADMIN__");
+    const client = track(new DbClient(RLS_VAR, "__UNSET_VAR_FOR_ADMIN__"));
     expect(() => client.getAdmin()).toThrow(DbMissingUrlError);
   });
 
-  it("dispose() drops the cached pools so the next call rebuilds them", () => {
+  it("dispose() drops the cached pools so the next call rebuilds them", async () => {
     const client = new DbClient(RLS_VAR, ADMIN_VAR);
     const first = client.getRls();
-    client.dispose();
+    await client.dispose();
     const second = client.getRls();
-    // Different handle after dispose — proves the cache was cleared.
     expect(second).not.toBe(first);
+    await client.dispose();
   });
 });
 
 describe("DbClientFactory", () => {
-  beforeEach(() => {
-    DbClientFactory.reset();
+  beforeEach(async () => {
+    await DbClientFactory.reset();
   });
-  afterEach(() => {
-    DbClientFactory.reset();
+  afterEach(async () => {
+    await DbClientFactory.reset();
   });
 
   it("returns the same DbClient instance across calls", () => {
@@ -76,14 +89,14 @@ describe("DbClientFactory", () => {
   });
 
   it("setInstance() overrides the cached client", () => {
-    const custom = new DbClient(RLS_VAR, ADMIN_VAR);
+    const custom = track(new DbClient(RLS_VAR, ADMIN_VAR));
     DbClientFactory.setInstance(custom);
     expect(DbClientFactory.getInstance()).toBe(custom);
   });
 
-  it("reset() forces the next getInstance() to rebuild", () => {
+  it("reset() forces the next getInstance() to rebuild", async () => {
     const a = DbClientFactory.getInstance();
-    DbClientFactory.reset();
+    await DbClientFactory.reset();
     const b = DbClientFactory.getInstance();
     expect(b).not.toBe(a);
   });

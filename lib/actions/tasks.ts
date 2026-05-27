@@ -9,6 +9,8 @@ import { getDb } from "@/db/client";
 import { tasks } from "@/db/schema";
 import { createTask, completeTask, deleteTask, updateTask } from "@/db/queries/tasks";
 import { recomputeCompanyScore } from "@/lib/scoring/recompute";
+import { InvalidInputError } from "./user-facing-action-error";
+import { withActionError } from "./wrap-action-error";
 
 const taskTypeEnum = z.enum(["email", "linkedin", "phone", "visit", "follow_up", "research", "other"]);
 const taskPriorityEnum = z.enum(["low", "medium", "high", "urgent"]);
@@ -24,9 +26,9 @@ const createSchema = z.object({
   contactId: z.string().uuid().optional().or(z.literal("")),
 });
 
-export async function createTaskAction(formData: FormData) {
+async function _createTaskAction(formData: FormData) {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization, user } = await getActiveOrg();
   const d = parsed.data;
@@ -47,9 +49,9 @@ export async function createTaskAction(formData: FormData) {
   redirect("/tasks");
 }
 
-export async function completeTaskAction(formData: FormData) {
+async function _completeTaskAction(formData: FormData) {
   const taskId = z.string().uuid().safeParse(formData.get("taskId"));
-  if (!taskId.success) throw new Error("invalid_input");
+  if (!taskId.success) throw new InvalidInputError(taskId.error);
 
   const { activeOrganization, user } = await getActiveOrg();
   await completeTask(activeOrganization.id, taskId.data, user.id);
@@ -70,9 +72,9 @@ const updateSchema = z.object({
   contactId: z.string().uuid().optional().or(z.literal("")),
 });
 
-export async function updateTaskAction(formData: FormData) {
+async function _updateTaskAction(formData: FormData) {
   const parsed = updateSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
   const d = parsed.data;
@@ -94,12 +96,12 @@ export async function updateTaskAction(formData: FormData) {
   redirect("/tasks");
 }
 
-export async function updateTaskStatusAction(formData: FormData) {
+async function _updateTaskStatusAction(formData: FormData) {
   const parsed = z.object({
     taskId: z.string().uuid(),
     status: z.enum(["pending", "in_progress", "completed", "cancelled"]),
   }).safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization, user } = await getActiveOrg();
   const { taskId, status } = parsed.data;
@@ -120,9 +122,9 @@ export async function updateTaskStatusAction(formData: FormData) {
   if (updated?.companyId) void recomputeCompanyScore(activeOrganization.id, updated.companyId);
 }
 
-export async function deleteTaskAction(formData: FormData) {
+async function _deleteTaskAction(formData: FormData) {
   const taskId = z.string().uuid().safeParse(formData.get("taskId"));
-  if (!taskId.success) throw new Error("invalid_input");
+  if (!taskId.success) throw new InvalidInputError(taskId.error);
 
   const { activeOrganization } = await getActiveOrg();
 
@@ -137,3 +139,13 @@ export async function deleteTaskAction(formData: FormData) {
   revalidatePath("/dashboard");
   if (task?.companyId) void recomputeCompanyScore(activeOrganization.id, task.companyId);
 }
+
+// ---------------------------------------------------------------------------
+// Wrapped exports — see lib/actions/wrap-action-error.ts
+// ---------------------------------------------------------------------------
+
+export const createTaskAction = withActionError(_createTaskAction);
+export const completeTaskAction = withActionError(_completeTaskAction);
+export const updateTaskAction = withActionError(_updateTaskAction);
+export const updateTaskStatusAction = withActionError(_updateTaskStatusAction);
+export const deleteTaskAction = withActionError(_deleteTaskAction);

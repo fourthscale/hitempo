@@ -15,6 +15,15 @@ import {
 import { getCurrentContext } from "@/lib/auth/context";
 import { AuthUserServiceFactory } from "@/lib/auth/auth-user-service-factory";
 import { AuthDeleteUserError } from "@/lib/auth/auth-errors";
+import {
+  AdminActionAlreadyMemberError,
+  AdminActionCannotRevokeSelfError,
+  AdminActionCreateOrgFailedError,
+  AdminActionInvalidSlugError,
+  AdminActionNotPlatformAdminError,
+  InvalidInputError,
+} from "./admin-action-errors";
+import { wrapActionError } from "./wrap-action-error";
 
 // ---------------------------------------------------------------------------
 // Guard
@@ -23,12 +32,13 @@ import { AuthDeleteUserError } from "@/lib/auth/auth-errors";
 /**
  * Every admin action runs through this gate. Throws if the current user is
  * not a platform admin — defense in depth, even if the page is also gated
- * by the /admin layout.
+ * by the /admin layout. The user-facing error code is surfaced via the
+ * global modal (no full-page error boundary).
  */
 async function requirePlatformAdmin() {
   const ctx = await getCurrentContext();
   if (!ctx.isPlatformAdmin) {
-    throw new Error("forbidden_not_platform_admin");
+    throw new AdminActionNotPlatformAdminError();
   }
   return ctx;
 }
@@ -111,28 +121,32 @@ const createOrgSchema = z.object({
 });
 
 export async function createOrgAction(formData: FormData) {
-  await requirePlatformAdmin();
-  const parsed = createOrgSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  let targetId: string | undefined;
+  await wrapActionError(async () => {
+    await requirePlatformAdmin();
+    const parsed = createOrgSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) throw new InvalidInputError(parsed.error);
 
-  const d = parsed.data;
-  const slug = d.slug && d.slug.length > 0 ? slugify(d.slug) : slugify(d.name);
-  if (!slug) throw new Error("invalid_slug");
+    const d = parsed.data;
+    const slug = d.slug && d.slug.length > 0 ? slugify(d.slug) : slugify(d.name);
+    if (!slug) throw new AdminActionInvalidSlugError();
 
-  const [row] = await getAdminDb()
-    .insert(organizations)
-    .values({
-      name: d.name,
-      slug,
-      plan: d.plan ?? "trial",
-      defaultLocale: d.defaultLocale ?? "fr",
-      supportedLocales: parseSupportedLocales(d.supportedLocales),
-    })
-    .returning({ id: organizations.id });
+    const [row] = await getAdminDb()
+      .insert(organizations)
+      .values({
+        name: d.name,
+        slug,
+        plan: d.plan ?? "trial",
+        defaultLocale: d.defaultLocale ?? "fr",
+        supportedLocales: parseSupportedLocales(d.supportedLocales),
+      })
+      .returning({ id: organizations.id });
 
-  if (!row) throw new Error("create_org_failed");
-  revalidatePath("/admin/orgs");
-  redirect(`/admin/orgs/${row.id}`);
+    if (!row) throw new AdminActionCreateOrgFailedError();
+    targetId = row.id;
+    revalidatePath("/admin/orgs");
+  });
+  if (targetId) redirect(`/admin/orgs/${targetId}`);
 }
 
 const updateOrgSchema = z.object({
@@ -144,25 +158,30 @@ const updateOrgSchema = z.object({
 });
 
 export async function updateOrgAction(formData: FormData) {
-  await requirePlatformAdmin();
-  const parsed = updateOrgSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
-  const d = parsed.data;
+  let successId: string | undefined;
+  await wrapActionError(async () => {
+      await requirePlatformAdmin();
+      const parsed = updateOrgSchema.safeParse(Object.fromEntries(formData));
+      if (!parsed.success) throw new InvalidInputError(parsed.error);
+      const d = parsed.data;
 
-  await getAdminDb()
-    .update(organizations)
-    .set({
-      name: d.name,
-      plan: d.plan,
-      defaultLocale: d.defaultLocale,
-      supportedLocales: parseSupportedLocales(d.supportedLocales),
-      updatedAt: new Date(),
-    })
-    .where(eq(organizations.id, d.id));
+      await getAdminDb()
+        .update(organizations)
+        .set({
+          name: d.name,
+          plan: d.plan,
+          defaultLocale: d.defaultLocale,
+          supportedLocales: parseSupportedLocales(d.supportedLocales),
+          updatedAt: new Date(),
+        })
+        .where(eq(organizations.id, d.id));
 
-  revalidatePath("/admin/orgs");
-  revalidatePath(`/admin/orgs/${d.id}`);
-  redirect(`/admin/orgs/${d.id}`);
+      revalidatePath("/admin/orgs");
+      revalidatePath(`/admin/orgs/${d.id}`);
+      successId = d.id;
+    },
+  );
+  if (successId) redirect(`/admin/orgs/${successId}`);
 }
 
 const softDeleteOrgSchema = z.object({
@@ -170,17 +189,22 @@ const softDeleteOrgSchema = z.object({
 });
 
 export async function softDeleteOrgAction(formData: FormData) {
-  await requirePlatformAdmin();
-  const parsed = softDeleteOrgSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  let didDelete = false;
+  await wrapActionError(async () => {
+      await requirePlatformAdmin();
+      const parsed = softDeleteOrgSchema.safeParse(Object.fromEntries(formData));
+      if (!parsed.success) throw new InvalidInputError(parsed.error);
 
-  await getAdminDb()
-    .update(organizations)
-    .set({ deletedAt: new Date() })
-    .where(eq(organizations.id, parsed.data.id));
+      await getAdminDb()
+        .update(organizations)
+        .set({ deletedAt: new Date() })
+        .where(eq(organizations.id, parsed.data.id));
 
-  revalidatePath("/admin/orgs");
-  redirect("/admin/orgs");
+      revalidatePath("/admin/orgs");
+      didDelete = true;
+    },
+  );
+  if (didDelete) redirect("/admin/orgs");
 }
 
 // ---------------------------------------------------------------------------
@@ -196,39 +220,42 @@ const inviteMemberSchema = z.object({
 });
 
 export async function inviteUserToOrgAction(formData: FormData) {
-  await requirePlatformAdmin();
-  const parsed = inviteMemberSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
-  const d = parsed.data;
+  await wrapActionError(async () => {
+      await requirePlatformAdmin();
+      const parsed = inviteMemberSchema.safeParse(Object.fromEntries(formData));
+      if (!parsed.success) throw new InvalidInputError(parsed.error);
+      const d = parsed.data;
 
-  const outcome = await AuthUserServiceFactory.getInstance().getOrInviteOrRefresh(
-    d.email,
-    {
-      firstName: d.firstName || undefined,
-      lastName: d.lastName || undefined,
+      const outcome = await AuthUserServiceFactory.getInstance().getOrInviteOrRefresh(
+        d.email,
+        {
+          firstName: d.firstName || undefined,
+          lastName: d.lastName || undefined,
+        },
+      );
+      const user = outcome.user;
+      if (outcome.status === "noop" && outcome.warning) {
+        console.warn(`[admin] magic-link skipped for ${d.email}: ${outcome.warning}`);
+      }
+
+      // Check if membership already exists in this org.
+      const existing = await getAdminDb().query.organizationMembers.findFirst({
+        where: and(
+          eq(organizationMembers.organizationId, d.orgId),
+          eq(organizationMembers.userId, user.id),
+        ),
+      });
+      if (existing) throw new AdminActionAlreadyMemberError(d.email);
+
+      await getAdminDb().insert(organizationMembers).values({
+        organizationId: d.orgId,
+        userId: user.id,
+        role: d.role,
+      });
+
+      revalidatePath(`/admin/orgs/${d.orgId}`);
     },
   );
-  const user = outcome.user;
-  if (outcome.status === "noop" && outcome.warning) {
-    console.warn(`[admin] magic-link skipped for ${d.email}: ${outcome.warning}`);
-  }
-
-  // Check if membership already exists in this org.
-  const existing = await getAdminDb().query.organizationMembers.findFirst({
-    where: and(
-      eq(organizationMembers.organizationId, d.orgId),
-      eq(organizationMembers.userId, user.id),
-    ),
-  });
-  if (existing) throw new Error("already_member");
-
-  await getAdminDb().insert(organizationMembers).values({
-    organizationId: d.orgId,
-    userId: user.id,
-    role: d.role,
-  });
-
-  revalidatePath(`/admin/orgs/${d.orgId}`);
 }
 
 const updateMemberRoleSchema = z.object({
@@ -238,22 +265,25 @@ const updateMemberRoleSchema = z.object({
 });
 
 export async function updateMemberRoleAction(formData: FormData) {
-  await requirePlatformAdmin();
-  const parsed = updateMemberRoleSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
-  const d = parsed.data;
+  await wrapActionError(async () => {
+      await requirePlatformAdmin();
+      const parsed = updateMemberRoleSchema.safeParse(Object.fromEntries(formData));
+      if (!parsed.success) throw new InvalidInputError(parsed.error);
+      const d = parsed.data;
 
-  await getAdminDb()
-    .update(organizationMembers)
-    .set({ role: d.role })
-    .where(
-      and(
-        eq(organizationMembers.organizationId, d.orgId),
-        eq(organizationMembers.userId, d.userId),
-      ),
-    );
+      await getAdminDb()
+        .update(organizationMembers)
+        .set({ role: d.role })
+        .where(
+          and(
+            eq(organizationMembers.organizationId, d.orgId),
+            eq(organizationMembers.userId, d.userId),
+          ),
+        );
 
-  revalidatePath(`/admin/orgs/${d.orgId}`);
+      revalidatePath(`/admin/orgs/${d.orgId}`);
+    },
+  );
 }
 
 const removeMemberSchema = z.object({
@@ -262,24 +292,27 @@ const removeMemberSchema = z.object({
 });
 
 export async function removeMemberFromOrgAction(formData: FormData) {
-  await requirePlatformAdmin();
-  const parsed = removeMemberSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
-  const d = parsed.data;
+  await wrapActionError(async () => {
+      await requirePlatformAdmin();
+      const parsed = removeMemberSchema.safeParse(Object.fromEntries(formData));
+      if (!parsed.success) throw new InvalidInputError(parsed.error);
+      const d = parsed.data;
 
-  await getAdminDb()
-    .delete(organizationMembers)
-    .where(
-      and(
-        eq(organizationMembers.organizationId, d.orgId),
-        eq(organizationMembers.userId, d.userId),
-      ),
-    );
+      await getAdminDb()
+        .delete(organizationMembers)
+        .where(
+          and(
+            eq(organizationMembers.organizationId, d.orgId),
+            eq(organizationMembers.userId, d.userId),
+          ),
+        );
 
-  // Clean up the auth user if this was their last hold on the system.
-  await deleteAuthUserIfOrphan(d.userId);
+      // Clean up the auth user if this was their last hold on the system.
+      await deleteAuthUserIfOrphan(d.userId);
 
-  revalidatePath(`/admin/orgs/${d.orgId}`);
+      revalidatePath(`/admin/orgs/${d.orgId}`);
+    },
+  );
 }
 
 const resendInvitationSchema = z.object({
@@ -294,15 +327,18 @@ const resendInvitationSchema = z.object({
  * lists for unconfirmed users.
  */
 export async function resendInvitationAction(formData: FormData) {
-  await requirePlatformAdmin();
-  const parsed = resendInvitationSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
-  const d = parsed.data;
+  await wrapActionError(async () => {
+      await requirePlatformAdmin();
+      const parsed = resendInvitationSchema.safeParse(Object.fromEntries(formData));
+      if (!parsed.success) throw new InvalidInputError(parsed.error);
+      const d = parsed.data;
 
-  await AuthUserServiceFactory.getInstance().sendInviteLink(d.email);
+      await AuthUserServiceFactory.getInstance().sendInviteLink(d.email);
 
-  if (d.orgId) revalidatePath(`/admin/orgs/${d.orgId}`);
-  revalidatePath("/admin/platform-admins");
+      if (d.orgId) revalidatePath(`/admin/orgs/${d.orgId}`);
+      revalidatePath("/admin/platform-admins");
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -317,36 +353,38 @@ const promoteAdminSchema = z.object({
 });
 
 export async function promotePlatformAdminAction(formData: FormData) {
-  const ctx = await requirePlatformAdmin();
-  const parsed = promoteAdminSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
-  const d = parsed.data;
+  await wrapActionError(async () => {
+    const ctx = await requirePlatformAdmin();
+    const parsed = promoteAdminSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) throw new InvalidInputError(parsed.error);
+    const d = parsed.data;
 
-  const outcome = await AuthUserServiceFactory.getInstance().getOrInviteOrRefresh(
-    d.email,
-    {
-      firstName: d.firstName || undefined,
-      lastName: d.lastName || undefined,
-    },
-  );
-  const user = outcome.user;
-  if (outcome.status === "noop" && outcome.warning) {
-    console.warn(`[admin] magic-link skipped for ${d.email}: ${outcome.warning}`);
-  }
-  const db = getAdminDb();
+    const outcome = await AuthUserServiceFactory.getInstance().getOrInviteOrRefresh(
+      d.email,
+      {
+        firstName: d.firstName || undefined,
+        lastName: d.lastName || undefined,
+      },
+    );
+    const user = outcome.user;
+    if (outcome.status === "noop" && outcome.warning) {
+      console.warn(`[admin] magic-link skipped for ${d.email}: ${outcome.warning}`);
+    }
+    const db = getAdminDb();
 
-  // Idempotent : if already admin, nothing happens (audit row still emitted
-  // by the trigger on real INSERT only).
-  await db
-    .insert(platformAdmins)
-    .values({
-      userId: user.id,
-      note: d.note || null,
-      grantedBy: ctx.user.id,
-    })
-    .onConflictDoNothing({ target: platformAdmins.userId });
+    // Idempotent : if already admin, nothing happens (audit row still emitted
+    // by the trigger on real INSERT only).
+    await db
+      .insert(platformAdmins)
+      .values({
+        userId: user.id,
+        note: d.note || null,
+        grantedBy: ctx.user.id,
+      })
+      .onConflictDoNothing({ target: platformAdmins.userId });
 
-  revalidatePath("/admin/platform-admins");
+    revalidatePath("/admin/platform-admins");
+  });
 }
 
 const revokeAdminSchema = z.object({
@@ -354,25 +392,27 @@ const revokeAdminSchema = z.object({
 });
 
 export async function revokePlatformAdminAction(formData: FormData) {
-  const ctx = await requirePlatformAdmin();
-  const parsed = revokeAdminSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
-  const d = parsed.data;
+  await wrapActionError(async () => {
+    const ctx = await requirePlatformAdmin();
+    const parsed = revokeAdminSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) throw new InvalidInputError(parsed.error);
+    const d = parsed.data;
 
-  // Block self-revoke as a safety net : avoids the "I locked myself out"
-  // scenario. Another admin must do it.
-  if (d.userId === ctx.user.id) {
-    throw new Error("cannot_revoke_self");
-  }
+    // Block self-revoke as a safety net : avoids the "I locked myself out"
+    // scenario. Another admin must do it.
+    if (d.userId === ctx.user.id) {
+      throw new AdminActionCannotRevokeSelfError();
+    }
 
-  await getAdminDb()
-    .delete(platformAdmins)
-    .where(eq(platformAdmins.userId, d.userId));
+    await getAdminDb()
+      .delete(platformAdmins)
+      .where(eq(platformAdmins.userId, d.userId));
 
-  // Clean up the auth user if this was their last hold on the system.
-  await deleteAuthUserIfOrphan(d.userId);
+    // Clean up the auth user if this was their last hold on the system.
+    await deleteAuthUserIfOrphan(d.userId);
 
-  revalidatePath("/admin/platform-admins");
+    revalidatePath("/admin/platform-admins");
+  });
 }
 
 // ---------------------------------------------------------------------------

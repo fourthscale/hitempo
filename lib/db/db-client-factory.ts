@@ -28,8 +28,14 @@ export class DbClientFactory {
     this.cached = client;
   }
 
-  public static reset(): void {
-    if (this.cached) this.cached.dispose();
+  /**
+   * Disposes the cached client (closes the pools) and clears the slot.
+   * Returns a promise so tests can `await` the pool teardown ; production
+   * code never calls this so the async signature is non-disruptive.
+   */
+  public static async reset(): Promise<void> {
+    const old = this.cached;
     this.cached = null;
+    if (old) await old.dispose();
   }
 }

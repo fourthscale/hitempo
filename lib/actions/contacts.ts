@@ -7,6 +7,8 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { contacts } from "@/db/schema";
 import { getActiveOrg } from "@/lib/auth/context";
+import { InvalidInputError } from "./user-facing-action-error";
+import { withActionError } from "./wrap-action-error";
 
 const baseSchema = {
   companyId: z.string().uuid(),
@@ -47,9 +49,9 @@ function emptyToNull<T extends Record<string, unknown>>(input: T) {
   return out;
 }
 
-export async function createContactAction(formData: FormData) {
+async function _createContactAction(formData: FormData) {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
   const data = emptyToNull(parsed.data);
@@ -82,9 +84,9 @@ export async function createContactAction(formData: FormData) {
   redirect(`/contacts/${row!.id}`);
 }
 
-export async function updateContactAction(formData: FormData) {
+async function _updateContactAction(formData: FormData) {
   const parsed = updateSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new Error("invalid_input");
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
   const data = emptyToNull(parsed.data);
@@ -120,9 +122,9 @@ export async function updateContactAction(formData: FormData) {
   redirect(`/contacts/${parsed.data.id}`);
 }
 
-export async function deleteContactAction(formData: FormData) {
+async function _deleteContactAction(formData: FormData) {
   const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success) throw new Error("invalid_id");
+  if (!id.success) throw new InvalidInputError(id.error);
 
   const { activeOrganization } = await getActiveOrg();
 
@@ -136,3 +138,11 @@ export async function deleteContactAction(formData: FormData) {
   revalidatePath("/contacts");
   redirect("/contacts");
 }
+
+// ---------------------------------------------------------------------------
+// Wrapped exports — see lib/actions/wrap-action-error.ts
+// ---------------------------------------------------------------------------
+
+export const createContactAction = withActionError(_createContactAction);
+export const updateContactAction = withActionError(_updateContactAction);
+export const deleteContactAction = withActionError(_deleteContactAction);

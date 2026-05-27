@@ -8,6 +8,8 @@ import { getDb } from "@/db/client";
 import { companies } from "@/db/schema";
 import { getActiveOrg } from "@/lib/auth/context";
 import { recomputeCompanyScore } from "@/lib/scoring/recompute";
+import { InvalidInputError } from "./user-facing-action-error";
+import { withActionError } from "./wrap-action-error";
 
 const baseSchema = {
   name: z.string().min(1).max(200),
@@ -44,10 +46,10 @@ function normalize<T extends Record<string, unknown>>(input: T) {
   return out;
 }
 
-export async function createCompanyAction(formData: FormData) {
+async function _createCompanyAction(formData: FormData) {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    throw new Error("invalid_input");
+    throw new InvalidInputError(parsed.error);
   }
   const { activeOrganization } = await getActiveOrg();
   const data = normalize(parsed.data);
@@ -79,10 +81,10 @@ export async function createCompanyAction(formData: FormData) {
   redirect(`/companies/${row!.id}`);
 }
 
-export async function updateCompanyAction(formData: FormData) {
+async function _updateCompanyAction(formData: FormData) {
   const parsed = updateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    throw new Error("invalid_input");
+    throw new InvalidInputError(parsed.error);
   }
   const { activeOrganization } = await getActiveOrg();
   const data = normalize(parsed.data);
@@ -127,9 +129,9 @@ export async function updateCompanyAction(formData: FormData) {
   redirect(`/companies/${parsed.data.id}`);
 }
 
-export async function deleteCompanyAction(formData: FormData) {
+async function _deleteCompanyAction(formData: FormData) {
   const id = z.string().uuid().safeParse(formData.get("id"));
-  if (!id.success) throw new Error("invalid_id");
+  if (!id.success) throw new InvalidInputError(id.error);
 
   const { activeOrganization } = await getActiveOrg();
 
@@ -148,7 +150,7 @@ export async function deleteCompanyAction(formData: FormData) {
  * Sets the primary contact for a company. Pass empty string to clear.
  * UX: invoked from the "Changer" button on the company detail's Contact prioritaire card.
  */
-export async function setPrimaryContactAction(formData: FormData) {
+async function _setPrimaryContactAction(formData: FormData) {
   const companyId = z.string().uuid().safeParse(formData.get("companyId"));
   const rawContact = formData.get("contactId");
   const contactId =
@@ -156,7 +158,7 @@ export async function setPrimaryContactAction(formData: FormData) {
       ? null
       : z.string().uuid().parse(rawContact);
 
-  if (!companyId.success) throw new Error("invalid_input");
+  if (!companyId.success) throw new InvalidInputError(companyId.error);
   const { activeOrganization } = await getActiveOrg();
 
   await getDb()
@@ -169,3 +171,14 @@ export async function setPrimaryContactAction(formData: FormData) {
   revalidatePath(`/companies/${companyId.data}`);
   void recomputeCompanyScore(activeOrganization.id, companyId.data);
 }
+
+// ---------------------------------------------------------------------------
+// Wrapped exports — all action errors flow through `wrapActionError` so
+// `UserFacingActionError` subclasses surface via the global modal instead
+// of the App Router error boundary.
+// ---------------------------------------------------------------------------
+
+export const createCompanyAction = withActionError(_createCompanyAction);
+export const updateCompanyAction = withActionError(_updateCompanyAction);
+export const deleteCompanyAction = withActionError(_deleteCompanyAction);
+export const setPrimaryContactAction = withActionError(_setPrimaryContactAction);

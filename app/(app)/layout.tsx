@@ -2,6 +2,7 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { Sidebar } from "@/components/app/sidebar";
 import { Topbar } from "@/components/app/topbar";
 import { ImpersonationBanner } from "@/components/app/impersonation-banner";
+import { ActionErrorModal } from "@/components/app/action-error-modal";
 
 export default async function AppLayout({
   children,
@@ -27,6 +28,7 @@ export default async function AppLayout({
           {children}
         </main>
       </div>
+      <ActionErrorModal />
     </div>
   );
 }
