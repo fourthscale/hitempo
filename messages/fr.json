@@ -45,6 +45,53 @@
     "email": "Email",
     "linkedin": "LinkedIn"
   },
+  "companyRelationshipType": {
+    "prospect": "Prospect",
+    "client": "Client",
+    "former_client": "Ancien client",
+    "prescriber": "Prescripteur",
+    "partner": "Partenaire"
+  },
+  "companyStatus": {
+    "to_qualify": "À qualifier",
+    "to_contact": "À contacter",
+    "to_follow_up": "À relancer",
+    "qualified": "Qualifié",
+    "not_interested": "Pas intéressé"
+  },
+  "contactRole": {
+    "decision_maker": "Décideur",
+    "influencer": "Influenceur",
+    "user": "Utilisateur",
+    "prescriber": "Prescripteur",
+    "assistant": "Assistant·e",
+    "other": "Autre"
+  },
+  "contactChannel": {
+    "email": "Email",
+    "phone": "Téléphone",
+    "linkedin": "LinkedIn",
+    "in_person": "En personne"
+  },
+  "contactStatus": {
+    "to_contact": "À contacter",
+    "to_follow_up": "À relancer",
+    "qualified": "Qualifié",
+    "not_interested": "Pas intéressé"
+  },
+  "siteType": {
+    "office": "Bureau",
+    "hotel": "Hôtel",
+    "showroom": "Showroom",
+    "store": "Boutique",
+    "restaurant": "Restaurant",
+    "warehouse": "Entrepôt",
+    "other": "Autre"
+  },
+  "languageName": {
+    "fr": "Français",
+    "en": "English"
+  },
   "interactionOutcome": {
     "no_response": "Pas de réponse",
     "positive_reply": "Réponse positive",
@@ -53,6 +100,15 @@
     "wrong_contact": "Mauvais contact",
     "rdv_scheduled": "RDV planifié",
     "opted_out": "Désabonné"
+  },
+  "errors": {
+    "appBoundary": {
+      "title": "Quelque chose s'est mal passé",
+      "description": "Une erreur inattendue est survenue. Réessaye, ou retourne au tableau de bord.",
+      "retry": "Réessayer",
+      "home": "Retour au dashboard",
+      "ref": "Référence d'erreur"
+    }
   },
   "common": {
     "appName": "hitempo",

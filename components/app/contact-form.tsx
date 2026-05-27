@@ -1,10 +1,15 @@
 import { getTranslations } from "next-intl/server";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { CompanySiteSelects } from "./company-site-selects";
+
+const CONTACT_ROLES = ["decision_maker", "influencer", "user", "prescriber", "assistant", "other"] as const;
+const CONTACT_CHANNELS = ["email", "phone", "linkedin", "in_person"] as const;
+const CONTACT_STATUSES = ["to_contact", "to_follow_up", "qualified", "not_interested"] as const;
+const CONTACT_LOCALES = ["fr", "en"] as const;
 
 type ContactInitial = {
   id?: string;
@@ -39,7 +44,13 @@ export async function ContactForm({
   initial?: ContactInitial;
   defaultCompanyId?: string;
 }) {
-  const t = await getTranslations("pages.contacts.fields");
+  const [t, tRole, tChannel, tStatus, tLang] = await Promise.all([
+    getTranslations("pages.contacts.fields"),
+    getTranslations("contactRole"),
+    getTranslations("contactChannel"),
+    getTranslations("contactStatus"),
+    getTranslations("languageName"),
+  ]);
   const selectedCompanyId = initial?.companyId ?? defaultCompanyId ?? "";
   const selectedSiteId = initial?.siteId ?? "";
 
@@ -83,12 +94,11 @@ export async function ContactForm({
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
           >
             <option value="">—</option>
-            <option value="decision_maker">Decision maker</option>
-            <option value="influencer">Influencer</option>
-            <option value="user">User</option>
-            <option value="prescriber">Prescriber</option>
-            <option value="assistant">Assistant</option>
-            <option value="other">Other</option>
+            {CONTACT_ROLES.map((v) => (
+              <option key={v} value={v}>
+                {tRole(v)}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -138,8 +148,11 @@ export async function ContactForm({
             defaultValue={initial?.preferredLanguage ?? "fr"}
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
           >
-            <option value="fr">Français</option>
-            <option value="en">English</option>
+            {CONTACT_LOCALES.map((v) => (
+              <option key={v} value={v}>
+                {tLang(v)}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -152,10 +165,11 @@ export async function ContactForm({
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
           >
             <option value="">—</option>
-            <option value="email">Email</option>
-            <option value="phone">Phone</option>
-            <option value="linkedin">LinkedIn</option>
-            <option value="in_person">In person</option>
+            {CONTACT_CHANNELS.map((v) => (
+              <option key={v} value={v}>
+                {tChannel(v)}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -167,10 +181,11 @@ export async function ContactForm({
             defaultValue={initial?.status ?? "to_contact"}
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
           >
-            <option value="to_contact">to_contact</option>
-            <option value="to_follow_up">to_follow_up</option>
-            <option value="qualified">qualified</option>
-            <option value="not_interested">not_interested</option>
+            {CONTACT_STATUSES.map((v) => (
+              <option key={v} value={v}>
+                {tStatus(v)}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -180,7 +195,7 @@ export async function ContactForm({
         </div>
 
         <div className="md:col-span-2 flex justify-end gap-2 pt-2">
-          <Button type="submit">{submitLabel}</Button>
+          <SubmitButton>{submitLabel}</SubmitButton>
         </div>
       </form>
     </Card>

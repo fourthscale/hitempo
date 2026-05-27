@@ -5,6 +5,7 @@ import { listOrgsForAdmin } from "@/lib/actions/admin";
 import { selectOrgAction } from "@/lib/auth/actions";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 
 export default async function AdminOrgsPage() {
@@ -63,9 +64,9 @@ export default async function AdminOrgsPage() {
                         </Button>
                       </Link>
                       <form action={enterOrg}>
-                        <Button type="submit" size="sm">
+                        <SubmitButton size="sm">
                           {t("select")}
-                        </Button>
+                        </SubmitButton>
                       </form>
                     </div>
                   </td>

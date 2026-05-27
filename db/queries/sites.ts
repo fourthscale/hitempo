@@ -39,6 +39,8 @@ export async function listSitesByOrgWithCompany(orgId: string) {
     })
     .from(sites)
     .innerJoin(companies, eq(sites.companyId, companies.id))
-    .where(eq(sites.organizationId, orgId))
+    // Multi-tenant: both sides of the join must be filtered by orgId for
+    // defense-in-depth (RLS is the ultimate safety net but explicit beats implicit).
+    .where(and(eq(sites.organizationId, orgId), eq(companies.organizationId, orgId)))
     .orderBy(asc(companies.name), asc(sites.name));
 }

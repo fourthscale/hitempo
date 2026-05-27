@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { requestPasswordResetAction } from "@/lib/auth/actions";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,7 @@ export default async function ForgotPasswordPage({
                 <Label htmlFor="email">{t("email")}</Label>
                 <Input id="email" name="email" type="email" required autoComplete="email" />
               </div>
-              <Button type="submit" className="w-full">{t("submit")}</Button>
+              <SubmitButton className="w-full">{t("submit")}</SubmitButton>
             </form>
           )}
           <Link href="/login" className="block mt-4 text-sm text-slate-600 hover:underline text-center">

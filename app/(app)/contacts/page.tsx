@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { Plus } from "lucide-react";
+import { Plus, User } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { listContactsByOrg } from "@/db/queries/contacts";
 import { PageHeader } from "@/components/app/page-header";
+import { EmptyState } from "@/components/app/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -30,12 +31,11 @@ export default async function ContactsPage() {
 
       <Card className="p-0 overflow-hidden">
         {rows.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground text-sm">
-            {t("empty")}{" "}
-            <Link href="/contacts/new" className="text-brand-teal hover:underline">
-              {t("emptyAction")}
-            </Link>
-          </div>
+          <EmptyState
+            icon={User}
+            title={t("empty")}
+            action={{ label: t("emptyAction"), href: "/contacts/new" }}
+          />
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-secondary/40 text-muted-foreground">

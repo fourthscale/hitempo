@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { llmUsage } from "@/db/schema";
 import type { ProviderName } from "./llm-strategy";
@@ -94,7 +95,6 @@ export class DbLlmUsageLogger implements LlmUsageLogger {
     type: string,
     id: string,
   ): Promise<void> {
-    const { eq } = await import("drizzle-orm");
     await getDb()
       .update(llmUsage)
       .set({ relatedEntityType: type, relatedEntityId: id })

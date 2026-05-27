@@ -7,7 +7,7 @@ import {
 import { getCurrentContext } from "@/lib/auth/context";
 import { PageHeader } from "@/components/app/page-header";
 import { ConfirmForm } from "@/components/app/confirm-form";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,14 +71,13 @@ export default async function AdminPlatformAdminsPage() {
                         message={t("revokeConfirm")}
                       >
                         <input type="hidden" name="userId" value={a.userId} />
-                        <Button
-                          type="submit"
+                        <SubmitButton
                           size="sm"
                           variant="ghost"
                           className="text-red-600 hover:bg-red-50"
                         >
                           {t("revoke")}
-                        </Button>
+                        </SubmitButton>
                       </ConfirmForm>
                     )}
                   </td>
@@ -115,7 +114,7 @@ export default async function AdminPlatformAdminsPage() {
             </div>
           </div>
           <div className="flex items-center justify-end">
-            <Button type="submit">{tPromote("submit")}</Button>
+            <SubmitButton>{tPromote("submit")}</SubmitButton>
           </div>
         </form>
       </Card>

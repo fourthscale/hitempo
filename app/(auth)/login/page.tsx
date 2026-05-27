@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { signInAction } from "@/lib/auth/actions";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,7 +48,7 @@ export default async function LoginPage({
               <Input id="password" name="password" type="password" required autoComplete="current-password" />
             </div>
             {errorKey && <p className="text-sm text-red-600">{t(`errors.${errorKey}`)}</p>}
-            <Button type="submit" className="w-full">{t("submit")}</Button>
+            <SubmitButton className="w-full">{t("submit")}</SubmitButton>
             <Link href="/forgot-password" className="text-sm text-slate-600 hover:underline text-center">
               {t("forgot")}
             </Link>

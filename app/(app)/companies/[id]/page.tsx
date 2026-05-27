@@ -30,6 +30,7 @@ import {
 import type { ScoreBreakdown } from "@/lib/scoring/compute";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { CompanyTabs } from "@/components/app/company-tabs";
 import { SitesSection } from "@/components/app/sites-section";
 import { PageHeader } from "@/components/app/page-header";
@@ -206,10 +207,10 @@ export default async function CompanyDetailPage({
           </Link>
           <form action={deleteCompanyAction}>
             <input type="hidden" name="id" value={company.id} />
-            <Button variant="outline" size="sm" type="submit" className="text-red-600 hover:bg-red-50">
+            <SubmitButton variant="outline" size="sm" className="text-red-600 hover:bg-red-50">
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
               {t("delete")}
-            </Button>
+            </SubmitButton>
           </form>
         </div>
       </div>
@@ -443,9 +444,9 @@ export default async function CompanyDetailPage({
                   )}
                   <form action={recomputeCompanyScoreAction}>
                     <input type="hidden" name="companyId" value={company.id} />
-                    <Button type="submit" size="sm" variant="outline" className="h-7 text-xs px-2">
+                    <SubmitButton size="sm" variant="outline" className="h-7 text-xs px-2">
                       {t("scoreBreakdown.recompute")}
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </div>
               </div>

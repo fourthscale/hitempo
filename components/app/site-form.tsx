@@ -1,7 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+const SITE_TYPES = ["office", "hotel", "showroom", "store", "restaurant", "warehouse", "other"] as const;
 
 export async function SiteForm({
   action,
@@ -12,7 +14,10 @@ export async function SiteForm({
   companyId: string;
   submitLabel: string;
 }) {
-  const t = await getTranslations("pages.companies.sites.fields");
+  const [t, tType] = await Promise.all([
+    getTranslations("pages.companies.sites.fields"),
+    getTranslations("siteType"),
+  ]);
 
   return (
     <form action={action} className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4">
@@ -31,13 +36,11 @@ export async function SiteForm({
           defaultValue="office"
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
         >
-          <option value="office">Office</option>
-          <option value="hotel">Hotel</option>
-          <option value="showroom">Showroom</option>
-          <option value="store">Store</option>
-          <option value="restaurant">Restaurant</option>
-          <option value="warehouse">Warehouse</option>
-          <option value="other">Other</option>
+          {SITE_TYPES.map((v) => (
+            <option key={v} value={v}>
+              {tType(v)}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -67,7 +70,7 @@ export async function SiteForm({
       </div>
 
       <div className="md:col-span-2 flex justify-end pt-2">
-        <Button type="submit">{submitLabel}</Button>
+        <SubmitButton>{submitLabel}</SubmitButton>
       </div>
     </form>
   );

@@ -45,6 +45,53 @@
     "email": "Email",
     "linkedin": "LinkedIn"
   },
+  "companyRelationshipType": {
+    "prospect": "Prospect",
+    "client": "Client",
+    "former_client": "Former client",
+    "prescriber": "Prescriber",
+    "partner": "Partner"
+  },
+  "companyStatus": {
+    "to_qualify": "To qualify",
+    "to_contact": "To contact",
+    "to_follow_up": "To follow up",
+    "qualified": "Qualified",
+    "not_interested": "Not interested"
+  },
+  "contactRole": {
+    "decision_maker": "Decision maker",
+    "influencer": "Influencer",
+    "user": "User",
+    "prescriber": "Prescriber",
+    "assistant": "Assistant",
+    "other": "Other"
+  },
+  "contactChannel": {
+    "email": "Email",
+    "phone": "Phone",
+    "linkedin": "LinkedIn",
+    "in_person": "In person"
+  },
+  "contactStatus": {
+    "to_contact": "To contact",
+    "to_follow_up": "To follow up",
+    "qualified": "Qualified",
+    "not_interested": "Not interested"
+  },
+  "siteType": {
+    "office": "Office",
+    "hotel": "Hotel",
+    "showroom": "Showroom",
+    "store": "Store",
+    "restaurant": "Restaurant",
+    "warehouse": "Warehouse",
+    "other": "Other"
+  },
+  "languageName": {
+    "fr": "Français",
+    "en": "English"
+  },
   "interactionOutcome": {
     "no_response": "No response",
     "positive_reply": "Positive reply",
@@ -53,6 +100,15 @@
     "wrong_contact": "Wrong contact",
     "rdv_scheduled": "Meeting scheduled",
     "opted_out": "Opted out"
+  },
+  "errors": {
+    "appBoundary": {
+      "title": "Something went wrong",
+      "description": "An unexpected error occurred. Try again, or come back to the dashboard.",
+      "retry": "Try again",
+      "home": "Back to dashboard",
+      "ref": "Error reference"
+    }
   },
   "common": {
     "appName": "hitempo",

@@ -6,6 +6,7 @@ import { getOrgMembersWithNames } from "@/db/queries/members";
 import { createTaskAction } from "@/lib/actions/tasks";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { CompanyContactSelect } from "@/components/app/company-contact-select";
 
 export default async function NewTaskPage({
@@ -152,7 +153,7 @@ export default async function NewTaskPage({
             <Link href="/tasks">
               <Button type="button" variant="outline">{t("create.cancel")}</Button>
             </Link>
-            <Button type="submit">{t("create.submit")}</Button>
+            <SubmitButton>{t("create.submit")}</SubmitButton>
           </div>
         </form>
       </Card>

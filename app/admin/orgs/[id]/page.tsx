@@ -12,6 +12,7 @@ import { selectOrgAction } from "@/lib/auth/actions";
 import { PageHeader } from "@/components/app/page-header";
 import { ConfirmForm } from "@/components/app/confirm-form";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,9 +48,9 @@ export default async function AdminOrgDetailPage({
         right={
           <div className="flex items-center gap-2">
             <form action={enterOrg}>
-              <Button type="submit" size="sm" variant="outline">
+              <SubmitButton size="sm" variant="outline">
                 {t("select")}
-              </Button>
+              </SubmitButton>
             </form>
             <Link href={`/admin/orgs/${org.id}/edit`}>
               <Button type="button" size="sm" variant="outline">
@@ -60,15 +61,14 @@ export default async function AdminOrgDetailPage({
             {!org.deletedAt && (
               <ConfirmForm action={softDeleteOrgAction} message={tDelete("confirm")}>
                 <input type="hidden" name="id" value={org.id} />
-                <Button
-                  type="submit"
+                <SubmitButton
                   size="sm"
                   variant="outline"
                   className="text-red-600 hover:bg-red-50"
                 >
                   <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                   {tDelete("trigger")}
-                </Button>
+                </SubmitButton>
               </ConfirmForm>
             )}
           </div>
@@ -141,14 +141,13 @@ export default async function AdminOrgDetailPage({
                       >
                         <input type="hidden" name="orgId" value={org.id} />
                         <input type="hidden" name="userId" value={m.userId} />
-                        <Button
-                          type="submit"
+                        <SubmitButton
                           size="sm"
                           variant="ghost"
                           className="text-red-600 hover:bg-red-50"
                         >
                           {tDetail("remove")}
-                        </Button>
+                        </SubmitButton>
                       </ConfirmForm>
                     </td>
                   </tr>
@@ -200,7 +199,7 @@ export default async function AdminOrgDetailPage({
           </div>
 
           <div className="flex items-center justify-end">
-            <Button type="submit">{tInvite("submit")}</Button>
+            <SubmitButton>{tInvite("submit")}</SubmitButton>
           </div>
         </form>
       </Card>

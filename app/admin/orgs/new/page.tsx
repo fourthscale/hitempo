@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { createOrgAction } from "@/lib/actions/admin";
 import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,7 +82,7 @@ export default async function AdminOrgNewPage() {
                 {t("cancel")}
               </Button>
             </Link>
-            <Button type="submit">{t("submit")}</Button>
+            <SubmitButton>{t("submit")}</SubmitButton>
           </div>
         </form>
       </Card>

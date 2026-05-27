@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { SiteForm } from "./site-form";
 import { SitesAdd } from "./sites-add";
 import { createSiteAction, deleteSiteAction } from "@/lib/actions/sites";
@@ -74,14 +74,13 @@ export async function SitesSection({
                     <form action={deleteSiteAction}>
                       <input type="hidden" name="id" value={s.id} />
                       <input type="hidden" name="companyId" value={companyId} />
-                      <Button
-                        type="submit"
+                      <SubmitButton
                         variant="ghost"
                         size="sm"
                         className="text-red-600 hover:bg-red-50"
                       >
                         {t("delete")}
-                      </Button>
+                      </SubmitButton>
                     </form>
                   </td>
                 </tr>

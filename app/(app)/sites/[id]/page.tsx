@@ -8,6 +8,7 @@ import { setSitePrimaryContactAction } from "@/lib/actions/sites";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export default async function SiteDetailPage({
   params,
@@ -129,9 +130,9 @@ export default async function SiteDetailPage({
                               <input type="hidden" name="siteId" value={site.id} />
                               <input type="hidden" name="companyId" value={site.company.id} />
                               <input type="hidden" name="contactId" value={c.id} />
-                              <Button type="submit" size="sm" variant="ghost" className="text-xs">
+                              <SubmitButton size="sm" variant="ghost" className="text-xs">
                                 {t("setPrimary")}
-                              </Button>
+                              </SubmitButton>
                             </form>
                           )}
                         </td>

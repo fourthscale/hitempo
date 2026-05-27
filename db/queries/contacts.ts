@@ -12,7 +12,15 @@ export async function listContactsByOrg(orgId: string) {
     })
     .from(contacts)
     .innerJoin(companies, eq(contacts.companyId, companies.id))
-    .where(and(eq(contacts.organizationId, orgId), isNull(contacts.deletedAt)))
+    // Multi-tenant: filter BOTH sides of the join explicitly. RLS is the safety
+    // net but defense-in-depth (CLAUDE.md hard rule) requires explicit filters.
+    .where(
+      and(
+        eq(contacts.organizationId, orgId),
+        eq(companies.organizationId, orgId),
+        isNull(contacts.deletedAt),
+      ),
+    )
     .orderBy(desc(contacts.relevance), asc(contacts.lastName))
     .limit(200);
 }

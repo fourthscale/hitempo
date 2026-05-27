@@ -12,6 +12,7 @@ import { logInteractionAction } from "@/lib/actions/interactions";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { LogInteractionForm } from "@/components/app/log-interaction-form";
 import {
   InteractionOutcomeMenu,
@@ -137,10 +138,10 @@ export default async function ContactDetailPage({
             </Link>
             <form action={deleteContactAction}>
               <input type="hidden" name="id" value={contact.id} />
-              <Button variant="outline" size="sm" type="submit" className="text-red-600 hover:bg-red-50">
+              <SubmitButton variant="outline" size="sm" className="text-red-600 hover:bg-red-50">
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                 {t("delete")}
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         }

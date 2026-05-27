@@ -7,6 +7,7 @@ import { getOrgMembersWithNames } from "@/db/queries/members";
 import { updateTaskAction } from "@/lib/actions/tasks";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { CompanyContactSelect } from "@/components/app/company-contact-select";
 
 export default async function EditTaskPage({
@@ -164,7 +165,7 @@ export default async function EditTaskPage({
             <Link href="/tasks">
               <Button type="button" variant="outline">{t("create.cancel")}</Button>
             </Link>
-            <Button type="submit">{t("edit.submit")}</Button>
+            <SubmitButton>{t("edit.submit")}</SubmitButton>
           </div>
         </form>
       </Card>
