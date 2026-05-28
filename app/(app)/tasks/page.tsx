@@ -196,19 +196,19 @@ export default async function TasksPage({
   return (
     <div className="max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between gap-6 mb-6">
+      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div>
           <h1 className="font-serif text-3xl md:text-4xl font-bold tracking-tight">{t("title")}</h1>
           <p className="mt-1 text-sm text-brand-amber font-medium">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 sm:shrink-0">
           <div className="flex items-center rounded-md border border-border bg-background divide-x divide-border">
             <button
               type="button"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary text-foreground rounded-l-md"
             >
               <LayoutList className="h-3.5 w-3.5" />
-              {t("views.list")}
+              <span className="hidden sm:inline">{t("views.list")}</span>
             </button>
             <button
               type="button"
@@ -217,7 +217,7 @@ export default async function TasksPage({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <LayoutGrid className="h-3.5 w-3.5" />
-              {t("views.kanban")}
+              <span className="hidden sm:inline">{t("views.kanban")}</span>
             </button>
             <button
               type="button"
@@ -226,13 +226,13 @@ export default async function TasksPage({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed rounded-r-md"
             >
               <Calendar className="h-3.5 w-3.5" />
-              {t("views.calendar")}
+              <span className="hidden sm:inline">{t("views.calendar")}</span>
             </button>
           </div>
           <Link href="/tasks/new">
             <Button>
-              <Plus className="h-4 w-4 mr-1.5" />
-              {t("newTask")}
+              <Plus className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">{t("newTask")}</span>
             </Button>
           </Link>
         </div>

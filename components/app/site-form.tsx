@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormFooter } from "@/components/app/form-footer";
 
 const SITE_TYPES = ["office", "hotel", "showroom", "store", "restaurant", "warehouse", "other"] as const;
 
@@ -69,9 +70,9 @@ export async function SiteForm({
         <Label htmlFor="site-isPrimary" className="cursor-pointer">{t("isPrimary")}</Label>
       </div>
 
-      <div className="md:col-span-2 flex justify-end pt-2">
+      <FormFooter className="md:col-span-2">
         <SubmitButton>{submitLabel}</SubmitButton>
-      </div>
+      </FormFooter>
     </form>
   );
 }

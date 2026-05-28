@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { CompanyContactSelect } from "@/components/app/company-contact-select";
+import { FormFooter } from "@/components/app/form-footer";
 
 export default async function NewTaskPage({
   searchParams,
@@ -149,12 +150,12 @@ export default async function NewTaskPage({
             hintSelectCompany={t("fields.selectCompanyFirst")}
           />
 
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <FormFooter>
             <Link href="/tasks">
               <Button type="button" variant="outline">{t("create.cancel")}</Button>
             </Link>
             <SubmitButton>{t("create.submit")}</SubmitButton>
-          </div>
+          </FormFooter>
         </form>
       </Card>
     </div>

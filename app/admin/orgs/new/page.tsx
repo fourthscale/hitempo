@@ -7,6 +7,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormFooter } from "@/components/app/form-footer";
 
 const PLAN_OPTIONS = ["trial", "starter", "pro", "business"] as const;
 const LOCALE_OPTIONS = ["fr", "en"] as const;
@@ -76,14 +77,14 @@ export default async function AdminOrgNewPage() {
             <p className="text-xs text-muted-foreground">{t("fields.supportedLocalesHint")}</p>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2">
+          <FormFooter>
             <Link href="/admin/orgs">
               <Button type="button" variant="ghost">
                 {t("cancel")}
               </Button>
             </Link>
             <SubmitButton>{t("submit")}</SubmitButton>
-          </div>
+          </FormFooter>
         </form>
       </Card>
     </div>

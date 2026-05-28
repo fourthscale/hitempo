@@ -28,7 +28,40 @@ export default async function AdminOrgsPage() {
       />
 
       <Card className="p-0 overflow-hidden">
-        <div className="overflow-x-auto"><table className="w-full text-sm">
+        {/* Mobile / tablet portrait : cards */}
+        <ul className="lg:hidden divide-y divide-border">
+          {orgs.map((org) => {
+            const enterOrg = selectOrgAction.bind(null, org.id);
+            return (
+              <li key={org.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <Link
+                    href={`/admin/orgs/${org.id}`}
+                    className="font-medium hover:text-brand-teal"
+                  >
+                    {org.name}
+                  </Link>
+                  <div className="flex items-center gap-1.5 shrink-0 text-xs text-muted-foreground">
+                    <span className="px-1.5 py-0.5 rounded bg-secondary capitalize">{org.plan}</span>
+                    <span>{new Date(org.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground mb-3">{org.slug}</div>
+                <div className="flex items-center gap-2">
+                  <Link href={`/admin/orgs/${org.id}`}>
+                    <Button type="button" size="sm" variant="outline">{t("open")}</Button>
+                  </Link>
+                  <form action={enterOrg}>
+                    <SubmitButton size="sm">{t("select")}</SubmitButton>
+                  </form>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+
+        {/* Desktop : table */}
+        <div className="hidden lg:block overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-secondary/40 text-muted-foreground">
             <tr className="text-left">
               <th className="px-4 py-3 font-medium">{t("columns.name")}</th>

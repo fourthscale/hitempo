@@ -3,6 +3,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FormFooter } from "@/components/app/form-footer";
 import { Card } from "@/components/ui/card";
 import { CompanySiteSelects } from "./company-site-selects";
 
@@ -194,9 +195,9 @@ export async function ContactForm({
           <Textarea id="notes" name="notes" defaultValue={initial?.notes ?? ""} rows={4} maxLength={5000} />
         </div>
 
-        <div className="md:col-span-2 flex justify-end gap-2 pt-2">
+        <FormFooter className="md:col-span-2">
           <SubmitButton>{submitLabel}</SubmitButton>
-        </div>
+        </FormFooter>
       </form>
     </Card>
   );

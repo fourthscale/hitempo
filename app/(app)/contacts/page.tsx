@@ -47,7 +47,54 @@ export default async function ContactsPage() {
             action={{ label: t("emptyAction"), href: "/contacts/new" }}
           />
         ) : (
-          <div className="overflow-x-auto"><table className="w-full text-sm">
+          <>
+          {/* Mobile / tablet portrait : cards */}
+          <ul className="lg:hidden divide-y divide-border">
+            {rows.map(({ contact, companyName, companyId }) => (
+              <li key={contact.id} className="px-4 py-3 hover:bg-secondary/30">
+                <div className="flex items-start justify-between gap-3 mb-1.5">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/contacts/${contact.id}`}
+                      className="font-medium text-foreground hover:text-brand-teal"
+                    >
+                      {contact.firstName} {contact.lastName}
+                    </Link>
+                    {contact.jobTitle && (
+                      <div className="text-xs text-muted-foreground">{contact.jobTitle}</div>
+                    )}
+                    <Link
+                      href={`/companies/${companyId}`}
+                      className="block text-xs text-muted-foreground hover:text-brand-teal mt-0.5 truncate"
+                    >
+                      {companyName}
+                    </Link>
+                  </div>
+                  {contact.relevance != null && (
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {"★".repeat(contact.relevance)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  {contact.role && (
+                    <span className="px-1.5 py-0.5 rounded bg-secondary text-foreground">
+                      {tRole(contact.role as Parameters<typeof tRole>[0])}
+                    </span>
+                  )}
+                  <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                    {tStatus(contact.status as Parameters<typeof tStatus>[0])}
+                  </span>
+                  {contact.email && (
+                    <span className="text-muted-foreground truncate">· {contact.email}</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop : table */}
+          <div className="hidden lg:block overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-secondary/40 text-muted-foreground">
               <tr className="text-left">
                 <th className="px-4 py-3 font-medium">{t("columns.name")}</th>
@@ -90,6 +137,7 @@ export default async function ContactsPage() {
               ))}
             </tbody>
           </table></div>
+          </>
         )}
       </Card>
     </div>

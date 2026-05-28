@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { BrandBrief, BrandBriefLocale } from "@/lib/brand/brand-brief";
+import { FormFooter } from "@/components/app/form-footer";
 
 type Tab = "fr" | "en";
 
@@ -103,14 +104,14 @@ export function BrandBriefEditor({
         labels={labels}
       />
 
-      <div className="mt-6 flex items-center gap-3">
-        <Button type="submit" disabled={isPending}>
-          {labels.save}
-        </Button>
+      <FormFooter>
         {savedFlash && (
           <span className="text-sm text-emerald-600">{labels.saved}</span>
         )}
-      </div>
+        <Button type="submit" disabled={isPending}>
+          {labels.save}
+        </Button>
+      </FormFooter>
     </form>
   );
 }

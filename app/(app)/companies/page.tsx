@@ -27,6 +27,8 @@ export default async function CompaniesPage() {
   const t = await getTranslations("pages.companies");
   const tNav = await getTranslations("nav");
   const tStatus = await getTranslations("companyStatus");
+  // eslint-disable-next-line react-hooks/purity -- server component, renders once per request
+  const now = Date.now();
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -84,7 +86,78 @@ export default async function CompaniesPage() {
             action={{ label: t("emptyAction"), href: "/companies/new" }}
           />
         ) : (
-          <div className="overflow-x-auto"><table className="w-full text-sm">
+          <>
+          {/* Mobile / tablet portrait : cards layout (one per row) */}
+          <ul className="lg:hidden divide-y divide-border">
+            {rows.map((c) => {
+              const grade = scoreGrade(c.score);
+              const addressBits = c.primarySite
+                ? [c.primarySite.addressLine1, c.primarySite.postalCode, c.primarySite.city]
+                    .filter(Boolean)
+                    .join(", ")
+                : null;
+              const daysSince = c.signalDetectedAt
+                ? Math.floor(
+                    (now - new Date(c.signalDetectedAt).getTime()) /
+                      (1000 * 60 * 60 * 24),
+                  )
+                : null;
+              const isFresh = daysSince != null && daysSince <= 30;
+              return (
+                <li key={c.id}>
+                  <Link
+                    href={`/companies/${c.id}`}
+                    className="block px-4 py-3 hover:bg-secondary/30 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-1.5">
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground truncate">{c.name}</div>
+                        {addressBits && (
+                          <div className="text-xs text-muted-foreground mt-0.5">{addressBits}</div>
+                        )}
+                      </div>
+                      {c.score != null && grade && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium shrink-0",
+                            scoreBadgeClasses(c.score),
+                          )}
+                        >
+                          {c.score} · {grade}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                        {tStatus(c.status as Parameters<typeof tStatus>[0])}
+                      </span>
+                      {c.signalType && (
+                        <span
+                          className={cn(
+                            "px-1.5 py-0.5 rounded font-medium",
+                            isFresh
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-slate-100 text-slate-600",
+                          )}
+                        >
+                          {c.signalType}
+                          {daysSince != null && ` · ${daysSince}d`}
+                        </span>
+                      )}
+                      {c.topContact && (
+                        <span className="text-muted-foreground">
+                          · {c.topContact.firstName} {c.topContact.lastName}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Desktop : table layout */}
+          <div className="hidden lg:block overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-secondary/40 text-muted-foreground text-[11px] uppercase tracking-wider">
               <tr className="text-left">
                 <th className="px-4 py-3 font-medium">{t("columns.company")}</th>
@@ -201,6 +274,7 @@ export default async function CompaniesPage() {
               })}
             </tbody>
           </table></div>
+          </>
         )}
       </Card>
 

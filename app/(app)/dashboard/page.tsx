@@ -89,9 +89,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="max-w-[1400px] mx-auto">
-      <header className="flex items-start justify-between gap-8 mb-10">
+      <header className="flex flex-col gap-3 mb-10 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
         <div>
-          <h1 className="font-serif text-4xl md:text-5xl font-bold tracking-tight">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight">
             {t("greeting", { name: firstName })} <span aria-hidden>👋</span>
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -102,7 +102,7 @@ export default async function DashboardPage() {
             })}
           </p>
         </div>
-        <div className="text-right shrink-0">
+        <div className="sm:text-right sm:shrink-0">
           <div className="text-sm text-muted-foreground">
             {t("sideHeader", {
               week: PLACEHOLDER_SPRINT06.weekNumber,

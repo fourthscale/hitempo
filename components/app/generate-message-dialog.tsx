@@ -203,9 +203,13 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
         <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/30 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 duration-100" />
         <DialogPrimitive.Popup
           className={cn(
-            "fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
-            "w-[min(1100px,calc(100vw-2rem))] h-[min(720px,calc(100vh-2rem))]",
-            "flex flex-col overflow-hidden rounded-xl bg-popover ring-1 ring-foreground/10 outline-none",
+            // Mobile/tablet portrait : full-screen sheet (no border-radius,
+            // no margins) so the form has room to breathe.
+            "fixed inset-0 z-50 w-screen h-[100dvh] flex flex-col overflow-hidden bg-popover outline-none",
+            // Desktop : centered floating dialog.
+            "lg:inset-auto lg:top-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2",
+            "lg:w-[min(1100px,calc(100vw-2rem))] lg:h-[min(720px,calc(100vh-2rem))]",
+            "lg:rounded-xl lg:ring-1 lg:ring-foreground/10",
             "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
             "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           )}
@@ -234,8 +238,8 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
             </DialogPrimitive.Close>
           </div>
 
-          {/* Body — two columns */}
-          <div className="flex-1 min-h-0 grid grid-cols-[minmax(260px,320px)_1fr] divide-x divide-border overflow-hidden">
+          {/* Body — two columns on desktop, stacked on mobile */}
+          <div className="flex-1 min-h-0 flex flex-col divide-y divide-border overflow-y-auto lg:overflow-hidden lg:grid lg:grid-cols-[minmax(260px,320px)_1fr] lg:divide-y-0 lg:divide-x">
             {/* Left — parameters */}
             <ParamsColumn
               channelIntent={channelIntent}
