@@ -211,12 +211,46 @@ export async function softDeleteOrgAction(formData: FormData) {
 // Org members
 // ---------------------------------------------------------------------------
 
+/**
+ * Lightweight lookup used by the invite form to adapt its UI before submission.
+ * Returns whether the email already has a Supabase auth account and whether it
+ * is confirmed. Safe to call from client components — platform-admin-gated.
+ */
+export async function checkEmailForInviteAction(email: string): Promise<{
+  status: "new" | "existing_confirmed" | "existing_pending";
+  displayName: string;
+}> {
+  await requirePlatformAdmin();
+  const parsed = z.string().email().safeParse(email.trim());
+  if (!parsed.success) return { status: "new", displayName: "" };
+
+  const user = await AuthUserServiceFactory.getInstance().findByEmail(parsed.data);
+  if (!user) return { status: "new", displayName: "" };
+
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const displayName =
+    [
+      typeof meta.firstName === "string" ? meta.firstName : "",
+      typeof meta.lastName === "string" ? meta.lastName : "",
+    ]
+      .filter(Boolean)
+      .join(" ") ||
+    user.email ||
+    "";
+
+  return {
+    status: user.email_confirmed_at ? "existing_confirmed" : "existing_pending",
+    displayName,
+  };
+}
+
 const inviteMemberSchema = z.object({
   orgId: z.string().uuid(),
   email: z.string().email(),
   firstName: z.string().trim().max(100).optional().or(z.literal("")),
   lastName: z.string().trim().max(100).optional().or(z.literal("")),
   role: z.enum(ROLE_VALUES),
+  preferredLocale: z.enum(LOCALE_VALUES).optional(),
 });
 
 export async function inviteUserToOrgAction(formData: FormData) {
@@ -251,6 +285,7 @@ export async function inviteUserToOrgAction(formData: FormData) {
         organizationId: d.orgId,
         userId: user.id,
         role: d.role,
+        preferredLocale: d.preferredLocale ?? "fr",
       });
 
       revalidatePath(`/admin/orgs/${d.orgId}`);

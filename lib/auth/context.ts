@@ -22,19 +22,39 @@ export async function getCurrentUser() {
 }
 
 /**
- * Resolves the membership row for the current user (with the org loaded).
- * Returns null if the user has no membership — this is normal for a pure
- * platform admin. Callers decide what to do (redirect, fallback, etc.).
- *
- * Pure data fetch: no side effects.
+ * Fetches all memberships for a user (with orgs loaded) and returns the
+ * full list plus the "active" one resolved by `preferredOrgId` (cookie).
+ * Falls back to the first membership when the preferred id is absent or
+ * doesn't match any of the user's orgs.
  */
-async function fetchMembership(userId: string) {
+async function resolveMemberships(userId: string, preferredOrgId?: string) {
   const db = getDb();
-  const membership = await db.query.organizationMembers.findFirst({
+  const all = await db.query.organizationMembers.findMany({
     where: eq(organizationMembers.userId, userId),
     with: { organization: true },
   });
-  return membership ?? null;
+
+  if (all.length === 0) return { all: [], active: null };
+
+  if (preferredOrgId) {
+    const preferred = all.find((m) => m.organizationId === preferredOrgId);
+    if (preferred) return { all, active: preferred };
+  }
+
+  return { all, active: all[0]! };
+}
+
+/**
+ * Returns the list of org IDs the user is a member of.
+ * Used by selectOrgAction to validate a switch target.
+ */
+export async function getUserOrgIds(userId: string): Promise<string[]> {
+  const db = getDb();
+  const rows = await db
+    .select({ organizationId: organizationMembers.organizationId })
+    .from(organizationMembers)
+    .where(eq(organizationMembers.userId, userId));
+  return rows.map((r) => r.organizationId);
 }
 
 async function isPlatformAdminUser(userId: string) {
@@ -48,7 +68,7 @@ async function isPlatformAdminUser(userId: string) {
 
 /**
  * Returns the user, their membership, and their org.
- * - If the user has a membership: returns it.
+ * - If the user has a membership: returns it (cookie-resolved when multi-org).
  * - If no membership AND user is a platform admin: redirects to /admin/orgs.
  * - If no membership AND not a platform admin: throws (data integrity bug).
  *
@@ -56,7 +76,9 @@ async function isPlatformAdminUser(userId: string) {
  */
 export async function getCurrentOrg() {
   const user = await getCurrentUser();
-  const membership = await fetchMembership(user.id);
+  const cookieStore = await cookies();
+  const preferredOrgId = cookieStore.get(CURRENT_ORG_COOKIE)?.value;
+  const { active: membership } = await resolveMemberships(user.id, preferredOrgId);
 
   if (!membership) {
     if (await isPlatformAdminUser(user.id)) {
@@ -85,8 +107,11 @@ export async function getCurrentOrg() {
  */
 export async function getCurrentContext() {
   const user = await getCurrentUser();
-  const [membership, isPlatformAdmin] = await Promise.all([
-    fetchMembership(user.id),
+  const cookieStore = await cookies();
+  const preferredOrgId = cookieStore.get(CURRENT_ORG_COOKIE)?.value;
+
+  const [{ all: allMemberships, active: membership }, isPlatformAdmin] = await Promise.all([
+    resolveMemberships(user.id, preferredOrgId),
     isPlatformAdminUser(user.id),
   ]);
 
@@ -100,8 +125,9 @@ export async function getCurrentContext() {
 
   return {
     user,
-    membership, // may be null for pure platform admins
-    organization: membership?.organization ?? null, // may be null for pure platform admins
+    membership,       // active membership (cookie-resolved when multi-org); null for pure platform admins
+    allMemberships,   // all memberships — for the org switcher UI
+    organization: membership?.organization ?? null,
     isPlatformAdmin,
   };
 }
@@ -118,32 +144,40 @@ export async function getCurrentContext() {
  *   - no cookie + no membership → redirect to /admin/orgs
  */
 export async function getActiveOrg() {
-  const { user, membership, organization, isPlatformAdmin } = await getCurrentContext();
-  const cookieStore = await cookies();
-  const cookieOrgId = cookieStore.get(CURRENT_ORG_COOKIE)?.value;
+  const { user, membership, allMemberships, organization, isPlatformAdmin } =
+    await getCurrentContext();
 
-  if (isPlatformAdmin && cookieOrgId) {
-    const target = await getDb().query.organizations.findFirst({
-      where: and(eq(organizations.id, cookieOrgId), isNull(organizations.deletedAt)),
-    });
-    if (target) {
-      return {
-        user,
-        membership,
-        ownOrganization: organization,
-        activeOrganization: target,
-        isPlatformAdmin: true,
-        isImpersonating: organization?.id !== target.id,
-      };
+  // Platform admins can impersonate any org via cookie (cross-org access).
+  // The cookie is already factored in for regular multi-org users inside
+  // getCurrentContext → resolveMemberships, so here we only need the extra
+  // lookup for platform admins pointing at a non-member org.
+  if (isPlatformAdmin) {
+    const cookieStore = await cookies();
+    const cookieOrgId = cookieStore.get(CURRENT_ORG_COOKIE)?.value;
+    if (cookieOrgId) {
+      const target = await getDb().query.organizations.findFirst({
+        where: and(eq(organizations.id, cookieOrgId), isNull(organizations.deletedAt)),
+      });
+      if (target) {
+        return {
+          user,
+          membership,
+          allMemberships,
+          ownOrganization: organization,
+          activeOrganization: target,
+          isPlatformAdmin: true as const,
+          isImpersonating: organization?.id !== target.id,
+        };
+      }
+      // Cookie points to a non-existent org → fall through.
     }
-    // Cookie points to a non-existent org → ignore and fall through.
   }
 
-  // No cookie path
   if (organization) {
     return {
       user,
       membership,
+      allMemberships,
       ownOrganization: organization,
       activeOrganization: organization,
       isPlatformAdmin,

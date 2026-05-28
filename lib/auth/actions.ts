@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { CURRENT_ORG_COOKIE, getCurrentContext } from "@/lib/auth/context";
+import { CURRENT_ORG_COOKIE, getCurrentContext, getUserOrgIds } from "@/lib/auth/context";
 import { getAdminDb } from "@/db/client";
 import { platformAdminAudit } from "@/db/schema";
 
@@ -119,10 +119,10 @@ export async function selectOrgAction(orgId: string) {
 
   const { user, membership, isPlatformAdmin } = await getCurrentContext();
 
-  // Normal users can't switch — silently bounce. They MUST have a membership
-  // (getCurrentContext guarantees it for non-admins), so .organizationId is safe.
+  // Non-admin users can only switch to orgs they are a member of.
   if (!isPlatformAdmin) {
-    if (!membership || parsedOrg.data !== membership.organizationId) {
+    const memberOrgIds = await getUserOrgIds(user.id);
+    if (!memberOrgIds.includes(parsedOrg.data)) {
       redirect("/dashboard");
     }
   }

@@ -4,7 +4,6 @@ import { getTranslations, getLocale } from "next-intl/server";
 import { Pencil, Trash2 } from "lucide-react";
 import {
   getOrgWithMembers,
-  inviteUserToOrgAction,
   removeMemberFromOrgAction,
   resendInvitationAction,
   softDeleteOrgAction,
@@ -12,11 +11,10 @@ import {
 import { selectOrgAction } from "@/lib/auth/actions";
 import { PageHeader } from "@/components/app/page-header";
 import { ConfirmForm } from "@/components/app/confirm-form";
+import { InviteMemberForm } from "@/components/app/invite-member-form";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 const ROLE_OPTIONS = ["owner", "admin", "commercial", "viewer"] as const;
 type Role = (typeof ROLE_OPTIONS)[number];
@@ -185,44 +183,7 @@ export default async function AdminOrgDetailPage({
         <p className="text-sm text-muted-foreground mt-1 mb-4">
           {tInvite("subtitle")}
         </p>
-        <form action={inviteUserToOrgAction} className="space-y-4">
-          <input type="hidden" name="orgId" value={org.id} />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="email">{tInvite("email")}</Label>
-              <Input id="email" name="email" type="email" required />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="role">{tInvite("role")}</Label>
-              <select
-                id="role"
-                name="role"
-                defaultValue="commercial"
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                {ROLE_OPTIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {tRoles(r)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="firstName">{tInvite("firstName")}</Label>
-              <Input id="firstName" name="firstName" maxLength={100} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="lastName">{tInvite("lastName")}</Label>
-              <Input id="lastName" name="lastName" maxLength={100} />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end">
-            <SubmitButton>{tInvite("submit")}</SubmitButton>
-          </div>
-        </form>
+        <InviteMemberForm orgId={org.id} />
       </Card>
     </div>
   );

@@ -171,18 +171,21 @@ export class AuthUserService {
       return { user, status: "invited" };
     }
 
-    // Patch metadata only when the caller actually provided non-empty values
-    // that differ from the current values. Avoids no-op writes.
-    const currentMeta = (existing.user_metadata ?? {}) as Record<string, unknown>;
+    // Only patch metadata for unconfirmed users. A confirmed user's identity
+    // (name) was set at account creation; a different org's admin must not
+    // overwrite it through an invite form.
     const nextMeta: UserMetadataPatch = {};
-    if (metadata.firstName && currentMeta.firstName !== metadata.firstName) {
-      nextMeta.firstName = metadata.firstName;
-    }
-    if (metadata.lastName && currentMeta.lastName !== metadata.lastName) {
-      nextMeta.lastName = metadata.lastName;
-    }
-    if (Object.keys(nextMeta).length > 0) {
-      await this.updateMetadata(existing.id, nextMeta);
+    if (!existing.email_confirmed_at) {
+      const currentMeta = (existing.user_metadata ?? {}) as Record<string, unknown>;
+      if (metadata.firstName && currentMeta.firstName !== metadata.firstName) {
+        nextMeta.firstName = metadata.firstName;
+      }
+      if (metadata.lastName && currentMeta.lastName !== metadata.lastName) {
+        nextMeta.lastName = metadata.lastName;
+      }
+      if (Object.keys(nextMeta).length > 0) {
+        await this.updateMetadata(existing.id, nextMeta);
+      }
     }
 
     if (!existing.email_confirmed_at) {

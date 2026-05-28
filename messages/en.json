@@ -247,8 +247,18 @@
           "firstName": "First name",
           "lastName": "Last name",
           "role": "Role",
+          "preferredLocale": "Language",
+          "localeOptions": {
+            "fr": "French",
+            "en": "English"
+          },
           "submit": "Send invitation",
-          "submitting": "Sending…"
+          "submitting": "Sending…",
+          "checkingEmail": "Checking…",
+          "existingConfirmed": "Already has an account — {name}. Name fields are not needed.",
+          "existingPending": "Invitation pending — {name}. A new link will be sent.",
+          "newUser": "New user — fill in first name and last name.",
+          "required": "(required)"
         },
         "remove": "Remove",
         "removeConfirm": "Remove this member from the org? Their auth account stays — only the membership is dropped.",

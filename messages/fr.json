@@ -247,8 +247,18 @@
           "firstName": "Prénom",
           "lastName": "Nom",
           "role": "Rôle",
+          "preferredLocale": "Langue",
+          "localeOptions": {
+            "fr": "Français",
+            "en": "Anglais"
+          },
           "submit": "Envoyer l'invitation",
-          "submitting": "Envoi…"
+          "submitting": "Envoi…",
+          "checkingEmail": "Vérification…",
+          "existingConfirmed": "Compte existant — {name}. Le prénom et nom ne sont pas requis.",
+          "existingPending": "Invitation en attente — {name}. Un nouveau lien sera envoyé.",
+          "newUser": "Nouvel utilisateur — renseignez le prénom et le nom.",
+          "required": "(requis)"
         },
         "remove": "Retirer",
         "removeConfirm": "Retirer ce membre de l'org ? Son compte auth reste — seule l'appartenance est supprimée.",

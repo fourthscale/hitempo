@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { SidebarNav, type NavItem } from "./sidebar-nav";
 import { Logo } from "./logo";
+import { OrgSwitcher } from "./org-switcher";
 import { signOutAction } from "@/lib/auth/actions";
 import { LogOut, ArrowLeftRight, ShieldCheck } from "lucide-react";
 import { countCompaniesByOrg } from "@/db/queries/companies";
@@ -14,6 +15,8 @@ type Organization = {
   name: string;
   slug: string;
 };
+
+type OrgOption = { id: string; name: string };
 
 function initialsFromEmail(email: string | null | undefined): string {
   if (!email) return "?";
@@ -29,11 +32,14 @@ function initialsFromEmail(email: string | null | undefined): string {
 export async function Sidebar({
   user,
   organization,
+  allOrgs = [],
   isPlatformAdmin = false,
   showBusinessNav = true,
 }: {
   user: User;
   organization: Organization | null;
+  /** All orgs the user is a member of — drives the org switcher. */
+  allOrgs?: OrgOption[];
   isPlatformAdmin?: boolean;
   /**
    * When false, only the chrome (logo, admin pill, user info, sign out) shows.
@@ -72,11 +78,13 @@ export async function Sidebar({
     <aside className="w-60 bg-sidebar text-sidebar-foreground flex flex-col py-5 shrink-0 sticky top-0 h-screen self-start overflow-y-auto">
       <div className="px-5 mb-6">
         <Logo variant="white" className="h-10 w-auto" />
-        {organization && (
+        {organization && allOrgs.length > 1 ? (
+          <OrgSwitcher orgs={allOrgs} activeOrgId={organization.id} />
+        ) : organization ? (
           <div className="text-[10px] uppercase tracking-[0.2em] text-sidebar-foreground/60 mt-2">
             {organization.name}
           </div>
-        )}
+        ) : null}
         {isPlatformAdmin && (
           <div className="mt-2 inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider bg-brand-amber/15 text-brand-amber border border-brand-amber/30">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-amber" aria-hidden />
