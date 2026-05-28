@@ -81,9 +81,10 @@ function ScoreBreakdownRows({
   );
 }
 
-type Tab = "overview" | "sites" | "contacts";
+type Tab = "overview" | "sites" | "contacts" | "tasks" | "interactions";
+const TABS = new Set<Tab>(["overview", "sites", "contacts", "tasks", "interactions"]);
 function parseTab(raw: string | undefined): Tab {
-  return raw === "sites" || raw === "contacts" ? raw : "overview";
+  return raw && (TABS as Set<string>).has(raw) ? (raw as Tab) : "overview";
 }
 
 export default async function CompanyDetailPage({
@@ -250,6 +251,16 @@ export default async function CompanyDetailPage({
           contacts: company.contacts.length,
           interactions: interactionsCount,
           tasks: tasksCount,
+        }}
+        labels={{
+          overview: t("tabs.overview"),
+          sites: t("tabs.sites"),
+          contacts: t("tabs.contacts"),
+          interactions: t("tabs.interactions"),
+          tasks: t("tabs.tasks"),
+          opportunities: t("tabs.opportunities"),
+          files: t("tabs.files"),
+          soon: t("tabs.soon"),
         }}
       />
 
@@ -496,29 +507,59 @@ export default async function CompanyDetailPage({
 
           {/* Right sidebar */}
           <div className="space-y-6">
-            <CompanyTasksCard companyId={company.id} orgId={activeOrganization.id} />
+            <CompanyTasksCard
+              companyId={company.id}
+              orgId={activeOrganization.id}
+              limit={5}
+            />
             <CompanyInteractionsCard
               companyId={company.id}
               companyName={company.name}
               orgId={activeOrganization.id}
+              limit={5}
             />
           </div>
         </div>
+      )}
+
+      {tab === "tasks" && (
+        <CompanyTasksCard
+          companyId={company.id}
+          orgId={activeOrganization.id}
+        />
+      )}
+
+      {tab === "interactions" && (
+        <CompanyInteractionsCard
+          companyId={company.id}
+          companyName={company.name}
+          orgId={activeOrganization.id}
+        />
       )}
     </div>
   );
 }
 
-async function CompanyTasksCard({ companyId, orgId }: { companyId: string; orgId: string }) {
+async function CompanyTasksCard({
+  companyId,
+  orgId,
+  limit,
+}: {
+  companyId: string;
+  orgId: string;
+  /** Cap on rendered rows. Omitted = no cap (used on the dedicated tab). */
+  limit?: number;
+}) {
   const companyTasks = await getTasksByCompany(orgId, companyId);
   const locale = await getLocale();
   const tTaskType = await getTranslations("taskType");
   const tTasks = await getTranslations("pages.tasks");
+  const visibleTasks = limit ? companyTasks.slice(0, limit) : companyTasks;
   return (
     <Card className="p-5 bg-brand-amber/5 border-brand-amber/30">
       <div className="flex items-center justify-between mb-3">
         <div className="text-xs uppercase tracking-wider text-amber-800 font-medium">
-          {tTasks("breadcrumb")}
+          {tTasks("breadcrumb")} {limit && companyTasks.length > 0 && `(${companyTasks.length})`}
         </div>
         <Link
           href={`/tasks/new?companyId=${companyId}`}
@@ -531,7 +572,7 @@ async function CompanyTasksCard({ companyId, orgId }: { companyId: string; orgId
         <p className="text-xs text-muted-foreground">{tTasks("empty")}</p>
       ) : (
         <ul className="space-y-2">
-          {companyTasks.slice(0, 5).map((task) => (
+          {visibleTasks.map((task) => (
             <li key={task.id} className="text-sm">
               <span className="font-medium">
                 {tTaskType(task.type as Parameters<typeof tTaskType>[0])}
@@ -560,12 +601,18 @@ async function CompanyInteractionsCard({
   companyId,
   companyName,
   orgId,
+  limit,
 }: {
   companyId: string;
   companyName: string;
   orgId: string;
+  /** Cap on rendered rows. Omitted = no cap (used on the dedicated tab). */
+  limit?: number;
 }) {
   const companyInteractions = await getInteractionsByCompany(orgId, companyId);
+  const visibleInteractions = limit
+    ? companyInteractions.slice(0, limit)
+    : companyInteractions;
   const locale = await getLocale();
   const t = await getTranslations("pages.companies");
   const tI = await getTranslations("pages.interactions");
@@ -607,7 +654,7 @@ async function CompanyInteractionsCard({
         <p className="text-xs text-muted-foreground">{tI("empty")}</p>
       ) : (
         <ul className="space-y-3">
-          {companyInteractions.slice(0, 5).map((interaction) => (
+          {visibleInteractions.map((interaction) => (
             <li key={interaction.id} className="text-sm">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">

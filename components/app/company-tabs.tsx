@@ -3,26 +3,42 @@ import { cn } from "@/lib/utils";
 
 /**
  * Tab strip for the company detail page.
- * Tabs that route within /companies/[id] use ?tab= query param; disabled tabs
- * are placeholders for features that arrive in later sprints.
+ *
+ * Tabs that route within /companies/[id] use the `?tab=` query param ;
+ * disabled tabs are placeholders for features that ship later (V1).
+ *
+ * Labels come from the parent server component via the `labels` prop so
+ * they stay i18n-driven (no hardcoded strings here).
  */
 export function CompanyTabs({
   companyId,
   active,
   counts,
+  labels,
 }: {
   companyId: string;
   active: "overview" | "sites" | "contacts" | "interactions" | "tasks" | "opportunities" | "files";
   counts: { sites: number; contacts: number; interactions: number; tasks: number };
+  labels: {
+    overview: string;
+    sites: string;
+    contacts: string;
+    interactions: string;
+    tasks: string;
+    opportunities: string;
+    files: string;
+    /** Tooltip on disabled tabs. */
+    soon: string;
+  };
 }) {
   const tabs = [
-    { key: "overview", label: "Aperçu", count: null, href: `/companies/${companyId}`, enabled: true },
-    { key: "sites", label: "Sites", count: counts.sites, href: `/companies/${companyId}?tab=sites`, enabled: true },
-    { key: "contacts", label: "Contacts", count: counts.contacts, href: `/companies/${companyId}?tab=contacts`, enabled: true },
-    { key: "interactions", label: "Interactions", count: counts.interactions, href: null, enabled: false },
-    { key: "tasks", label: "Tâches", count: counts.tasks, href: null, enabled: false },
-    { key: "opportunities", label: "Opportunités", count: null, href: null, enabled: false },
-    { key: "files", label: "Fichiers", count: null, href: null, enabled: false },
+    { key: "overview", label: labels.overview, count: null, href: `/companies/${companyId}`, enabled: true },
+    { key: "sites", label: labels.sites, count: counts.sites, href: `/companies/${companyId}?tab=sites`, enabled: true },
+    { key: "contacts", label: labels.contacts, count: counts.contacts, href: `/companies/${companyId}?tab=contacts`, enabled: true },
+    { key: "interactions", label: labels.interactions, count: counts.interactions, href: `/companies/${companyId}?tab=interactions`, enabled: true },
+    { key: "tasks", label: labels.tasks, count: counts.tasks, href: `/companies/${companyId}?tab=tasks`, enabled: true },
+    { key: "opportunities", label: labels.opportunities, count: null, href: null, enabled: false },
+    { key: "files", label: labels.files, count: null, href: null, enabled: false },
   ] as const;
 
   return (
@@ -66,7 +82,7 @@ export function CompanyTabs({
               key={t.key}
               type="button"
               disabled={!t.enabled}
-              title={!t.enabled ? "Coming in a later sprint" : undefined}
+              title={!t.enabled ? labels.soon : undefined}
               className={baseCls}
             >
               {content}

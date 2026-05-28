@@ -337,6 +337,16 @@
       "placeholder": "Le CRUD entreprises arrive au sprint 04.",
       "count": "{count, plural, =0 {Aucun résultat} one {1 résultat} other {# résultats}}",
       "new": "Nouvelle entreprise",
+      "tabs": {
+        "overview": "Aperçu",
+        "sites": "Sites",
+        "contacts": "Contacts",
+        "interactions": "Interactions",
+        "tasks": "Tâches",
+        "opportunities": "Opportunités",
+        "files": "Fichiers",
+        "soon": "Bientôt disponible"
+      },
       "importCsv": "Importer CSV",
       "filtersSoon": "Les filtres arrivent avec les segments / micro-zones",
       "moreFilters": "Plus de filtres",
