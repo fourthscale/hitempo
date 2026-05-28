@@ -671,6 +671,37 @@
       "importSectionTitle": "Import en masse",
       "importSectionDescription": "Importez entreprises, contacts et sites depuis un fichier CSV.",
       "importSectionLink": "Ouvrir l'import",
+      "profileSectionTitle": "Mon profil",
+      "profileSectionDescription": "Nom, langue préférée et mot de passe.",
+      "profileSectionLink": "Modifier mon profil",
+      "profile": {
+        "title": "Mon profil",
+        "identityTitle": "Identité",
+        "firstName": "Prénom",
+        "lastName": "Nom",
+        "email": "Email",
+        "emailHint": "L'email ne peut pas être modifié ici.",
+        "saveIdentity": "Enregistrer",
+        "orgTitle": "Organisation",
+        "role": "Rôle",
+        "roleHint": "Le rôle est défini par un administrateur.",
+        "preferredLocale": "Langue préférée",
+        "saveLocale": "Enregistrer",
+        "passwordTitle": "Mot de passe",
+        "newPassword": "Nouveau mot de passe",
+        "confirmPassword": "Confirmer le mot de passe",
+        "savePassword": "Changer le mot de passe",
+        "saved": {
+          "profile": "Profil mis à jour.",
+          "locale": "Langue mise à jour.",
+          "password": "Mot de passe mis à jour."
+        },
+        "errors": {
+          "invalid_input": "Données invalides.",
+          "invalid_password": "Mot de passe invalide ou les deux mots de passe ne correspondent pas (minimum 6 caractères).",
+          "update_failed": "La mise à jour a échoué, veuillez réessayer."
+        }
+      },
       "brand": {
         "title": "Voix de marque",
         "subtitle": "Utilisée par l'IA d'hitempo pour générer des messages alignés avec votre marque. Remplissez au moins une langue pour activer la génération dans cette langue.",

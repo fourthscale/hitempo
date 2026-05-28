@@ -10,7 +10,7 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, activeOrganization, allMemberships, isPlatformAdmin, isImpersonating } =
+  const { user, membership, activeOrganization, allMemberships, isPlatformAdmin, isImpersonating } =
     await getActiveOrg();
 
   return (
@@ -20,6 +20,7 @@ export default async function AppLayout({
           user={user}
           organization={activeOrganization}
           allOrgs={allMemberships.map((m) => ({ id: m.organizationId, name: m.organization.name }))}
+          memberRole={membership?.role ?? null}
           isPlatformAdmin={isPlatformAdmin}
         />
       }

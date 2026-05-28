@@ -33,6 +33,7 @@ export async function Sidebar({
   user,
   organization,
   allOrgs = [],
+  memberRole = null,
   isPlatformAdmin = false,
   showBusinessNav = true,
 }: {
@@ -40,6 +41,8 @@ export async function Sidebar({
   organization: Organization | null;
   /** All orgs the user is a member of — drives the org switcher. */
   allOrgs?: OrgOption[];
+  /** Role in the active org — displayed below the user name. */
+  memberRole?: string | null;
   isPlatformAdmin?: boolean;
   /**
    * When false, only the chrome (logo, admin pill, user info, sign out) shows.
@@ -48,6 +51,7 @@ export async function Sidebar({
   showBusinessNav?: boolean;
 }) {
   const t = await getTranslations("nav");
+  const tRoles = await getTranslations("admin.orgs.detail.roles");
 
   // Real counters when we have an active org; skip otherwise (pure platform admin).
   const [companiesCount, contactsCount, tasksCount] = organization
@@ -118,18 +122,24 @@ export async function Sidebar({
 
       <div className="px-3 mt-4 pt-4 border-t border-sidebar-border">
         <div className="flex items-center gap-3 px-2">
-          <div className="h-9 w-9 shrink-0 rounded-full bg-brand-amber/90 text-white flex items-center justify-center text-xs font-semibold">
-            {initials}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-white truncate">
-              {displayName}
+          <Link
+            href="/settings/profile"
+            className="flex items-center gap-3 min-w-0 flex-1 rounded-md hover:bg-sidebar-accent transition-colors -mx-2 px-2 py-1.5"
+          >
+            <div className="h-9 w-9 shrink-0 rounded-full bg-brand-amber/90 text-white flex items-center justify-center text-xs font-semibold">
+              {initials}
             </div>
-            <div className="text-xs text-sidebar-foreground/60 capitalize truncate">
-              {/* PLACEHOLDER: hard-coded role label, will pull from membership.role */}
-              owner
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-white truncate">
+                {displayName}
+              </div>
+              {memberRole && (
+                <div className="text-xs text-sidebar-foreground/60 truncate">
+                  {tRoles(memberRole as Parameters<typeof tRoles>[0])}
+                </div>
+              )}
             </div>
-          </div>
+          </Link>
           <form action={signOutAction}>
             <button
               type="submit"

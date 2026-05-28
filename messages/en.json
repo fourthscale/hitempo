@@ -671,6 +671,37 @@
       "importSectionTitle": "Bulk import",
       "importSectionDescription": "Import companies, contacts, and sites from a CSV file.",
       "importSectionLink": "Open the importer",
+      "profileSectionTitle": "My profile",
+      "profileSectionDescription": "Name, preferred language and password.",
+      "profileSectionLink": "Edit my profile",
+      "profile": {
+        "title": "My profile",
+        "identityTitle": "Identity",
+        "firstName": "First name",
+        "lastName": "Last name",
+        "email": "Email",
+        "emailHint": "Email cannot be changed here.",
+        "saveIdentity": "Save",
+        "orgTitle": "Organization",
+        "role": "Role",
+        "roleHint": "Role is set by an administrator.",
+        "preferredLocale": "Preferred language",
+        "saveLocale": "Save",
+        "passwordTitle": "Password",
+        "newPassword": "New password",
+        "confirmPassword": "Confirm password",
+        "savePassword": "Change password",
+        "saved": {
+          "profile": "Profile updated.",
+          "locale": "Language updated.",
+          "password": "Password updated."
+        },
+        "errors": {
+          "invalid_input": "Invalid data.",
+          "invalid_password": "Invalid password or passwords do not match (minimum 6 characters).",
+          "update_failed": "Update failed, please try again."
+        }
+      },
       "brand": {
         "title": "Brand voice",
         "subtitle": "Used by hitempo's AI to generate brand-aligned messages. Fill at least one locale to enable generation in that language.",
