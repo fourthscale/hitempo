@@ -101,10 +101,11 @@ export default async function CompanyDetailPage({
   const company = await getCompanyWithDetails(activeOrganization.id, id);
   if (!company) notFound();
 
-  const [t, tCompanyStatus, tRelationship, locale] = await Promise.all([
+  const [t, tCompanyStatus, tRelationship, tScoring, locale] = await Promise.all([
     getTranslations("pages.companies"),
     getTranslations("companyStatus"),
     getTranslations("companyRelationshipType"),
+    getTranslations("scoring"),
     getLocale(),
   ]);
   const grade = scoreGrade(company.score);
@@ -179,7 +180,7 @@ export default async function CompanyDetailPage({
                     scoreBadgeClasses(company.score),
                   )}
                 >
-                  Score {company.score} · {grade}
+                  {tScoring("scoreBadge", { score: company.score, grade })}
                 </span>
               )}
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-muted-foreground">

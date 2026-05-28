@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
 import { contacts, interactions } from "@/db/schema";
 
@@ -206,6 +206,116 @@ export async function countInteractionsByOrg(orgId: string): Promise<number> {
     columns: { id: true },
   });
   return rows.length;
+}
+
+/**
+ * Counts `email_received` interactions that don't yet have an `outcome` set
+ * — the user's pending classification queue. These are the rows the
+ * "Réponses à classer" KPI on the dashboard surfaces : reading the reply
+ * snippet and picking positive_reply / negative_reply / rdv / etc is the
+ * core daily loop for the commercial.
+ */
+export async function countRepliesToClassifyByOrg(orgId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ c: count() })
+    .from(interactions)
+    .where(
+      and(
+        eq(interactions.organizationId, orgId),
+        eq(interactions.type, "email_received"),
+        isNull(interactions.outcome),
+      ),
+    );
+  return row?.c ?? 0;
+}
+
+/**
+ * Counts outbound interactions that have been sent but haven't yet been
+ * marked as `responded` — i.e. mail / call / visit "still in flight" from
+ * the rep's perspective. Filters by assignee/sender so each rep sees their
+ * own backlog. Useful as an early-warning KPI : when this number balloons,
+ * it's time to relance the oldest ones.
+ */
+export async function countAwaitingReplyByOrg(
+  orgId: string,
+  userId: string,
+): Promise<number> {
+  const [row] = await getDb()
+    .select({ c: count() })
+    .from(interactions)
+    .where(
+      and(
+        eq(interactions.organizationId, orgId),
+        eq(interactions.userId, userId),
+        eq(interactions.status, "sent"),
+      ),
+    );
+  return row?.c ?? 0;
+}
+
+/**
+ * Real response-rate metric : compares the last 30-day rolling window to
+ * the prior 30-day window. Uses the new `status` enum (responded vs sent)
+ * so it only counts outbound interactions where we have ground truth.
+ *
+ * Returns the current rate as a percentage and the delta in points
+ * versus the previous window. The delta is `null` when the previous
+ * window has zero outbound activity (avoids meaningless ↑∞ %).
+ */
+export async function getResponseRateLast30Days(
+  orgId: string,
+): Promise<{ rate: number; deltaPoints: number | null; sent: number; responded: number }> {
+  const now = new Date();
+  const day = 24 * 60 * 60 * 1000;
+  const start30 = new Date(now.getTime() - 30 * day);
+  const start60 = new Date(now.getTime() - 60 * day);
+
+  const rows = await getDb().query.interactions.findMany({
+    where: and(
+      eq(interactions.organizationId, orgId),
+      gte(interactions.occurredAt, start60),
+    ),
+    columns: { status: true, occurredAt: true },
+  });
+
+  const inRange = (r: { occurredAt: Date }, from: Date, to: Date) =>
+    r.occurredAt >= from && r.occurredAt < to;
+
+  /**
+   * Returns `null` when the window has zero outbound activity (sent or responded),
+   * so callers can distinguish "no data" from "0% rate".
+   * `sent` here is the total outbound volume in the window — i.e. responded rows
+   * count too, since a "responded" message was once sent.
+   */
+  function windowStats(
+    rows: Array<{ status: string | null; occurredAt: Date }>,
+    from: Date,
+    to: Date,
+  ): { rate: number; sent: number; responded: number } | null {
+    const slice = rows.filter(
+      (r) => inRange(r, from, to) && (r.status === "sent" || r.status === "responded"),
+    );
+    if (slice.length === 0) return null;
+    const responded = slice.filter((r) => r.status === "responded").length;
+    return {
+      rate: Math.round((responded / slice.length) * 100),
+      sent: slice.length,
+      responded,
+    };
+  }
+
+  const currentStats = windowStats(rows, start30, now);
+  const previousStats = windowStats(rows, start60, start30);
+
+  const current = currentStats?.rate ?? 0;
+  const deltaPoints = previousStats == null ? null : current - previousStats.rate;
+
+  return {
+    rate: current,
+    deltaPoints,
+    sent: currentStats?.sent ?? 0,
+    responded: currentStats?.responded ?? 0,
+  };
 }
 
 export async function getWeeklyInteractionStats(

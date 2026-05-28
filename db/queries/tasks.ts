@@ -100,6 +100,37 @@ export async function countOverdueTasksByOrg(orgId: string, assigneeId?: string 
   return rows.length;
 }
 
+/**
+ * Returns the age in days of the oldest overdue task — i.e. days since the
+ * earliest `due_at` among pending/in_progress tasks past their deadline.
+ * Used by the dashboard's "En retard" KPI : "Le plus vieux : 3 j".
+ *
+ * Returns 0 when no overdue tasks (callers can render `—` accordingly).
+ */
+export async function getOldestOverdueTaskAgeDays(
+  orgId: string,
+  assigneeId?: string | null,
+): Promise<number> {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const rows = await getDb().query.tasks.findMany({
+    where: and(
+      eq(tasks.organizationId, orgId),
+      or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
+      lt(tasks.dueAt, startOfToday),
+      assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
+    ),
+    columns: { dueAt: true },
+    orderBy: [asc(tasks.dueAt)],
+    limit: 1,
+  });
+  const oldest = rows[0]?.dueAt;
+  if (!oldest) return 0;
+  const ms = startOfToday.getTime() - oldest.getTime();
+  return Math.max(1, Math.floor(ms / (24 * 60 * 60 * 1000)));
+}
+
 export async function countPendingTasksByOrg(orgId: string, assigneeId?: string): Promise<number> {
   const [row] = await getDb()
     .select({ c: count() })

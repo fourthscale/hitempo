@@ -2,6 +2,7 @@
 
 import { useEffect, useReducer } from "react";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Menu, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ export function AppShell({
     false,
   );
   const pathname = usePathname();
+  const t = useTranslations("nav");
 
   // Close the drawer on route change.
   useEffect(() => {
@@ -63,7 +65,7 @@ export function AppShell({
       <button
         type="button"
         onClick={() => dispatch("open")}
-        aria-label="Open navigation"
+        aria-label={t("openDrawer")}
         className="lg:hidden fixed top-3 left-3 z-30 h-9 w-9 inline-flex items-center justify-center rounded-md bg-sidebar text-sidebar-foreground shadow-md"
       >
         <Menu className="h-5 w-5" />
@@ -73,7 +75,7 @@ export function AppShell({
       {open && (
         <button
           type="button"
-          aria-label="Close navigation"
+          aria-label={t("closeDrawer")}
           onClick={() => dispatch("close")}
           className="lg:hidden fixed inset-0 z-40 bg-black/50"
         />
@@ -93,7 +95,7 @@ export function AppShell({
         <button
           type="button"
           onClick={() => dispatch("close")}
-          aria-label="Close navigation"
+          aria-label={t("closeDrawer")}
           className="lg:hidden absolute top-3 right-3 z-10 h-8 w-8 inline-flex items-center justify-center rounded-md text-sidebar-foreground/80 hover:bg-sidebar-accent"
         >
           <X className="h-4 w-4" />

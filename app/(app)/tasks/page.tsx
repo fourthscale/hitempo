@@ -215,7 +215,7 @@ export default async function TasksPage({
             <button
               type="button"
               disabled
-              title="Kanban — coming soon"
+              title={t("views.kanbanSoon")}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <LayoutGrid className="h-3.5 w-3.5" />
@@ -224,7 +224,7 @@ export default async function TasksPage({
             <button
               type="button"
               disabled
-              title="Calendar — coming soon"
+              title={t("views.calendarSoon")}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed rounded-r-md"
             >
               <Calendar className="h-3.5 w-3.5" />

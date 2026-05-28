@@ -86,7 +86,7 @@ export default async function NewTaskPage({
               rows={3}
               maxLength={2000}
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-y"
-              placeholder="Optional context, notes, signal..."
+              placeholder={t("fields.descriptionPlaceholder")}
             />
           </div>
 

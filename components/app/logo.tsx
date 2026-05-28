@@ -5,7 +5,7 @@ type LogoVariant = "white" | "blue";
 /**
  * hitempo logo — SVG inline.
  * - 3 teal dots + 1 amber dash in the top row.
- * - "hitempo" wordmark below in Playfair Display (var(--font-serif)).
+ * - "hitempo" wordmark below in the heading font (var(--font-serif), aliased to Geist Sans).
  *
  * `variant` controls only the wordmark color (white for dark backgrounds,
  * deep navy for light backgrounds). Dots & dash always use brand colors.

@@ -182,7 +182,12 @@
     "settings": "Settings",
     "switchOrg": "Switch org",
     "platformAdmins": "Platform admins",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "openDrawer": "Open navigation",
+    "closeDrawer": "Close navigation"
+  },
+  "scoring": {
+    "scoreBadge": "Score {score} · {grade}"
   },
   "admin": {
     "nav": {
@@ -321,17 +326,25 @@
     "dashboard": {
       "greeting": "Hello {name}",
       "subtitle": "{date} · <em>{actions, plural, one {# action waiting} other {# actions waiting}}</em>",
-      "sideHeader": "Week {week} · Micro-zone: {zone}",
-      "sideSubheader": "{count} new prospects sourced this week",
       "kpis": {
         "actionsToday": "Today's actions",
         "actionsTodayDetail": "{emails} emails · {calls} calls · {visits} visits",
         "overdue": "Overdue follow-ups",
         "overdueDetail": "Oldest: {days, plural, one {# day} other {# days}}",
+        "overdueDetailNone": "Nothing overdue",
         "hotTargets": "Hot targets",
-        "hotTargetsDetail": "Score > 75 · to handle this week",
+        "hotTargetsDetail": "Score ≥ {threshold} · to handle this week",
+        "repliesToClassify": "Replies to classify",
+        "repliesToClassifyDetail": "Set the outcome of each conversation",
+        "repliesToClassifyDetailNone": "Inbox is up to date",
+        "awaitingReply": "Awaiting reply",
+        "awaitingReplyDetail": "Sent messages with no response yet",
         "responseRate": "30-day response rate",
-        "responseRateDetail": "+{points} pts vs last month"
+        "responseRateDeltaUp": "↑ {points} pts",
+        "responseRateDeltaDown": "↓ {points} pts",
+        "responseRateDeltaFlat": "Flat",
+        "responseRateDeltaNoData": "No comparison baseline yet",
+        "responseRateVolume": "{responded, plural, one {# reply} other {# replies}} / {sent, plural, one {# sent} other {# sent}}"
       },
       "today": {
         "title": "To handle today",
@@ -580,7 +593,9 @@
       "views": {
         "list": "List",
         "kanban": "Kanban",
-        "calendar": "Calendar"
+        "calendar": "Calendar",
+        "kanbanSoon": "Kanban — coming soon",
+        "calendarSoon": "Calendar — coming soon"
       },
       "groups": {
         "overdue": "OVERDUE",
@@ -619,6 +634,7 @@
         "type": "Type",
         "title": "Title",
         "description": "Description",
+        "descriptionPlaceholder": "Context, notes, signal… (optional)",
         "priority": "Priority",
         "dueAt": "Due date",
         "company": "Company",

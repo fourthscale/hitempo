@@ -182,7 +182,12 @@
     "settings": "Paramètres",
     "switchOrg": "Changer d'org",
     "platformAdmins": "Admins plateforme",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "openDrawer": "Ouvrir la navigation",
+    "closeDrawer": "Fermer la navigation"
+  },
+  "scoring": {
+    "scoreBadge": "Score {score} · {grade}"
   },
   "admin": {
     "nav": {
@@ -321,17 +326,25 @@
     "dashboard": {
       "greeting": "Bonjour {name}",
       "subtitle": "{date} · <em>{actions, plural, one {# action vous attend} other {# actions vous attendent}}</em>",
-      "sideHeader": "Semaine {week} · Micro-zone : {zone}",
-      "sideSubheader": "{count} nouveaux prospects sourcés cette semaine",
       "kpis": {
         "actionsToday": "Actions du jour",
         "actionsTodayDetail": "{emails} emails · {calls} appels · {visits} visites",
         "overdue": "Relances en retard",
         "overdueDetail": "Plus ancienne : {days, plural, one {# jour} other {# jours}}",
+        "overdueDetailNone": "Aucune en retard",
         "hotTargets": "Cibles chaudes",
-        "hotTargetsDetail": "Score > 75 · à traiter cette semaine",
+        "hotTargetsDetail": "Score ≥ {threshold} · à traiter cette semaine",
+        "repliesToClassify": "Réponses à classer",
+        "repliesToClassifyDetail": "Définir le résultat de la conversation",
+        "repliesToClassifyDetailNone": "Boîte de réception à jour",
+        "awaitingReply": "En attente de réponse",
+        "awaitingReplyDetail": "Messages envoyés sans réponse",
         "responseRate": "Taux de réponse 30j",
-        "responseRateDetail": "+{points} pts vs mois précédent"
+        "responseRateDeltaUp": "↑ {points} pts",
+        "responseRateDeltaDown": "↓ {points} pts",
+        "responseRateDeltaFlat": "Stable",
+        "responseRateDeltaNoData": "Pas de baseline comparative",
+        "responseRateVolume": "{responded, plural, one {# réponse} other {# réponses}} / {sent, plural, one {# envoi} other {# envois}}"
       },
       "today": {
         "title": "À traiter aujourd'hui",
@@ -580,7 +593,9 @@
       "views": {
         "list": "Liste",
         "kanban": "Kanban",
-        "calendar": "Calendrier"
+        "calendar": "Calendrier",
+        "kanbanSoon": "Kanban — bientôt disponible",
+        "calendarSoon": "Calendrier — bientôt disponible"
       },
       "groups": {
         "overdue": "EN RETARD",
@@ -619,6 +634,7 @@
         "type": "Type",
         "title": "Titre",
         "description": "Description",
+        "descriptionPlaceholder": "Contexte, notes, signal… (optionnel)",
         "priority": "Priorité",
         "dueAt": "Échéance",
         "company": "Entreprise",
