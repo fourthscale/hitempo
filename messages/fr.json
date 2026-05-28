@@ -619,6 +619,21 @@
       "edit": {
         "title": "Modifier la tâche",
         "submit": "Enregistrer"
+      },
+      "detail": {
+        "description": "Description",
+        "interactions": "Interactions",
+        "noInteractions": "Aucune interaction liée à cette tâche.",
+        "details": "Détails",
+        "dueAt": "Échéance",
+        "noDueDate": "Pas d'échéance",
+        "assignee": "Assigné à",
+        "company": "Entreprise",
+        "contact": "Contact",
+        "priority": "Priorité",
+        "createdAt": "Créée le",
+        "deleteConfirm": "Supprimer cette tâche ? Cette action est irréversible.",
+        "generateMessage": "Générer un message"
       }
     },
     "interactions": {
@@ -744,15 +759,15 @@
         "orientationPlaceholder": "ex : plus court, mentionne le contact précédent"
       },
       "channelIntentOptions": {
-        "email-first_contact":      "Email — Premier contact",
-        "email-follow_up":          "Email — Relance",
-        "email-meeting_request":    "Email — Demande de RDV",
-        "email-proposal_send":      "Email — Proposition",
-        "email-reconnect":          "Email — Reprise de contact",
-        "linkedin-first_contact":   "LinkedIn — Premier contact",
-        "linkedin-follow_up":       "LinkedIn — Relance",
+        "email-first_contact": "Email — Premier contact",
+        "email-follow_up": "Email — Relance",
+        "email-meeting_request": "Email — Demande de RDV",
+        "email-proposal_send": "Email — Proposition",
+        "email-reconnect": "Email — Reprise de contact",
+        "linkedin-first_contact": "LinkedIn — Premier contact",
+        "linkedin-follow_up": "LinkedIn — Relance",
         "linkedin-meeting_request": "LinkedIn — Demande de RDV",
-        "linkedin-reconnect":       "LinkedIn — Reprise de contact"
+        "linkedin-reconnect": "LinkedIn — Reprise de contact"
       },
       "languageOption": {
         "fr": "Français",

@@ -619,6 +619,21 @@
       "edit": {
         "title": "Edit task",
         "submit": "Save changes"
+      },
+      "detail": {
+        "description": "Description",
+        "interactions": "Interactions",
+        "noInteractions": "No interactions linked to this task yet.",
+        "details": "Details",
+        "dueAt": "Due date",
+        "noDueDate": "No due date",
+        "assignee": "Assignee",
+        "company": "Company",
+        "contact": "Contact",
+        "priority": "Priority",
+        "createdAt": "Created",
+        "deleteConfirm": "Delete this task? This cannot be undone.",
+        "generateMessage": "Generate message"
       }
     },
     "interactions": {
@@ -744,15 +759,15 @@
         "orientationPlaceholder": "e.g. shorter, mention the previous contact"
       },
       "channelIntentOptions": {
-        "email-first_contact":      "Email — First contact",
-        "email-follow_up":          "Email — Follow-up",
-        "email-meeting_request":    "Email — Meeting request",
-        "email-proposal_send":      "Email — Proposal",
-        "email-reconnect":          "Email — Reconnect",
-        "linkedin-first_contact":   "LinkedIn — First contact",
-        "linkedin-follow_up":       "LinkedIn — Follow-up",
+        "email-first_contact": "Email — First contact",
+        "email-follow_up": "Email — Follow-up",
+        "email-meeting_request": "Email — Meeting request",
+        "email-proposal_send": "Email — Proposal",
+        "email-reconnect": "Email — Reconnect",
+        "linkedin-first_contact": "LinkedIn — First contact",
+        "linkedin-follow_up": "LinkedIn — Follow-up",
         "linkedin-meeting_request": "LinkedIn — Meeting request",
-        "linkedin-reconnect":       "LinkedIn — Reconnect"
+        "linkedin-reconnect": "LinkedIn — Reconnect"
       },
       "languageOption": {
         "fr": "Français",

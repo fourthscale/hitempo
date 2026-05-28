@@ -493,13 +493,16 @@ async function TaskRow({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2 mb-1">
-          <span className={cn(
-            "text-sm font-medium",
-            isOverdue ? "text-brand-amber" : "text-foreground",
-            isCompleted && "line-through text-muted-foreground",
-          )}>
+          <Link
+            href={`/tasks/${task.id}`}
+            className={cn(
+              "text-sm font-medium hover:underline",
+              isOverdue ? "text-brand-amber" : "text-foreground",
+              isCompleted && "line-through text-muted-foreground",
+            )}
+          >
             {typeLabel} · {task.title}
-          </span>
+          </Link>
 
           {task.company?.score != null && grade && (
             <span className={cn(

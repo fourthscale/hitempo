@@ -57,6 +57,21 @@ export async function getRecentInteractionsForPrompt(
     .limit(limit);
 }
 
+export async function getInteractionsByTask(orgId: string, taskId: string) {
+  return getDb().query.interactions.findMany({
+    where: and(
+      eq(interactions.organizationId, orgId),
+      eq(interactions.taskId, taskId),
+    ),
+    with: {
+      company: { columns: { id: true, name: true } },
+      contact: { columns: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: [desc(interactions.occurredAt)],
+    limit: 50,
+  });
+}
+
 export async function getInteractionsByCompany(orgId: string, companyId: string) {
   return getDb().query.interactions.findMany({
     where: and(

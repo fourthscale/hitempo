@@ -233,6 +233,23 @@ export async function getTaskById(orgId: string, taskId: string) {
   });
 }
 
+/** Richer variant used by the task detail page. */
+export async function getTaskDetail(orgId: string, taskId: string) {
+  return getDb().query.tasks.findFirst({
+    where: and(eq(tasks.id, taskId), eq(tasks.organizationId, orgId)),
+    with: {
+      company: {
+        columns: { id: true, name: true, score: true, signalType: true, signalDetectedAt: true },
+      },
+      contact: {
+        columns: { id: true, firstName: true, lastName: true, jobTitle: true, preferredLanguage: true },
+      },
+    },
+  });
+}
+
+export type TaskDetail = NonNullable<Awaited<ReturnType<typeof getTaskDetail>>>;
+
 export async function updateTask(
   orgId: string,
   taskId: string,

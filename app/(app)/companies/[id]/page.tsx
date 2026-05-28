@@ -574,11 +574,13 @@ async function CompanyTasksCard({
         <ul className="space-y-2">
           {visibleTasks.map((task) => (
             <li key={task.id} className="text-sm">
-              <span className="font-medium">
-                {tTaskType(task.type as Parameters<typeof tTaskType>[0])}
-              </span>
-              {" · "}
-              <span className="text-foreground">{task.title}</span>
+              <Link href={`/tasks/${task.id}`} className="hover:underline">
+                <span className="font-medium">
+                  {tTaskType(task.type as Parameters<typeof tTaskType>[0])}
+                </span>
+                {" · "}
+                <span className="text-foreground">{task.title}</span>
+              </Link>
               {task.dueAt && (
                 <span className="text-xs text-muted-foreground ml-1">
                   · {new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(task.dueAt)}

@@ -211,9 +211,12 @@ export default async function ContactDetailPage({
             {contactTasks.map((task) => (
               <li key={task.id} className="py-3 flex items-start gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium">
+                  <Link
+                    href={`/tasks/${task.id}`}
+                    className="text-sm font-medium hover:underline"
+                  >
                     {tTaskType(task.type as Parameters<typeof tTaskType>[0])} · {task.title}
-                  </div>
+                  </Link>
                   {task.dueAt && (
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(task.dueAt)}
