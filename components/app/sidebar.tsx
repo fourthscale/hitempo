@@ -4,7 +4,7 @@ import type { User } from "@supabase/supabase-js";
 import { SidebarNav, type NavItem } from "./sidebar-nav";
 import { Logo } from "./logo";
 import { signOutAction } from "@/lib/auth/actions";
-import { LogOut, ArrowLeftRight } from "lucide-react";
+import { LogOut, ArrowLeftRight, ShieldCheck } from "lucide-react";
 import { countCompaniesByOrg } from "@/db/queries/companies";
 import { countContactsByOrg } from "@/db/queries/contacts";
 import { countPendingTasksByOrg } from "@/db/queries/tasks";
@@ -93,17 +93,17 @@ export async function Sidebar({
         <div className="px-3 mt-2 mb-1 space-y-0.5">
           <Link
             href="/admin/orgs"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
           >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-            {t("switchOrg")}
+            <ArrowLeftRight className="h-4 w-4 shrink-0 text-sidebar-foreground/70" />
+            <span className="flex-1 truncate">{t("switchOrg")}</span>
           </Link>
           <Link
             href="/admin/platform-admins"
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
           >
-            <ArrowLeftRight className="h-3.5 w-3.5 opacity-0" />
-            {t("platformAdmins")}
+            <ShieldCheck className="h-4 w-4 shrink-0 text-sidebar-foreground/70" />
+            <span className="flex-1 truncate">{t("platformAdmins")}</span>
           </Link>
         </div>
       )}
