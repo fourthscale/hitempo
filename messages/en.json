@@ -700,6 +700,21 @@
           "invalid_input": "Invalid data.",
           "invalid_password": "Invalid password or passwords do not match (minimum 6 characters).",
           "update_failed": "Update failed, please try again."
+        },
+        "gmailTitle": "Sending email",
+        "gmailDescription": "Connect your Gmail to send messages directly from hitempo and automatically detect replies from your prospects.",
+        "gmailConnect": "Connect Gmail",
+        "gmailDisconnect": "Disconnect",
+        "gmailConnectedSince": "Connected since {date}",
+        "gmailScopeNotice": "hitempo only accesses conversations sent from the app — no other emails in your inbox are read.",
+        "gmailSaved": {
+          "connected": "Gmail connected.",
+          "disconnected": "Gmail disconnected."
+        },
+        "gmailErrors": {
+          "denied": "Gmail connection cancelled.",
+          "state_mismatch": "Security check failed. Please try again.",
+          "exchange_failed": "Could not finalize Gmail connection, please try again."
         }
       },
       "brand": {

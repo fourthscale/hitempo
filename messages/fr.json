@@ -700,6 +700,21 @@
           "invalid_input": "Données invalides.",
           "invalid_password": "Mot de passe invalide ou les deux mots de passe ne correspondent pas (minimum 6 caractères).",
           "update_failed": "La mise à jour a échoué, veuillez réessayer."
+        },
+        "gmailTitle": "Email d'envoi",
+        "gmailDescription": "Connectez votre Gmail pour envoyer vos messages directement depuis hitempo et détecter automatiquement les réponses de vos prospects.",
+        "gmailConnect": "Connecter Gmail",
+        "gmailDisconnect": "Déconnecter",
+        "gmailConnectedSince": "Connecté depuis le {date}",
+        "gmailScopeNotice": "hitempo accède uniquement aux conversations envoyées depuis l'application — aucun autre email de votre boîte n'est lu.",
+        "gmailSaved": {
+          "connected": "Gmail connecté.",
+          "disconnected": "Gmail déconnecté."
+        },
+        "gmailErrors": {
+          "denied": "Connexion Gmail annulée.",
+          "state_mismatch": "Échec de la vérification de sécurité. Veuillez réessayer.",
+          "exchange_failed": "Impossible de finaliser la connexion Gmail, veuillez réessayer."
         }
       },
       "brand": {

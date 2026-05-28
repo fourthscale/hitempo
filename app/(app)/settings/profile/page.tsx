@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
@@ -9,18 +10,21 @@ import {
   updateProfileAction,
   updatePreferredLocaleAction,
   updatePasswordInAppAction,
+  disconnectGmailAction,
 } from "@/lib/actions/profile";
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
+import { CheckCircle2, AlertCircle, Mail } from "lucide-react";
 
 const LOCALE_OPTIONS = ["fr", "en"] as const;
 
 export default async function ProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; gmail?: string }>;
 }) {
   const { user, membership } = await getCurrentOrg();
-  const { saved, error } = await searchParams;
+  const { saved, error, gmail } = await searchParams;
+  const gmailCreds = await GmailCredentialsServiceFactory.getInstance().getForUser(user.id);
 
   const t = await getTranslations("pages.settings.profile");
   const tRoles = await getTranslations("admin.orgs.detail.roles");
@@ -44,6 +48,18 @@ export default async function ProfilePage({
         <div className="mb-6 flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-800">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{t(`errors.${error}`)}</span>
+        </div>
+      )}
+      {gmail && gmail !== "connected" && gmail !== "disconnected" && (
+        <div className="mb-6 flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm text-rose-800">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{t(`gmailErrors.${gmail}`)}</span>
+        </div>
+      )}
+      {(gmail === "connected" || gmail === "disconnected") && (
+        <div className="mb-6 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>{t(`gmailSaved.${gmail}`)}</span>
         </div>
       )}
 
@@ -104,6 +120,44 @@ export default async function ProfilePage({
         </form>
       </Card>
 
+      {/* Email d'envoi — Gmail OAuth */}
+      <Card className="p-6 mb-6">
+        <h2 className="font-serif text-base font-bold mb-1">{t("gmailTitle")}</h2>
+        <p className="text-sm text-muted-foreground mb-4">{t("gmailDescription")}</p>
+
+        {gmailCreds ? (
+          <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-secondary/30 px-4 py-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Mail className="h-4 w-4 shrink-0 text-emerald-700" />
+              <div className="min-w-0">
+                <div className="text-sm font-medium truncate">{gmailCreds.gmailAddress}</div>
+                <div className="text-xs text-muted-foreground">
+                  {t("gmailConnectedSince", {
+                    date: new Date(gmailCreds.connectedAt).toLocaleDateString(),
+                  })}
+                </div>
+              </div>
+            </div>
+            <form action={disconnectGmailAction}>
+              <SubmitButton size="sm" variant="outline" className="text-red-600 hover:bg-red-50">
+                {t("gmailDisconnect")}
+              </SubmitButton>
+            </form>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <Link
+              href="/api/auth/gmail/connect"
+              className="inline-flex items-center gap-3 h-10 pl-3 pr-4 rounded-md bg-white border border-[#dadce0] text-[#3c4043] text-sm font-medium hover:shadow-md hover:bg-[#f8faff] transition-all"
+            >
+              <GmailIcon className="h-[18px] w-[18px] shrink-0" />
+              <span>{t("gmailConnect")}</span>
+            </Link>
+            <p className="text-xs text-muted-foreground">{t("gmailScopeNotice")}</p>
+          </div>
+        )}
+      </Card>
+
       {/* Password */}
       <Card className="p-6">
         <h2 className="font-serif text-base font-bold mb-4">{t("passwordTitle")}</h2>
@@ -122,5 +176,33 @@ export default async function ProfilePage({
         </form>
       </Card>
     </div>
+  );
+}
+
+/** Official Gmail envelope mark, used inside the OAuth connect button. */
+function GmailIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 256 193" className={className} aria-hidden="true">
+      <path
+        fill="#4285f4"
+        d="M58.182 192.05V93.14L27.507 65.077 0 49.504v125.091c0 9.658 7.825 17.455 17.455 17.455h40.727z"
+      />
+      <path
+        fill="#34a853"
+        d="M197.818 192.05h40.727c9.659 0 17.455-7.826 17.455-17.455V49.505l-31.156 17.837-27.026 25.798v98.91z"
+      />
+      <path
+        fill="#ea4335"
+        d="M58.182 93.14l-4.174-38.647 4.174-36.989L128 69.868l69.818-52.364 4.669 33.95-4.669 41.685L128 145.504z"
+      />
+      <path
+        fill="#fbbc04"
+        d="M197.818 17.504V93.14L256 49.504V26.231c0-21.585-24.64-33.89-41.89-20.945l-16.292 12.218z"
+      />
+      <path
+        fill="#c5221f"
+        d="M0 49.504L26.759 69.577 58.182 93.14V17.504L41.89 5.286C24.61-7.66 0 4.646 0 26.231v23.273z"
+      />
+    </svg>
   );
 }

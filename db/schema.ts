@@ -624,3 +624,24 @@ export const platformAdminAudit = pgTable(
     byTable: index("idx_platform_audit_table").on(t.tableName, t.occurredAt),
   }),
 );
+
+/**
+ * Gmail OAuth credentials — one row per user (Gmail is global to a person,
+ * not org-scoped). organizationId tracks where they connected from, for audit.
+ * Tokens are AES-256-GCM-encrypted at rest with a server-side key.
+ *
+ * See docs/features/10-gmail-integration.md for the full design.
+ */
+export const userGmailCredentials = pgTable("user_gmail_credentials", {
+  userId: uuid("user_id").primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  gmailAddress: text("gmail_address").notNull(),
+  accessTokenEncrypted: text("access_token_encrypted").notNull(),
+  refreshTokenEncrypted: text("refresh_token_encrypted").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  scopes: text("scopes").array().notNull(),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+}, (t) => ({
+  byOrg: index("idx_gmail_creds_org").on(t.organizationId),
+}));

@@ -6,9 +6,10 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentOrg } from "@/lib/auth/context";
+import { getCurrentOrg, getCurrentUser } from "@/lib/auth/context";
 import { getDb } from "@/db/client";
 import { organizationMembers } from "@/db/schema";
+import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 
 const LOCALE_VALUES = ["fr", "en"] as const;
 
@@ -108,4 +109,15 @@ export async function updatePasswordInAppAction(formData: FormData) {
   }
 
   redirect("/settings/profile?saved=password");
+}
+
+// ---------------------------------------------------------------------------
+// Disconnect Gmail (delete the user_gmail_credentials row)
+// ---------------------------------------------------------------------------
+
+export async function disconnectGmailAction() {
+  const user = await getCurrentUser();
+  await GmailCredentialsServiceFactory.getInstance().delete(user.id);
+  revalidatePath("/settings/profile");
+  redirect("/settings/profile?gmail=disconnected");
 }

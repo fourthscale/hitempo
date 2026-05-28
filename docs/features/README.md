@@ -15,12 +15,13 @@ Features are implemented in order. Each one builds on the previous. The number i
 | 05 | Interactions & tasks | `05-interactions-tasks.md` | ✅ done |
 | 06 | Scoring & operational views | `06-scoring-views.md` | ✅ done |
 | 07 | AI message generation | `07-ai-message-generation.md` | ✅ done |
-| 08 | ~~Email digest & background jobs~~ | — | ➡️ moved to V1 (Inngest infra ships with séquences multicanal) |
+| 08 | ~~Email digest & background jobs~~ | — | ➡️ Inngest infra rolled into sprint 10 (reply polling), morning digest deferred to V1 |
 | 09 | CSV import & polish + responsive design | `09-csv-import-polish.md` | ✅ done |
+| 10 | Gmail integration (send + reply tracking) | `10-gmail-integration.md` | 📋 brief written |
 
 Briefs are written one at a time, just before starting that sprint. Each brief incorporates lessons learned from previous sprints.
 
-**MVP is code-complete as of sprint 09.** Deployed to Supabase Cloud + Vercel. The next steps are driven by L&G dogfood feedback. Some V1 features may get pulled in based on what sales actually needs after the first weeks of real use. The list below is the *planned* V1 set, not a contract.
+**MVP core was code-complete as of sprint 09** (companies, contacts, tasks, AI generation, CSV import). Deployed to Supabase Cloud + Vercel. **Sprint 10 (Gmail) pulled forward from V1** based on dogfood reality : without sending + reply tracking, the AI generation feature isn't actually used in the field. The remaining V1 list below stays driven by L&G feedback — not a contract.
 
 Outstanding before closing MVP:
 - Browser smoke test with L&G real CSV data (≥ 100 rows, all-in-one mode)
@@ -50,7 +51,7 @@ Outstanding before closing MVP:
 
 ## V1 features (planned, subject to dogfood feedback)
 
-- **Inngest infrastructure + email digest** (was sprint 08, deferred — bundled with séquences below)
+- **Morning email digest** (Inngest infra ships with sprint 10 ; the digest job itself stays V1)
 - Sourcing IA automatique par micro-zone
 - Enrichissement Dropcontact API
 - Séquences multicanal branchées (moteur d'exécution Inngest)
