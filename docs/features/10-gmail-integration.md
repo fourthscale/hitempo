@@ -174,4 +174,82 @@ Replies are written into the existing `interactions` table with `direction = 'in
 
 ## Implementation notes
 
-(Filled at end of sprint.)
+### Deviations from the brief
+
+- **Auto follow-up task on send was dropped from the MVP scope.** The
+  workflow we kept is "user → Send via Gmail → message stored + interaction
+  logged + originating task completed". Adding a J+4 follow-up task on top
+  felt premature without dogfood data — easy to bring back later if L&G
+  asks for it. Implementation notes 1.
+- **No "draft" lifecycle for messages.** The original plan was to persist
+  a `messages` row at generation time (status `draft`) and flip it on send.
+  In practice we found out that dialog-close auto-discard would overwrite
+  successful `sent` rows under racy conditions, and that the `discarded` /
+  `copied` lifecycle wasn't adding signal anywhere in the product. We
+  refactored the action layer to commit-on-action : the `messages` row is
+  only created when the user clicks Send via Gmail OR Log interaction. The
+  `llm_usage` row is still created at generation time, agnostic of any
+  message — it just gets its back-reference set when the commit happens.
+- **Interaction model gained a `status` enum.** Outbound interactions now
+  carry one of `sent`, `responded`, `no_answer`, `done`. The poller flips
+  the outbound's status from `sent` → `responded` when a reply is detected
+  ; outcome qualification (positive_reply / negative_reply / rdv_scheduled
+  / etc) moves to the inbound `email_received` row. Originally the spec
+  had the outcome staying on the outbound — we decided this was less
+  intuitive when reading the timeline.
+- **Timeline UI got a "Groupé / Liste" switcher.** Wasn't in the brief —
+  emerged from dogfood. Grouped view bumps the whole conversation to the
+  top when a reply arrives, list view is the legacy flat chronological.
+- **Snippet cleanup.** Gmail returns the snippet with quoted history
+  ("Le X à HH:MM, X a écrit : > Bonjour ...") and HTML entities
+  (`&gt;`, `&#39;`). We added `cleanReplySnippet()` to decode entities and
+  strip the quoted tail on the major French / English / German markers.
+  Heuristic, not perfect — fine for a snippet display.
+
+### Architecture decisions
+
+- **Inngest over Vercel Cron.** Considered Vercel Cron for the polling
+  job since we already have Vercel. Inngest won on : built-in fan-out
+  (1 step per user with independent retry), step-level observability,
+  reusable infra for V1 sequences. Free tier (50k step runs / month) is
+  largely enough at L&G dogfood scale and beyond — see brief consom table.
+- **Cron cadence per Ludovic.** 6 distinct weekday slots (peak 10 min,
+  lunch 20 min, etc.) + weekend hourly, all in Europe/Paris TZ. Defined
+  as 7 Inngest function declarations sharing the same handler. ~17k step
+  runs / month at 3 connected users ≈ 35 % free tier.
+- **Sec : Inngest's `signingKey` is auto-discovered from
+  `INNGEST_SIGNING_KEY`.** No need to pass it to `serve()` explicitly.
+  In dev we set `INNGEST_DEV=1` so the SDK bypasses signature checks
+  and routes events to the local `inngest dev` server.
+- **Vercel preview deployments + Inngest don't mix natively.** The
+  Vercel-Inngest integration auto-discovered a preview URL (protected by
+  Vercel Deployment Protection → 401 from Inngest). Fix : manual sync in
+  Inngest dashboard pointing at the stable prod alias
+  (`https://hitempo.vercel.app/api/inngest`). Documented as a "watch out"
+  for future deployers.
+
+### Migrations applied (in order)
+
+1. `20260528150430_user_gmail_credentials.sql` — credentials table + RLS
+2. `20260528155123_messages_gmail_columns.sql` — gmail_thread_id /
+   gmail_message_id / reply_received_at / last_polled_at on messages
+3. `20260528183539_interaction_type_email_received.sql` — new enum value
+4. `20260528191652_interaction_status.sql` — new enum + status column
+
+All additive, all pushed to local + cloud.
+
+### Things explicitly deferred to V1+
+
+- **Gmail Push via Cloud Pub/Sub** — real-time webhooks instead of
+  polling. Worth it once latency becomes a customer complaint or > 20
+  connected users start eating the Inngest free tier.
+- **LLM sentiment classification of replies** — auto-fill the outbound's
+  outcome from the reply content. Currently the user clicks the outcome
+  menu manually.
+- **Multi-reply tracking** — only the first inbound reply per thread
+  triggers an interaction row today (because `reply_received_at` is set
+  after detection and filters the row out of the polling query).
+- **Disconnect cleanup of pending threads** — when a user disconnects
+  Gmail, we keep `messages` rows but stop polling (no opt-in flag for
+  this yet, just relies on `getForUser` returning null and the user
+  loop exiting early).
