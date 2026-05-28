@@ -224,4 +224,33 @@ Estimated : ~21h of focused work.
 
 ## Implementation notes
 
-_To be filled at the end of the sprint._
+### What shipped
+
+All 4 import modes are live. The architecture follows the brief closely — Strategy + Facade + Factory as specified in `lib/imports/`.
+
+### Deviations from spec
+
+**Column mapping UI — not built.** Auto-detection of standard header names only. Users must either use the downloaded template (headers pre-filled) or rename their columns to match. The template download covers this use case well enough for L&G's data at MVP. Column mapping is a V1 item.
+
+**Pre-commit preview table — replaced by dry-run results.** The spec described a "preview before commit" flow with per-cell Zod feedback. What shipped instead: a single action that runs in dry-run mode first, shows the result counts (would create X / would update Y / Z errors), then the user confirms and the real commit runs. Simpler to build, same safety guarantee.
+
+**Streaming parser — papaparse `complete` callback, not `step`.** True row-by-row streaming (papaparse `step`) was evaluated but added complexity for marginal gain at L&G's file sizes (~200–2000 rows). `complete` loads the full CSV into memory once, then iterates rows. Fine for Vercel's memory limits at this scale.
+
+### Additions beyond spec
+
+**Filter tabs + pagination on results.** After a commit, results are shown with tabs: All / Errors / Created / Updated. Long result sets paginate with "Show 50 more" / "Show all" buttons. Reduces noise when importing 200 rows with a handful of errors.
+
+**Download error report.** A "Download errors as CSV" button on the Errors tab lets users fix their source file outside hitempo and re-import. The downloaded CSV is the original input rows that errored, with an extra `error` column appended.
+
+### Responsive design (Phase 1 + Phase 2)
+
+Shipped as a follow-up after sprint 09, not in the original brief:
+
+- **Phase 1 (Survive):** Drawer sidebar with hamburger (breakpoint `lg`/1024px — covers both mobile and tablet portrait), `overflow-x-auto` on all tables, viewport-safe dialog sizes, form grids stack on mobile, `PageHeader` responsive.
+- **Phase 2 (Use):** Companies + contacts lists → cards on `<lg`, `GenerateMessageDialog` full-screen on mobile, `FormFooter` component (sticky bottom on `<lg`, inline on `lg+`) wired into all forms, dashboard + tasks headers stack on mobile, admin list pages cards on `<lg`.
+
+### Known gaps / follow-ups
+
+- **Browser smoke with L&G real data** — acceptance criterion not yet checked. Should be done on the production instance before declaring MVP closed.
+- **`organisation_ref` visibility in UI** — the column exists in the DB but is not shown anywhere in the company/contact/site detail pages. Useful for import debugging. Low priority.
+- **Bulk export to CSV** — deliberately out of scope, V1.

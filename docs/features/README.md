@@ -16,11 +16,15 @@ Features are implemented in order. Each one builds on the previous. The number i
 | 06 | Scoring & operational views | `06-scoring-views.md` | ✅ done |
 | 07 | AI message generation | `07-ai-message-generation.md` | ✅ done |
 | 08 | ~~Email digest & background jobs~~ | — | ➡️ moved to V1 (Inngest infra ships with séquences multicanal) |
-| 09 | CSV import & polish | `09-csv-import-polish.md` | ⏳ next sprint |
+| 09 | CSV import & polish + responsive design | `09-csv-import-polish.md` | ✅ done |
 
 Briefs are written one at a time, just before starting that sprint. Each brief incorporates lessons learned from previous sprints.
 
-**MVP scope after sprint 09 is intentionally open** — the next steps will be driven by L&G dogfood feedback. Some V1 features may get pulled into MVP based on what sales actually needs after the first weeks of real use. The list below is the *planned* V1 set, not a contract.
+**MVP is code-complete as of sprint 09.** Deployed to Supabase Cloud + Vercel. The next steps are driven by L&G dogfood feedback. Some V1 features may get pulled in based on what sales actually needs after the first weeks of real use. The list below is the *planned* V1 set, not a contract.
+
+Outstanding before closing MVP:
+- Browser smoke test with L&G real CSV data (≥ 100 rows, all-in-one mode)
+- Sentry integration (deferred — add when needed)
 
 ## How to use these briefs
 
