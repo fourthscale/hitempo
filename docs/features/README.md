@@ -14,11 +14,13 @@ Features are implemented in order. Each one builds on the previous. The number i
 | 04 | Companies, sites, contacts (CRUD) | `04-companies-sites-contacts.md` | ✅ done (browser smoke test pending) |
 | 05 | Interactions & tasks | `05-interactions-tasks.md` | ✅ done |
 | 06 | Scoring & operational views | `06-scoring-views.md` | ✅ done |
-| 07 | AI message generation | `07-ai-message-generation.md` | ✅ done (live LLM verification pending) |
-| 08 | Email digest & background jobs | `08-email-digest.md` | ⏳ to write |
-| 09 | CSV import & polish | `09-csv-import-polish.md` | ⏳ to write |
+| 07 | AI message generation | `07-ai-message-generation.md` | ✅ done |
+| 08 | ~~Email digest & background jobs~~ | — | ➡️ moved to V1 (Inngest infra ships with séquences multicanal) |
+| 09 | CSV import & polish | `09-csv-import-polish.md` | ⏳ next sprint |
 
 Briefs are written one at a time, just before starting that sprint. Each brief incorporates lessons learned from previous sprints.
+
+**MVP scope after sprint 09 is intentionally open** — the next steps will be driven by L&G dogfood feedback. Some V1 features may get pulled into MVP based on what sales actually needs after the first weeks of real use. The list below is the *planned* V1 set, not a contract.
 
 ## How to use these briefs
 
@@ -42,11 +44,12 @@ Briefs are written one at a time, just before starting that sprint. Each brief i
 - [ ] PR description links to the feature brief
 - [ ] `Implementation notes` section filled at the bottom of the brief
 
-## V1 features (out of MVP scope, to plan after Sprint 09)
+## V1 features (planned, subject to dogfood feedback)
 
+- **Inngest infrastructure + email digest** (was sprint 08, deferred — bundled with séquences below)
 - Sourcing IA automatique par micro-zone
 - Enrichissement Dropcontact API
-- Séquences multicanal branchées (avec moteur d'exécution Inngest)
+- Séquences multicanal branchées (moteur d'exécution Inngest)
 - Bibliothèque 12 messages cœur (templates pré-construits)
 - Google Calendar API
 - Dashboard hebdo (reporting)

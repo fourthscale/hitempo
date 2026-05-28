@@ -34,10 +34,12 @@ export default async function CompaniesPage() {
         subtitle={t("count", { count: rows.length })}
         right={
           <div className="flex items-center gap-2">
-            <Button variant="outline" disabled title={t("importCsvSoon")}>
-              <Upload className="h-4 w-4 mr-1.5" />
-              {t("importCsv")}
-            </Button>
+            <Link href="/settings/import">
+              <Button variant="outline">
+                <Upload className="h-4 w-4 mr-1.5" />
+                {t("importCsv")}
+              </Button>
+            </Link>
             <Link href="/companies/new">
               <Button>
                 <Plus className="h-4 w-4 mr-1.5" />

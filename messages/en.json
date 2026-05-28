@@ -338,7 +338,6 @@
       "count": "{count, plural, =0 {No results} one {1 result} other {# results}}",
       "new": "New company",
       "importCsv": "Import CSV",
-      "importCsvSoon": "CSV import lands in sprint 09",
       "filtersSoon": "Filters land alongside segments / micro-zones in a later sprint",
       "moreFilters": "More filters",
       "paginationShowing": "{shown} of {total} shown",
@@ -492,6 +491,7 @@
       "titleSection": "Contacts",
       "count": "{count, plural, =0 {No contacts yet} one {1 contact} other {# contacts}}",
       "new": "New contact",
+      "importCsv": "Import CSV",
       "createSubmit": "Create contact",
       "updateSubmit": "Save changes",
       "editTitle": "Edit {name}",
@@ -633,6 +633,9 @@
       "brandSectionTitle": "Brand voice",
       "brandSectionDescription": "Configure how the AI writes on your behalf.",
       "brandSectionLink": "Edit brand voice",
+      "importSectionTitle": "Bulk import",
+      "importSectionDescription": "Import companies, contacts, and sites from a CSV file.",
+      "importSectionLink": "Open the importer",
       "brand": {
         "title": "Brand voice",
         "subtitle": "Used by hitempo's AI to generate brand-aligned messages. Fill at least one locale to enable generation in that language.",
@@ -655,6 +658,57 @@
         "save": "Save brand voice",
         "saved": "Saved",
         "listPlaceholder": "One per line"
+      }
+    },
+    "import": {
+      "title": "Bulk CSV import",
+      "subtitle": "Pick the mode that matches your file. Download the template to see the expected columns.",
+      "downloadTemplate": "Download template",
+      "uploadComingSoon": "Upload (coming soon)",
+      "pickFile": "Pick a CSV file",
+      "previewing": "Validating your file…",
+      "committing": "Importing rows…",
+      "previewHeading": "Preview — nothing has been imported yet.",
+      "previewSummary": "{total, plural, one {# row} other {# rows}} parsed · {create} to create · {update} to update · {errors} errors",
+      "committedHeading": "Import complete",
+      "committedSummary": "{total, plural, one {# row} other {# rows}} processed · {created} created · {updated} updated · {errors} errors",
+      "confirm": "Confirm import",
+      "cancel": "Cancel",
+      "importAnother": "Import another file",
+      "line": "Line",
+      "colStatus": "Status",
+      "colDetail": "Detail",
+      "statusCreated": "Created",
+      "statusUpdated": "Updated",
+      "statusSkipped": "Skipped",
+      "statusError": "Error",
+      "filterAll": "All",
+      "filterErrors": "Errors",
+      "filterCreated": "Created",
+      "filterUpdated": "Updated",
+      "filterSkipped": "Skipped",
+      "noRowsForFilter": "No rows match this filter.",
+      "paginationCounter": "{shown} of {total} shown",
+      "showMore": "Show {n} more",
+      "showAll": "Show all",
+      "downloadErrorReport": "Download error report",
+      "modes": {
+        "companies": {
+          "title": "Companies only",
+          "description": "One row per company. Use this for a clean list of organisations without their contacts."
+        },
+        "contacts": {
+          "title": "Contacts only",
+          "description": "One row per contact. Each row needs a company_organisation_ref to link to an existing company."
+        },
+        "sites": {
+          "title": "Sites only",
+          "description": "One row per site. Useful for chains with multiple locations per company."
+        },
+        "all-in-one": {
+          "title": "All-in-one",
+          "description": "One row = company + optional site + optional contact. Best for flat prospect spreadsheets."
+        }
       }
     },
     "messages": {

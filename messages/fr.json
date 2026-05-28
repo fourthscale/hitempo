@@ -338,7 +338,6 @@
       "count": "{count, plural, =0 {Aucun résultat} one {1 résultat} other {# résultats}}",
       "new": "Nouvelle entreprise",
       "importCsv": "Importer CSV",
-      "importCsvSoon": "L'import CSV arrive au sprint 09",
       "filtersSoon": "Les filtres arrivent avec les segments / micro-zones",
       "moreFilters": "Plus de filtres",
       "paginationShowing": "{shown} sur {total} affichés",
@@ -492,6 +491,7 @@
       "titleSection": "Contacts",
       "count": "{count, plural, =0 {Aucun contact} one {1 contact} other {# contacts}}",
       "new": "Nouveau contact",
+      "importCsv": "Importer CSV",
       "createSubmit": "Créer le contact",
       "updateSubmit": "Enregistrer",
       "editTitle": "Modifier {name}",
@@ -633,6 +633,9 @@
       "brandSectionTitle": "Voix de marque",
       "brandSectionDescription": "Configurez la manière dont l'IA écrit en votre nom.",
       "brandSectionLink": "Éditer la voix de marque",
+      "importSectionTitle": "Import en masse",
+      "importSectionDescription": "Importez entreprises, contacts et sites depuis un fichier CSV.",
+      "importSectionLink": "Ouvrir l'import",
       "brand": {
         "title": "Voix de marque",
         "subtitle": "Utilisée par l'IA d'hitempo pour générer des messages alignés avec votre marque. Remplissez au moins une langue pour activer la génération dans cette langue.",
@@ -655,6 +658,57 @@
         "save": "Enregistrer la voix de marque",
         "saved": "Enregistré",
         "listPlaceholder": "Un par ligne"
+      }
+    },
+    "import": {
+      "title": "Import CSV en masse",
+      "subtitle": "Choisis le mode qui correspond à ton fichier. Télécharge le template pour voir les colonnes attendues.",
+      "downloadTemplate": "Télécharger le template",
+      "uploadComingSoon": "Upload (bientôt)",
+      "pickFile": "Choisir un fichier CSV",
+      "previewing": "Validation du fichier…",
+      "committing": "Import en cours…",
+      "previewHeading": "Prévisualisation — rien n'a encore été importé.",
+      "previewSummary": "{total, plural, one {# ligne} other {# lignes}} parsées · {create} à créer · {update} à mettre à jour · {errors} erreurs",
+      "committedHeading": "Import terminé",
+      "committedSummary": "{total, plural, one {# ligne} other {# lignes}} traitées · {created} créées · {updated} mises à jour · {errors} erreurs",
+      "confirm": "Confirmer l'import",
+      "cancel": "Annuler",
+      "importAnother": "Importer un autre fichier",
+      "line": "Ligne",
+      "colStatus": "Statut",
+      "colDetail": "Détail",
+      "statusCreated": "Créée",
+      "statusUpdated": "Mise à jour",
+      "statusSkipped": "Ignorée",
+      "statusError": "Erreur",
+      "filterAll": "Toutes",
+      "filterErrors": "Erreurs",
+      "filterCreated": "Créées",
+      "filterUpdated": "Mises à jour",
+      "filterSkipped": "Ignorées",
+      "noRowsForFilter": "Aucune ligne ne correspond à ce filtre.",
+      "paginationCounter": "{shown} sur {total} affichées",
+      "showMore": "Voir {n} de plus",
+      "showAll": "Tout voir",
+      "downloadErrorReport": "Télécharger le rapport d'erreurs",
+      "modes": {
+        "companies": {
+          "title": "Entreprises uniquement",
+          "description": "Une ligne par entreprise. Pour une liste propre d'organisations sans leurs contacts."
+        },
+        "contacts": {
+          "title": "Contacts uniquement",
+          "description": "Une ligne par contact. Chaque ligne doit comporter un company_organisation_ref pour la rattacher à une entreprise existante."
+        },
+        "sites": {
+          "title": "Sites uniquement",
+          "description": "Une ligne par site. Utile pour les chaînes avec plusieurs adresses par entreprise."
+        },
+        "all-in-one": {
+          "title": "Tout-en-un",
+          "description": "Une ligne = entreprise + site optionnel + contact optionnel. Idéal pour les fichiers de prospection plats."
+        }
       }
     },
     "messages": {

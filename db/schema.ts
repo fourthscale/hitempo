@@ -196,6 +196,11 @@ export const companies = pgTable(
     // (cross-circular reference with contacts.companyId).
     primaryContactId: uuid("primary_contact_id"),
 
+    // Org-scoped external reference for CSV imports + future integrations.
+    // Optional. Unique per (organization_id, organisation_ref) when set —
+    // null values do NOT collide (partial unique index, see below).
+    organisationRef: text("organisation_ref"),
+
     // Soft delete
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -207,6 +212,9 @@ export const companies = pgTable(
     byOrgStatus: index("idx_companies_org_status").on(t.organizationId, t.status),
     byParent: index("idx_companies_parent").on(t.parentId),
     bySegment: index("idx_companies_segment").on(t.segmentId),
+    byOrgRef: uniqueIndex("uniq_companies_org_ref")
+      .on(t.organizationId, t.organisationRef)
+      .where(sql`organisation_ref IS NOT NULL`),
   }),
 );
 
@@ -242,6 +250,9 @@ export const sites = pgTable(
     // Primary contact for THIS site (max 1 per site, enforced by FK uniqueness — only one column reference).
     primaryContactId: uuid("primary_contact_id"),
 
+    // Org-scoped external reference (see companies.organisationRef).
+    organisationRef: text("organisation_ref"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -249,6 +260,9 @@ export const sites = pgTable(
     byCompany: index("idx_sites_company").on(t.companyId),
     byMicroZone: index("idx_sites_micro_zone").on(t.microZoneId),
     byOrg: index("idx_sites_org").on(t.organizationId),
+    byOrgRef: uniqueIndex("uniq_sites_org_ref")
+      .on(t.organizationId, t.organisationRef)
+      .where(sql`organisation_ref IS NOT NULL`),
   }),
 );
 
@@ -291,6 +305,9 @@ export const contacts = pgTable(
 
     notes: text("notes"),
 
+    // Org-scoped external reference (see companies.organisationRef).
+    organisationRef: text("organisation_ref"),
+
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -300,6 +317,9 @@ export const contacts = pgTable(
     bySite: index("idx_contacts_site").on(t.siteId),
     byOrg: index("idx_contacts_org").on(t.organizationId),
     byEmail: index("idx_contacts_email").on(t.organizationId, t.email),
+    byOrgRef: uniqueIndex("uniq_contacts_org_ref")
+      .on(t.organizationId, t.organisationRef)
+      .where(sql`organisation_ref IS NOT NULL`),
   }),
 );
 

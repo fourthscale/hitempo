@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { Plus, User } from "lucide-react";
+import { Plus, Upload, User } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { listContactsByOrg } from "@/db/queries/contacts";
 import { PageHeader } from "@/components/app/page-header";
@@ -20,12 +20,20 @@ export default async function ContactsPage() {
         title={tNav("contacts")}
         subtitle={t("count", { count: rows.length })}
         right={
-          <Link href="/contacts/new">
-            <Button>
-              <Plus className="h-4 w-4 mr-1.5" />
-              {t("new")}
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/settings/import">
+              <Button variant="outline">
+                <Upload className="h-4 w-4 mr-1.5" />
+                {t("importCsv")}
+              </Button>
+            </Link>
+            <Link href="/contacts/new">
+              <Button>
+                <Plus className="h-4 w-4 mr-1.5" />
+                {t("new")}
+              </Button>
+            </Link>
+          </div>
         }
       />
 
