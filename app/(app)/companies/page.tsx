@@ -84,7 +84,7 @@ export default async function CompaniesPage() {
             action={{ label: t("emptyAction"), href: "/companies/new" }}
           />
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-secondary/40 text-muted-foreground text-[11px] uppercase tracking-wider">
               <tr className="text-left">
                 <th className="px-4 py-3 font-medium">{t("columns.company")}</th>
@@ -200,7 +200,7 @@ export default async function CompaniesPage() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
 

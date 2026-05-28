@@ -109,7 +109,7 @@ export default async function AdminOrgDetailPage({
             {tDetail("membersEmpty")}
           </p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-secondary/40 text-muted-foreground text-xs">
               <tr className="text-left">
                 <th className="px-4 py-2 font-medium">{tCols("name")}</th>
@@ -175,7 +175,7 @@ export default async function AdminOrgDetailPage({
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
 

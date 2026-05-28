@@ -97,7 +97,7 @@ export default async function SiteDetailPage({
                   {t("noContacts")}
                 </div>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead className="bg-secondary/40 text-muted-foreground text-[11px] uppercase tracking-wider text-left">
                     <tr>
                       <th className="px-4 py-3 font-medium">{tContacts("columns.name")}</th>
@@ -140,7 +140,7 @@ export default async function SiteDetailPage({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </Card>
           </section>

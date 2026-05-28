@@ -28,7 +28,7 @@ export default async function AdminOrgsPage() {
       />
 
       <Card className="p-0 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-secondary/40 text-muted-foreground">
             <tr className="text-left">
               <th className="px-4 py-3 font-medium">{t("columns.name")}</th>
@@ -74,7 +74,7 @@ export default async function AdminOrgsPage() {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
       </Card>
     </div>
   );

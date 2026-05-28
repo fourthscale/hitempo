@@ -47,7 +47,7 @@ export default async function ContactsPage() {
             action={{ label: t("emptyAction"), href: "/contacts/new" }}
           />
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-secondary/40 text-muted-foreground">
               <tr className="text-left">
                 <th className="px-4 py-3 font-medium">{t("columns.name")}</th>
@@ -89,7 +89,7 @@ export default async function ContactsPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
     </div>

@@ -71,7 +71,7 @@ export function LogInteractionForm({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogTitle>
             {labels.logNew}{companyName ? ` — ${companyName}` : ""}
           </DialogTitle>

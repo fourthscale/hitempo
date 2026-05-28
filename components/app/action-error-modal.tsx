@@ -86,7 +86,7 @@ export function ActionErrorModal() {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-rose-900">
             <AlertCircle className="h-5 w-5 text-rose-600" />

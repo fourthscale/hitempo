@@ -63,7 +63,7 @@ export function TaskInteractionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogTitle>{tI("logNew")} — {companyName}</DialogTitle>
         <DialogDescription className="sr-only">{tI("logNew")}</DialogDescription>
 

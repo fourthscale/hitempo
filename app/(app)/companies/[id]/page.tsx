@@ -314,7 +314,7 @@ export default async function CompanyDetailPage({
                     </>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
                   <GroupStat value={groupStats.groupSize} label={t("group.stats.companies")} />
                   <GroupStat value={groupStats.sites} label={t("group.stats.sites")} />
                   <GroupStat value={groupStats.activeProspects} label={t("group.stats.activeProspects")} />
@@ -740,7 +740,7 @@ async function ContactsTabPanel({
             {tContacts("emptyForCompany")}
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-secondary/40 text-muted-foreground text-[11px] uppercase tracking-wider text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">{tContacts("columns.name")}</th>
@@ -766,7 +766,7 @@ async function ContactsTabPanel({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
     </section>
