@@ -139,13 +139,13 @@ export default async function CompanyDetailPage({
       </nav>
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-6 mb-6">
-        <div className="flex items-start gap-4 min-w-0">
-          <div className="h-16 w-16 rounded-md bg-slate-100 text-slate-700 flex items-center justify-center text-xl font-serif font-bold shrink-0">
+      <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+        <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+          <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-md bg-slate-100 text-slate-700 flex items-center justify-center text-base sm:text-xl font-serif font-bold shrink-0">
             {initials}
           </div>
           <div className="min-w-0">
-            <h1 className="font-serif text-3xl md:text-4xl font-bold tracking-tight">
+            <h1 className="font-serif text-2xl md:text-4xl font-bold tracking-tight break-words">
               {company.name}
             </h1>
             <div className="mt-1 text-sm text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -189,7 +189,7 @@ export default async function CompanyDetailPage({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
           <Button variant="outline" size="sm" disabled title={t("actions.soon")}>
             <Phone className="h-3.5 w-3.5 mr-1.5" />
             {t("actions.call")}
