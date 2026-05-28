@@ -13,6 +13,8 @@ export default async function ContactsPage() {
   const rows = await listContactsByOrg(activeOrganization.id);
   const t = await getTranslations("pages.contacts");
   const tNav = await getTranslations("nav");
+  const tRole = await getTranslations("contactRole");
+  const tStatus = await getTranslations("contactStatus");
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -72,12 +74,18 @@ export default async function ContactsPage() {
                       {companyName}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{contact.role ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {contact.role
+                      ? tRole(contact.role as Parameters<typeof tRole>[0])
+                      : "—"}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground break-all">{contact.email ?? "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {contact.relevance ? "★".repeat(contact.relevance) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{contact.status}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {tStatus(contact.status as Parameters<typeof tStatus>[0])}
+                  </td>
                 </tr>
               ))}
             </tbody>

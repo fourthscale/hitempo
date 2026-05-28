@@ -22,6 +22,7 @@ export default async function SiteDetailPage({
 
   const t = await getTranslations("pages.sites");
   const tContacts = await getTranslations("pages.contacts");
+  const tSiteType = await getTranslations("siteType");
 
   const addressBits = [
     site.addressLine1,
@@ -53,7 +54,7 @@ export default async function SiteDetailPage({
         title={site.name}
         subtitle={
           <span>
-            <span className="capitalize">{site.type}</span>
+            <span>{tSiteType(site.type as Parameters<typeof tSiteType>[0])}</span>
             {site.isPrimary && (
               <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider bg-brand-teal/15 text-brand-teal">
                 {t("primary")}
@@ -154,7 +155,7 @@ export default async function SiteDetailPage({
             <dl className="space-y-2 text-sm">
               <div>
                 <dt className="text-xs uppercase tracking-wider text-muted-foreground">{t("type")}</dt>
-                <dd className="capitalize">{site.type}</dd>
+                <dd>{tSiteType(site.type as Parameters<typeof tSiteType>[0])}</dd>
               </div>
               {site.standing != null && (
                 <div>

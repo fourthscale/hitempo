@@ -62,6 +62,9 @@ export default async function ContactDetailPage({
   const tInteractionChannel = await getTranslations("interactionChannel");
   const tInteractionOutcome = await getTranslations("interactionOutcome");
   const tTaskType = await getTranslations("taskType");
+  const tTaskPriority = await getTranslations("taskPriority");
+  const tContactRole = await getTranslations("contactRole");
+  const tContactStatus = await getTranslations("contactStatus");
   const tMessages = await getTranslations("pages.messages");
 
   const interactionTypeOptions = INTERACTION_TYPES.map((v) => ({
@@ -159,7 +162,11 @@ export default async function ContactDetailPage({
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{t("fields.role")}</div>
-          <div className="text-sm">{contact.role ?? "—"}</div>
+          <div className="text-sm">
+            {contact.role
+              ? tContactRole(contact.role as Parameters<typeof tContactRole>[0])
+              : "—"}
+          </div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{t("fields.relevance")}</div>
@@ -167,7 +174,9 @@ export default async function ContactDetailPage({
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{t("fields.status")}</div>
-          <div className="text-sm">{contact.status}</div>
+          <div className="text-sm">
+            {tContactStatus(contact.status as Parameters<typeof tContactStatus>[0])}
+          </div>
         </Card>
         <Card className="p-5">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{t("fields.preferredLanguage")}</div>
@@ -217,7 +226,7 @@ export default async function ContactDetailPage({
                   task.priority === "high" ? "bg-amber-50 text-amber-700" :
                   "bg-secondary text-muted-foreground",
                 )}>
-                  {task.priority}
+                  {tTaskPriority(task.priority as Parameters<typeof tTaskPriority>[0])}
                 </span>
               </li>
             ))}

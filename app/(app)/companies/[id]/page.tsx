@@ -100,8 +100,10 @@ export default async function CompanyDetailPage({
   const company = await getCompanyWithDetails(activeOrganization.id, id);
   if (!company) notFound();
 
-  const [t, locale] = await Promise.all([
+  const [t, tCompanyStatus, tRelationship, locale] = await Promise.all([
     getTranslations("pages.companies"),
+    getTranslations("companyStatus"),
+    getTranslations("companyRelationshipType"),
     getLocale(),
   ]);
   const grade = scoreGrade(company.score);
@@ -180,7 +182,7 @@ export default async function CompanyDetailPage({
                 </span>
               )}
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-muted-foreground">
-                {company.status}
+                {tCompanyStatus(company.status as Parameters<typeof tCompanyStatus>[0])}
               </span>
             </div>
           </div>
@@ -352,7 +354,14 @@ export default async function CompanyDetailPage({
                   label={t("info.addedAt")}
                   value={new Date(company.createdAt).toLocaleDateString()}
                 />
-                <InfoRow label={t("info.relationship")} value={company.relationshipType} />
+                <InfoRow
+                  label={t("info.relationship")}
+                  value={
+                    company.relationshipType
+                      ? tRelationship(company.relationshipType as Parameters<typeof tRelationship>[0])
+                      : null
+                  }
+                />
                 <InfoRow label={t("info.industry")} value={company.industry} />
               </dl>
             </Card>

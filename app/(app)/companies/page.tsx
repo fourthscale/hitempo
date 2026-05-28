@@ -26,6 +26,7 @@ export default async function CompaniesPage() {
   const rows = await listCompaniesByOrgEnriched(activeOrganization.id);
   const t = await getTranslations("pages.companies");
   const tNav = await getTranslations("nav");
+  const tStatus = await getTranslations("companyStatus");
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -188,7 +189,9 @@ export default async function CompaniesPage() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 align-top text-muted-foreground">{c.status}</td>
+                    <td className="px-4 py-3 align-top text-muted-foreground">
+                      {tStatus(c.status as Parameters<typeof tStatus>[0])}
+                    </td>
                     <td className="px-4 py-3 align-top text-muted-foreground">
                       {/* PLACEHOLDER: requires tasks table (sprint 05) */}
                       —
