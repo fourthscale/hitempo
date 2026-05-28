@@ -23,7 +23,14 @@
     "meeting": "Réunion",
     "demo": "Démo",
     "proposal_sent": "Proposition envoyée",
-    "note": "Note"
+    "note": "Note",
+    "email_received": "Réponse reçue"
+  },
+  "interactionStatus": {
+    "sent": "Envoyé",
+    "responded": "Répondu",
+    "no_answer": "Ne répond pas",
+    "done": "Terminé"
   },
   "interactionChannel": {
     "email": "Email",
@@ -661,7 +668,10 @@
       "submit": "Enregistrer",
       "cancel": "Annuler",
       "setOutcome": "Définir le résultat",
-      "clearOutcome": "Effacer le résultat"
+      "clearOutcome": "Effacer le résultat",
+      "modeGrouped": "Groupé",
+      "modeList": "Liste",
+      "replyHeader": "Réponse"
     },
     "settings": {
       "placeholder": "D'autres paramètres arriveront dans un sprint ultérieur.",

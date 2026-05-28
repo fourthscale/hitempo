@@ -4,10 +4,7 @@ import { getBrandBrief } from "@/db/queries/brand";
 import { getCompanyById } from "@/db/queries/companies";
 import { getContactById } from "@/db/queries/contacts";
 import { getRecentInteractionsForPrompt } from "@/db/queries/interactions";
-import {
-  getRecentMessagesByContact,
-  insertMessage,
-} from "@/db/queries/messages";
+import { getRecentMessagesByContact } from "@/db/queries/messages";
 import { BrandBriefMissingError } from "@/lib/ai/errors";
 import type { LlmGenerationService } from "@/lib/ai/llm-generation-service";
 import { buildOutboundMessagePrompt } from "@/lib/ai/prompts/outbound-message-prompt";
@@ -15,7 +12,6 @@ import { extractSubjectAndBody } from "@/lib/messages/extract-subject";
 import {
   CompanyNotFoundError,
   ContactNotFoundError,
-  MessagePersistError,
 } from "@/lib/messages/message-errors";
 import type {
   MessageChannel,
@@ -48,10 +44,15 @@ export type OrchestratorInput = {
 };
 
 export type OrchestratorResult = {
-  messageId: string;
+  /** The full raw content as produced by the LLM (with "Subject: ..." line for
+   *  email channel). Persisted as-is when the user commits to send / log. */
+  content: string;
+  /** Parsed split — convenience for the UI preview. */
   channel: MessageChannel;
   subject: string | null;
   body: string;
+  /** FK target on `messages.llm_usage_id` once the row is created at commit. */
+  llmUsageId: string;
   tokensIn: number;
   tokensOut: number;
 };
@@ -168,45 +169,17 @@ export class MessageGenerationOrchestrator {
       input.locale,
     );
 
-    // 7. Persist the message row, FK to llm_usage.
-    let inserted: { id: string; createdAt: Date };
-    try {
-      inserted = await insertMessage(input.organizationId, {
-        contactId: input.contactId,
-        companyId: input.companyId,
-        taskId: input.taskId,
-        userId: input.userId,
-        channel: input.channel,
-        intent: input.intent,
-        locale: input.locale,
-        orientation: input.orientation,
-        content: result.content,
-        llmUsageId: usage.id,
-      });
-    } catch (cause) {
-      throw new MessagePersistError(
-        cause instanceof Error ? cause.message : "insertMessage failed",
-        { cause },
-      );
-    }
-
-    // 8. Patch the llm_usage backref now that we have the message ID.
-    try {
-      await this.llmService.linkUsageToEntity(usage.id, "message", inserted.id);
-    } catch (cause) {
-      throw new MessagePersistError(
-        cause instanceof Error
-          ? `linkUsageToEntity failed: ${cause.message}`
-          : "linkUsageToEntity failed",
-        { cause },
-      );
-    }
+    // The messages row is intentionally NOT created here — it is persisted
+    // later only if the user actually commits the message (Send via Gmail
+    // or manually log the interaction). The llm_usage row already exists ;
+    // its `relatedEntity*` backref is patched at commit time too.
 
     return {
-      messageId: inserted.id,
+      content: result.content,
       channel: input.channel,
       subject,
       body,
+      llmUsageId: usage.id,
       tokensIn: result.tokensIn,
       tokensOut: result.tokensOut,
     };

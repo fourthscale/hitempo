@@ -16,9 +16,9 @@ import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { LogInteractionForm } from "@/components/app/log-interaction-form";
 import {
-  InteractionOutcomeMenu,
-  type InteractionOutcome,
-} from "@/components/app/interaction-outcome-menu";
+  InteractionsTimeline,
+  type InteractionsTimelineLabels,
+} from "@/components/app/interactions-timeline";
 import { ContactGenerateMessageButton } from "@/components/app/contact-generate-message-button";
 import {
   getMessageDefaultLocale,
@@ -63,6 +63,7 @@ export default async function ContactDetailPage({
   const tInteractionType = await getTranslations("interactionType");
   const tInteractionChannel = await getTranslations("interactionChannel");
   const tInteractionOutcome = await getTranslations("interactionOutcome");
+  const tInteractionStatus = await getTranslations("interactionStatus");
   const tTaskType = await getTranslations("taskType");
   const tTaskPriority = await getTranslations("taskPriority");
   const tContactRole = await getTranslations("contactRole");
@@ -270,53 +271,66 @@ export default async function ContactDetailPage({
           )}
         </div>
 
-        {interactionHistory.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{tInteractions("empty")}</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {interactionHistory.map((interaction) => (
-              <li key={interaction.id} className="py-3">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                      <span className="text-xs font-medium text-foreground">
-                        {tInteractionType(interaction.type as Parameters<typeof tInteractionType>[0])}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        · {tInteractionChannel(interaction.channel as Parameters<typeof tInteractionChannel>[0])}
-                      </span>
-                      <InteractionOutcomeMenu
-                        interactionId={interaction.id}
-                        current={(interaction.outcome ?? null) as InteractionOutcome | null}
-                        labels={{
-                          outcomes: {
-                            no_response: tInteractionOutcome("no_response"),
-                            positive_reply: tInteractionOutcome("positive_reply"),
-                            negative_reply: tInteractionOutcome("negative_reply"),
-                            out_of_office: tInteractionOutcome("out_of_office"),
-                            wrong_contact: tInteractionOutcome("wrong_contact"),
-                            rdv_scheduled: tInteractionOutcome("rdv_scheduled"),
-                            opted_out: tInteractionOutcome("opted_out"),
-                          },
-                          setOutcome: tInteractions("setOutcome"),
-                          clearOutcome: tInteractions("clearOutcome"),
-                        }}
-                      />
-                    </div>
-                    {interaction.summary && (
-                      <p className="text-sm text-foreground mt-0.5">{interaction.summary}</p>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground shrink-0">
-                    {new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(
-                      new Date(interaction.occurredAt),
-                    )}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <InteractionsTimeline
+          locale={locale}
+          interactions={interactionHistory.map((i) => ({
+            id: i.id,
+            type: i.type,
+            channel: i.channel,
+            outcome: i.outcome,
+            status: i.status,
+            summary: i.summary,
+            occurredAt: i.occurredAt,
+            messageId: i.messageId,
+          }))}
+          labels={
+            {
+              modeGrouped: tInteractions("modeGrouped"),
+              modeList: tInteractions("modeList"),
+              emptyState: tInteractions("empty"),
+              statuses: {
+                sent: tInteractionStatus("sent"),
+                responded: tInteractionStatus("responded"),
+                no_answer: tInteractionStatus("no_answer"),
+                done: tInteractionStatus("done"),
+              },
+              outcomeMenu: {
+                outcomes: {
+                  no_response: tInteractionOutcome("no_response"),
+                  positive_reply: tInteractionOutcome("positive_reply"),
+                  negative_reply: tInteractionOutcome("negative_reply"),
+                  out_of_office: tInteractionOutcome("out_of_office"),
+                  wrong_contact: tInteractionOutcome("wrong_contact"),
+                  rdv_scheduled: tInteractionOutcome("rdv_scheduled"),
+                  opted_out: tInteractionOutcome("opted_out"),
+                },
+                setOutcome: tInteractions("setOutcome"),
+                clearOutcome: tInteractions("clearOutcome"),
+              },
+              typeLabels: {
+                first_contact: tInteractionType("first_contact"),
+                follow_up: tInteractionType("follow_up"),
+                call: tInteractionType("call"),
+                visit: tInteractionType("visit"),
+                linkedin: tInteractionType("linkedin"),
+                meeting: tInteractionType("meeting"),
+                demo: tInteractionType("demo"),
+                proposal_sent: tInteractionType("proposal_sent"),
+                note: tInteractionType("note"),
+                email_received: tInteractionType("email_received"),
+              },
+              channelLabels: {
+                email: tInteractionChannel("email"),
+                linkedin: tInteractionChannel("linkedin"),
+                phone: tInteractionChannel("phone"),
+                in_person: tInteractionChannel("in_person"),
+                video: tInteractionChannel("video"),
+                other: tInteractionChannel("other"),
+              },
+              replyHeader: tInteractions("replyHeader"),
+            } satisfies InteractionsTimelineLabels
+          }
+        />
       </Card>
     </div>
   );

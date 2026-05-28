@@ -8,14 +8,9 @@ import { getSenderName } from "@/lib/auth/sender-name";
 import { logInteraction } from "@/db/queries/interactions";
 import { completeTask } from "@/db/queries/tasks";
 import { getContactById } from "@/db/queries/contacts";
-import {
-  updateMessageStatus,
-  updateMessageContent,
-  getMessageById,
-  markMessageSentViaGmail,
-  type MessageStatusUpdate,
-} from "@/db/queries/messages";
+import { insertMessage } from "@/db/queries/messages";
 import { MessageGenerationOrchestratorFactory } from "@/lib/messages/message-generation-orchestrator-factory";
+import { LlmGenerationServiceFactory } from "@/lib/ai/llm-generation-service-factory";
 import { GmailServiceFactory } from "@/lib/gmail/gmail-service-factory";
 import { GmailCredentialsNotFoundError, GmailApiError } from "@/lib/gmail/gmail-errors";
 import {
@@ -28,7 +23,6 @@ import {
 import {
   InvalidInputError,
   MessageActionInteractionInsertFailedError,
-  MessageActionMessageNotFoundError,
   GmailNotConnectedError,
   ContactEmailMissingError,
   GmailSendFailedError,
@@ -64,10 +58,15 @@ const generateSchema = z.object({
 });
 
 export type GenerateMessageResult = {
-  messageId: string;
+  /** Full raw content (with "Subject: ..." line for email). Send via Gmail
+   *  / Log interaction will persist this verbatim. */
+  content: string;
   channel: MessageChannel;
   subject: string | null;
   body: string;
+  /** Caller passes this back on commit so the new `messages` row can FK to
+   *  the already-created `llm_usage` audit row. */
+  llmUsageId: string;
   tokensIn: number;
   tokensOut: number;
 };
@@ -111,133 +110,179 @@ export async function generateMessageAction(
 }
 
 // ---------------------------------------------------------------------------
-// updateMessageStatusAction
+// Commit a generated message — shared schema + helper
 // ---------------------------------------------------------------------------
 
-const statusSchema = z.object({
-  messageId: z.string().uuid(),
-  status: z.enum(["copied", "discarded", "sent"]),
+/**
+ * The dialog holds the AI-generated content client-side and posts it back
+ * (along with the contextual metadata captured at generation time) when the
+ * user actually acts on it — Send via Gmail or Log interaction. The same
+ * shape feeds both commit actions.
+ */
+const commitSchema = z.object({
+  contactId: z.string().uuid(),
+  companyId: z.string().uuid(),
+  taskId: z.string().uuid().optional().or(z.literal("")),
+  channelIntent: z.enum(channelIntentValues),
+  locale: z.enum(["fr", "en"]),
+  content: z.string().min(1).max(20_000),
+  llmUsageId: z.string().uuid(),
+  orientation: z.string().max(500).optional().or(z.literal("")),
 });
 
-export async function updateMessageStatusAction(formData: FormData): Promise<void> {
-  const parsed = statusSchema.safeParse(Object.fromEntries(formData));
+type CommitData = z.infer<typeof commitSchema>;
+type ParsedCommit = {
+  data: CommitData;
+  channel: MessageChannel;
+  intent: MessageIntent;
+};
+
+function parseCommitFormData(formData: FormData): ParsedCommit {
+  const parsed = commitSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new InvalidInputError(parsed.error);
-  const { activeOrganization } = await getActiveOrg();
+  const { channel, intent } = parseChannelIntent(parsed.data.channelIntent);
+  return { data: parsed.data, channel, intent };
+}
 
-  await updateMessageStatus(
-    activeOrganization.id,
-    parsed.data.messageId,
-    parsed.data.status as MessageStatusUpdate,
-  );
+/**
+ * Inserts the `messages` row + auto-logs the outbound interaction +
+ * completes the originating task (if any). Used by both
+ * `sendMessageViaGmailAction` and `logSentInteractionAction`.
+ *
+ * `gmail` is the Gmail-side metadata (thread id + message id) populated by
+ * the Gmail send path ; undefined for the manual-log path.
+ *
+ * Returns the new message id + interaction id so the caller can hand them
+ * back to the UI (router.refresh covers the revalidation).
+ */
+async function persistSentMessage(args: {
+  orgId: string;
+  userId: string;
+  data: CommitData;
+  channel: MessageChannel;
+  intent: MessageIntent;
+  gmail?: { threadId: string; messageId: string };
+  summary: string | null;
+}): Promise<{ messageId: string; interactionId: string; taskCompleted: boolean }> {
+  const { orgId, userId, data, channel, intent, gmail, summary } = args;
+  const taskId = data.taskId && data.taskId !== "" ? data.taskId : null;
+  const orientation =
+    data.orientation && data.orientation !== "" ? data.orientation : null;
 
-  // Find the message to revalidate the right paths
-  const msg = await getMessageById(activeOrganization.id, parsed.data.messageId);
-  if (msg) {
-    revalidatePath(`/contacts/${msg.contactId}`);
-    revalidatePath(`/companies/${msg.companyId}`);
-    if (msg.taskId) revalidatePath("/tasks");
+  // 1. Persist the message row — sent state from the start, no draft phase.
+  const inserted = await insertMessage(orgId, {
+    contactId: data.contactId,
+    companyId: data.companyId,
+    taskId,
+    userId,
+    channel,
+    intent,
+    locale: data.locale,
+    orientation,
+    content: data.content,
+    llmUsageId: data.llmUsageId,
+    sentAt: new Date(),
+    gmailThreadId: gmail?.threadId ?? null,
+    gmailMessageId: gmail?.messageId ?? null,
+  });
+
+  // 2. Patch the llm_usage backref — best-effort, never blocks the commit.
+  try {
+    await LlmGenerationServiceFactory.getInstance().linkUsageToEntity(
+      data.llmUsageId,
+      "message",
+      inserted.id,
+    );
+  } catch (err) {
+    console.error("[persistSentMessage] linkUsageToEntity failed (non-fatal)", err);
   }
+
+  // 3. Log the outbound interaction. messageId points back at the freshly
+  //    inserted messages row so the reply-polling job can locate this
+  //    outbound when a reply arrives (to flip its status to "responded").
+  //    outcome stays null on the outbound — the outcome is qualified on
+  //    the reply when it comes in (positive / negative / rdv / etc).
+  const interaction = await logInteraction(orgId, userId, {
+    companyId: data.companyId,
+    contactId: data.contactId,
+    taskId,
+    type: messageIntentToInteractionType(intent),
+    channel,
+    outcome: null,
+    summary,
+    occurredAt: new Date(),
+    status: "sent",
+    messageId: inserted.id,
+  });
+  if (!interaction) throw new MessageActionInteractionInsertFailedError();
+
+  // 4. Complete the originating task, if any.
+  let taskCompleted = false;
+  if (taskId) {
+    await completeTask(orgId, taskId, userId);
+    taskCompleted = true;
+  }
+
+  return { messageId: inserted.id, interactionId: interaction.id, taskCompleted };
 }
 
 // ---------------------------------------------------------------------------
-// updateMessageContentAction
+// logSentInteractionAction — "I just sent this externally" from the dialog
 // ---------------------------------------------------------------------------
-
-const contentSchema = z.object({
-  messageId: z.string().uuid(),
-  subject: z.string().max(500).optional().or(z.literal("")),
-  body: z.string().min(1).max(20_000),
-});
-
-// ---------------------------------------------------------------------------
-// logSentInteractionAction — one-click "I just sent this" from the dialog
-// ---------------------------------------------------------------------------
-
-const logSentSchema = z.object({
-  messageId: z.string().uuid(),
-});
 
 export type LogSentInteractionResult = {
+  messageId: string;
   interactionId: string;
   taskCompleted: boolean;
 };
 
 /**
- * Records an interaction reflecting that the user just sent the generated
- * message externally (Gmail, LinkedIn UI, …). Maps the message metadata to
- * the interaction schema so the user doesn't fill the form manually.
- *
- * When the message was generated from a task (`message.taskId` set), also
- * marks the task as completed — one click closes the loop, no separate
- * "mark as done" step needed.
+ * Persists the AI-generated message as `sent` and records the outbound
+ * interaction. Used when the user clicks "Mark task done" / "Log interaction"
+ * in the dialog — meaning the message was sent via some external channel
+ * (LinkedIn, other mail client, etc.) and we just need to close the loop on
+ * our side.
  *
  * Side effects :
- *   - Inserts an `interactions` row.
- *   - Updates `contacts.lastContactedAt` (via `logInteraction` helper).
- *   - Flips the message status to "sent".
- *   - If message.taskId is set : marks the task `completed`.
- *   - Triggers a score recompute (interaction is a scoring input).
+ *   - Inserts the `messages` row (status=sent).
+ *   - Patches the `llm_usage` backref so usage records know which message they
+ *     belong to.
+ *   - Inserts an `interactions` row (outbound).
+ *   - Updates `contacts.lastContactedAt` (via `logInteraction`).
+ *   - Completes the originating task, if any.
  */
 export async function logSentInteractionAction(
   formData: FormData,
 ): Promise<LogSentInteractionResult> {
-  const parsed = logSentSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new InvalidInputError(parsed.error);
-
+  const { data, channel, intent } = parseCommitFormData(formData);
   const { activeOrganization, user } = await getActiveOrg();
-  const msg = await getMessageById(activeOrganization.id, parsed.data.messageId);
-  if (!msg) throw new MessageActionMessageNotFoundError(parsed.data.messageId);
 
-  const summary =
-    msg.channel === "email" && msg.content.startsWith("Objet:")
-      ? msg.content.split("\n", 1)[0]!.replace(/^Objet:\s*/i, "").trim()
-      : msg.channel === "email" && msg.content.startsWith("Subject:")
-      ? msg.content.split("\n", 1)[0]!.replace(/^Subject:\s*/i, "").trim()
-      : msg.content.slice(0, 120).trim();
+  const { subject, body } = splitSubjectAndBody(data.content, data.locale);
+  const summary = subject || body.slice(0, 120).trim() || null;
 
-  const interaction = await logInteraction(activeOrganization.id, user.id, {
-    companyId: msg.companyId,
-    contactId: msg.contactId,
-    taskId: msg.taskId,
-    type: messageIntentToInteractionType(msg.intent as MessageIntent),
-    channel: msg.channel,
-    // Default state for an auto-logged sent message : "sent, awaiting reply".
-    // Maps to `no_response` per the CRM convention — the user updates this if
-    // a reply actually comes in (positive/negative/rdv_scheduled/etc).
-    outcome: "no_response",
-    summary: summary || null,
-    occurredAt: new Date(),
+  const result = await persistSentMessage({
+    orgId: activeOrganization.id,
+    userId: user.id,
+    data,
+    channel,
+    intent,
+    summary,
   });
-  if (!interaction) throw new MessageActionInteractionInsertFailedError();
 
-  // Mark the message as sent so the row reflects reality.
-  await updateMessageStatus(activeOrganization.id, msg.id, "sent");
-
-  // If the message was generated from a task, the act of sending closes that
-  // task — auto-complete it so the user doesn't have to do it in two clicks.
-  let taskCompleted = false;
-  if (msg.taskId) {
-    await completeTask(activeOrganization.id, msg.taskId, user.id);
-    taskCompleted = true;
-  }
-
-  revalidatePath(`/contacts/${msg.contactId}`);
-  revalidatePath(`/companies/${msg.companyId}`);
+  revalidatePath(`/contacts/${data.contactId}`);
+  revalidatePath(`/companies/${data.companyId}`);
   revalidatePath("/dashboard");
-  if (msg.taskId) revalidatePath("/tasks");
+  if (data.taskId) revalidatePath("/tasks");
 
-  return { interactionId: interaction.id, taskCompleted };
+  return result;
 }
 
 // ---------------------------------------------------------------------------
 // sendMessageViaGmailAction — one-click Gmail send + auto log + task close
 // ---------------------------------------------------------------------------
 
-const sendViaGmailSchema = z.object({
-  messageId: z.string().uuid(),
-});
-
 export type SendMessageViaGmailResult = {
+  messageId: string;
   threadId: string;
   gmailMessageId: string;
   interactionId: string;
@@ -267,26 +312,21 @@ export type SendMessageViaGmailResult = {
 export async function sendMessageViaGmailAction(
   formData: FormData,
 ): Promise<SendMessageViaGmailResult> {
-  const parsed = sendViaGmailSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new InvalidInputError(parsed.error);
-
+  const { data, channel, intent } = parseCommitFormData(formData);
   const { activeOrganization, user } = await getActiveOrg();
-  const msg = await getMessageById(activeOrganization.id, parsed.data.messageId);
-  if (!msg) throw new MessageActionMessageNotFoundError(parsed.data.messageId);
 
-  const contact = await getContactById(activeOrganization.id, msg.contactId);
-  if (!contact?.email) throw new ContactEmailMissingError(msg.contactId);
+  const contact = await getContactById(activeOrganization.id, data.contactId);
+  if (!contact?.email) throw new ContactEmailMissingError(data.contactId);
 
-  // Split "Subject: foo\n\nbody" — the same convention the AI generator emits.
-  const { subject, body } = splitSubjectAndBody(msg.content, msg.locale);
+  const { subject, body } = splitSubjectAndBody(data.content, data.locale);
 
-  // 1. Gmail send. Any failure here aborts before any DB mutation.
-  let result;
+  // 1. Gmail send. Failure here means we never persist anything.
+  let sendResult;
   try {
-    result = await GmailServiceFactory.getInstance().send({
+    sendResult = await GmailServiceFactory.getInstance().send({
       userId: user.id,
       to: contact.email,
-      subject: subject || (msg.locale === "fr" ? "(sans objet)" : "(no subject)"),
+      subject: subject || (data.locale === "fr" ? "(sans objet)" : "(no subject)"),
       body,
     });
   } catch (err) {
@@ -299,46 +339,31 @@ export async function sendMessageViaGmailAction(
     throw err;
   }
 
-  // 2. Persist Gmail ids on the message row immediately — even if downstream
-  //    bookkeeping fails, we never lose the link between our row and the
-  //    Gmail thread (needed for reply tracking).
-  await markMessageSentViaGmail(activeOrganization.id, msg.id, {
-    threadId: result.threadId,
-    messageId: result.messageId,
+  // 2. Now that Gmail accepted the send, persist the message row + log the
+  //    outbound interaction + complete the task (all inside persistSentMessage).
+  const summary = subject || body.slice(0, 120).trim() || null;
+  const persisted = await persistSentMessage({
+    orgId: activeOrganization.id,
+    userId: user.id,
+    data,
+    channel,
+    intent,
+    gmail: { threadId: sendResult.threadId, messageId: sendResult.messageId },
+    summary,
   });
 
-  // 3. Auto-log the outbound interaction.
-  const summary = subject || body.slice(0, 120).trim();
-  const interaction = await logInteraction(activeOrganization.id, user.id, {
-    companyId: msg.companyId,
-    contactId: msg.contactId,
-    taskId: msg.taskId,
-    type: messageIntentToInteractionType(msg.intent as MessageIntent),
-    channel: msg.channel,
-    outcome: "no_response",
-    summary: summary || null,
-    occurredAt: new Date(),
-  });
-  if (!interaction) throw new MessageActionInteractionInsertFailedError();
-
-  // 4. Complete the originating task, if any.
-  let taskCompleted = false;
-  if (msg.taskId) {
-    await completeTask(activeOrganization.id, msg.taskId, user.id);
-    taskCompleted = true;
-  }
-
-  revalidatePath(`/contacts/${msg.contactId}`);
-  revalidatePath(`/companies/${msg.companyId}`);
+  revalidatePath(`/contacts/${data.contactId}`);
+  revalidatePath(`/companies/${data.companyId}`);
   revalidatePath("/dashboard");
-  if (msg.taskId) revalidatePath("/tasks");
+  if (data.taskId) revalidatePath("/tasks");
 
   return {
-    threadId: result.threadId,
-    gmailMessageId: result.messageId,
-    interactionId: interaction.id,
-    taskCompleted,
-    fromAddress: result.fromAddress,
+    messageId: persisted.messageId,
+    threadId: sendResult.threadId,
+    gmailMessageId: sendResult.messageId,
+    interactionId: persisted.interactionId,
+    taskCompleted: persisted.taskCompleted,
+    fromAddress: sendResult.fromAddress,
     toAddress: contact.email,
   };
 }
@@ -362,21 +387,3 @@ function splitSubjectAndBody(
   return { subject, body };
 }
 
-export async function updateMessageContentAction(formData: FormData): Promise<void> {
-  const parsed = contentSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) throw new InvalidInputError(parsed.error);
-  const { activeOrganization } = await getActiveOrg();
-
-  const existing = await getMessageById(activeOrganization.id, parsed.data.messageId);
-  if (!existing) throw new MessageActionMessageNotFoundError(parsed.data.messageId);
-
-  const reassembled =
-    existing.channel === "email" && parsed.data.subject
-      ? `${existing.locale === "fr" ? "Objet" : "Subject"}: ${parsed.data.subject.trim()}\n\n${parsed.data.body}`
-      : parsed.data.body;
-
-  await updateMessageContent(activeOrganization.id, parsed.data.messageId, reassembled);
-
-  revalidatePath(`/contacts/${existing.contactId}`);
-  revalidatePath(`/companies/${existing.companyId}`);
-}

@@ -10,8 +10,6 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
 import {
   generateMessageAction,
-  updateMessageStatusAction,
-  updateMessageContentAction,
   logSentInteractionAction,
   sendMessageViaGmailAction,
   type GenerateMessageResult,
@@ -128,13 +126,10 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
   }
 
   function handleOpenChange(next: boolean) {
-    // Closing while we have an un-copied result → mark as discarded.
-    if (!next && step.kind === "result" && !copied) {
-      const fd = new FormData();
-      fd.append("messageId", step.result.messageId);
-      fd.append("status", "discarded");
-      void updateMessageStatusAction(fd);
-    }
+    // No more side effect on close. The `messages` row is only persisted on
+    // an explicit user action (Send via Gmail or Log interaction). Closing
+    // without acting simply discards the in-memory state — the LLM call is
+    // already logged in `llm_usage` (independent of any message row).
     if (!next) resetDialog();
     props.onOpenChange(next);
   }
@@ -180,30 +175,38 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
         ? `${locale === "fr" ? "Objet" : "Subject"}: ${step.subject}\n\n${step.body}`
         : step.body;
     void navigator.clipboard.writeText(toCopy);
+    setCopied(true);
+  }
 
-    // Persist edits (if any) + flip status to copied. Dialog stays open
-    // so the user can also "Log interaction" before closing manually.
-    startTransition(async () => {
-      const fdContent = new FormData();
-      fdContent.append("messageId", step.result.messageId);
-      if (step.subject) fdContent.append("subject", step.subject);
-      fdContent.append("body", step.body);
-      await updateMessageContentAction(fdContent);
-
-      const fdStatus = new FormData();
-      fdStatus.append("messageId", step.result.messageId);
-      fdStatus.append("status", "copied");
-      await updateMessageStatusAction(fdStatus);
-
-      setCopied(true);
-    });
+  /**
+   * Builds the FormData payload both commit actions consume. The dialog
+   * holds the AI-generated content + the user's edits client-side, so on
+   * commit we send the full payload (content + ids + metadata) rather than
+   * an opaque messageId — the server creates the row only at this point.
+   */
+  function buildCommitFormData(): FormData | null {
+    if (step.kind !== "result") return null;
+    const fullContent =
+      channel === "email" && step.subject
+        ? `${locale === "fr" ? "Objet" : "Subject"}: ${step.subject}\n\n${step.body}`
+        : step.body;
+    const fd = new FormData();
+    fd.append("contactId", props.contactId);
+    fd.append("companyId", props.companyId);
+    if (props.taskId) fd.append("taskId", props.taskId);
+    fd.append("channelIntent", channelIntent);
+    fd.append("locale", locale);
+    fd.append("content", fullContent);
+    fd.append("llmUsageId", step.result.llmUsageId);
+    if (orientation.trim()) fd.append("orientation", orientation.trim());
+    return fd;
   }
 
   function handleLogInteraction() {
     if (step.kind !== "result" || interactionLogged) return;
+    const fd = buildCommitFormData();
+    if (!fd) return;
     startTransition(async () => {
-      const fd = new FormData();
-      fd.append("messageId", step.result.messageId);
       await logSentInteractionAction(fd);
       setInteractionLogged(true);
       router.refresh();
@@ -212,19 +215,12 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
 
   async function handleSendViaGmail() {
     if (step.kind !== "result" || gmailSent || gmailSending) return;
+    const fd = buildCommitFormData();
+    if (!fd) return;
     setGmailError(null);
     setGmailSending(true);
 
-    // Persist any edits first so what we send matches what's shown.
-    const fdContent = new FormData();
-    fdContent.append("messageId", step.result.messageId);
-    if (step.subject) fdContent.append("subject", step.subject);
-    fdContent.append("body", step.body);
     try {
-      await updateMessageContentAction(fdContent);
-
-      const fd = new FormData();
-      fd.append("messageId", step.result.messageId);
       await sendMessageViaGmailAction(fd);
 
       setGmailSent(true);

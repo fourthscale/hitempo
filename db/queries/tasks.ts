@@ -1,6 +1,6 @@
 import "server-only";
 import { and, asc, count, desc, eq, isNull, lt, lte, gte, or } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { getDb, type Db } from "@/db/client";
 import { companies, contacts, tasks } from "@/db/schema";
 
 export type TaskWithContext = Awaited<ReturnType<typeof getTasksByOrg>>[number];
@@ -204,8 +204,15 @@ export async function createTask(
   return row;
 }
 
-export async function completeTask(orgId: string, taskId: string, userId: string) {
-  await getDb()
+export async function completeTask(
+  orgId: string,
+  taskId: string,
+  userId: string,
+  /** Optional DB override for background jobs (Inngest crons) running
+   *  outside an authenticated user session. */
+  dbOverride?: Db,
+) {
+  await (dbOverride ?? getDb())
     .update(tasks)
     .set({
       status: "completed",

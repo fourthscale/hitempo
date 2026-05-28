@@ -45,11 +45,21 @@ export type InsertMessageInput = {
   orientation: string | null;
   content: string;
   llmUsageId: string;
+  /** Always "sent" since the row is only created when the user commits.
+   *  Kept as a parameter so the caller is explicit about it. */
+  status?: "sent";
+  sentAt?: Date;
+  gmailThreadId?: string | null;
+  gmailMessageId?: string | null;
 };
 
 /**
- * Inserts a draft message row. The provenance fields (provider/model/tokens/cost)
- * live in llm_usage and are referenced through llmUsageId.
+ * Inserts a `messages` row. The provenance fields (provider/model/tokens/cost)
+ * live in llm_usage and are referenced through `llmUsageId`.
+ *
+ * In the new flow (sprint 10) the row is created **only when the user actually
+ * commits** the message — either by sending via Gmail or by manually logging
+ * the interaction. There is no longer a "draft" lifecycle.
  */
 export async function insertMessage(orgId: string, input: InsertMessageInput) {
   const [row] = await getDb()
@@ -66,7 +76,10 @@ export async function insertMessage(orgId: string, input: InsertMessageInput) {
       orientation: input.orientation,
       content: input.content,
       llmUsageId: input.llmUsageId,
-      status: "draft",
+      status: input.status ?? "sent",
+      sentAt: input.sentAt ?? new Date(),
+      gmailThreadId: input.gmailThreadId ?? null,
+      gmailMessageId: input.gmailMessageId ?? null,
     })
     .returning({
       id: messages.id,
@@ -77,40 +90,6 @@ export async function insertMessage(orgId: string, input: InsertMessageInput) {
     throw new Error("insertMessage: no row returned");
   }
   return row;
-}
-
-export type MessageStatusUpdate = "copied" | "discarded" | "sent";
-
-export async function updateMessageStatus(
-  orgId: string,
-  messageId: string,
-  status: MessageStatusUpdate,
-): Promise<void> {
-  await getDb()
-    .update(messages)
-    .set({ status, updatedAt: new Date() })
-    .where(
-      and(
-        eq(messages.organizationId, orgId),
-        eq(messages.id, messageId),
-      ),
-    );
-}
-
-export async function updateMessageContent(
-  orgId: string,
-  messageId: string,
-  content: string,
-): Promise<void> {
-  await getDb()
-    .update(messages)
-    .set({ content, updatedAt: new Date() })
-    .where(
-      and(
-        eq(messages.organizationId, orgId),
-        eq(messages.id, messageId),
-      ),
-    );
 }
 
 /**
@@ -124,34 +103,4 @@ export async function getMessageById(orgId: string, messageId: string) {
       eq(messages.id, messageId),
     ),
   });
-}
-
-/**
- * Flip a message to `sent` and persist the Gmail-side identifiers
- * (`gmail_thread_id`, `gmail_message_id`). `sentAt` is set server-side so
- * the timeline always agrees with our clock, not the caller's.
- *
- * Used by `sendMessageViaGmailAction` immediately after a successful
- * Gmail API send.
- */
-export async function markMessageSentViaGmail(
-  orgId: string,
-  messageId: string,
-  gmail: { threadId: string; messageId: string },
-): Promise<void> {
-  await getDb()
-    .update(messages)
-    .set({
-      status: "sent",
-      sentAt: new Date(),
-      gmailThreadId: gmail.threadId,
-      gmailMessageId: gmail.messageId,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(messages.organizationId, orgId),
-        eq(messages.id, messageId),
-      ),
-    );
 }

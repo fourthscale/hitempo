@@ -36,7 +36,7 @@ export const contactRole = pgEnum("contact_role", [
 
 export const interactionType = pgEnum("interaction_type", [
   "first_contact", "follow_up", "call", "visit", "linkedin",
-  "meeting", "demo", "proposal_sent", "note",
+  "meeting", "demo", "proposal_sent", "note", "email_received",
 ]);
 
 export const interactionChannel = pgEnum("interaction_channel", [
@@ -46,6 +46,20 @@ export const interactionChannel = pgEnum("interaction_channel", [
 export const interactionOutcome = pgEnum("interaction_outcome", [
   "no_response", "positive_reply", "negative_reply", "out_of_office",
   "wrong_contact", "rdv_scheduled", "opted_out",
+]);
+
+/**
+ * Lifecycle stage of an interaction. Independent of `outcome` (which
+ * qualifies the content of the exchange — positive/negative/rdv/etc).
+ *
+ *   - `sent`       : outbound emitted, no follow-up yet (default for outbound)
+ *   - `responded`  : a reply / answer was received (auto-flipped by the
+ *                    Gmail poller for emails ; manual for other channels)
+ *   - `no_answer`  : call attempted, no one picked up
+ *   - `done`       : completed event (visit performed, call connected, etc.)
+ */
+export const interactionStatus = pgEnum("interaction_status", [
+  "sent", "responded", "no_answer", "done",
 ]);
 
 export const taskType = pgEnum("task_type", [
@@ -339,6 +353,10 @@ export const interactions = pgTable(
     type: interactionType("type").notNull(),
     channel: interactionChannel("channel").notNull(),
     outcome: interactionOutcome("outcome"),
+    /** Lifecycle status (sent / responded / no_answer / done). Independent
+     *  of outcome. Default null = legacy rows ; new outbound rows default
+     *  to "sent" via the action layer. */
+    status: interactionStatus("status"),
 
     subject: text("subject"),
     summary: text("summary"),

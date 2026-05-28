@@ -1,0 +1,1 @@
+ALTER TYPE "public"."interaction_type" ADD VALUE 'email_received';

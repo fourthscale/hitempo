@@ -1,6 +1,6 @@
 import "server-only";
 import { and, asc, desc, eq, gte } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { getDb, type Db } from "@/db/client";
 import { contacts, interactions } from "@/db/schema";
 
 export type InteractionRow = Awaited<ReturnType<typeof getInteractionsByContact>>[number];
@@ -123,9 +123,21 @@ export async function logInteraction(
     summary?: string | null;
     interestLevel?: number | null;
     occurredAt: Date;
+    /** Lifecycle stage of the interaction. Outbound rows default to "sent"
+     *  via the action layer ; reply rows are left null. */
+    status?: typeof interactions.$inferInsert["status"];
+    /** FK back to the `messages` row this interaction reflects. Set for outbound
+     *  events created on Send via Gmail / Log interaction. */
+    messageId?: string | null;
+    /** Optional JSON metadata. Used by the Gmail reply poller to store
+     *  `{ kind, gmail_thread_id, gmail_message_id, original_message_id }`. */
+    metadata?: Record<string, unknown>;
   },
+  /** Optional DB override — pass the admin pool from background jobs that
+   *  run outside an authenticated user session (Inngest crons, migrations). */
+  dbOverride?: Db,
 ) {
-  const db = getDb();
+  const db = dbOverride ?? getDb();
 
   const [row] = await db
     .insert(interactions)
@@ -142,6 +154,9 @@ export async function logInteraction(
       interestLevel: data.interestLevel ?? null,
       occurredAt: data.occurredAt,
       userId,
+      status: data.status ?? null,
+      messageId: data.messageId ?? null,
+      metadata: data.metadata ?? {},
     })
     .returning();
 

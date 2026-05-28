@@ -23,7 +23,14 @@
     "meeting": "Meeting",
     "demo": "Demo",
     "proposal_sent": "Proposal sent",
-    "note": "Note"
+    "note": "Note",
+    "email_received": "Reply received"
+  },
+  "interactionStatus": {
+    "sent": "Sent",
+    "responded": "Replied",
+    "no_answer": "No answer",
+    "done": "Done"
   },
   "interactionChannel": {
     "email": "Email",
@@ -661,7 +668,10 @@
       "submit": "Log",
       "cancel": "Cancel",
       "setOutcome": "Set outcome",
-      "clearOutcome": "Clear outcome"
+      "clearOutcome": "Clear outcome",
+      "modeGrouped": "Grouped",
+      "modeList": "List",
+      "replyHeader": "Reply"
     },
     "settings": {
       "placeholder": "More settings land in a later sprint.",
