@@ -687,7 +687,11 @@
       "clearOutcome": "Clear outcome",
       "modeGrouped": "Grouped",
       "modeList": "List",
-      "replyHeader": "Reply"
+      "replyHeader": "Reply",
+      "attachments": {
+        "sectionLabel": "Attachments",
+        "downloadError": "Could not open this attachment. Please try again."
+      }
     },
     "settings": {
       "placeholder": "More settings land in a later sprint.",
@@ -877,6 +881,18 @@
         "gmailSent": "Sent",
         "gmailSendFailed": "Send failed, please try again.",
         "connectGmailHint": "Connect Gmail to send in one click"
+      },
+      "attachments": {
+        "label": "Attachments",
+        "hint": "PDF · max {max} files · {sizeMb} MB per file",
+        "add": "Add attachment",
+        "remove": "Remove",
+        "errors": {
+          "tooMany": "Maximum {max} attachments per message.",
+          "unsupportedType": "\"{filename}\" is not accepted (allowed types: {allowed}).",
+          "tooLarge": "\"{filename}\" exceeds the {max} MB per-file limit.",
+          "totalTooLarge": "Combined attachments exceed {max} MB."
+        }
       },
       "emptyState": "Pick your parameters and click Generate.",
       "legend": {

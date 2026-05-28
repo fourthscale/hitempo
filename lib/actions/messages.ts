@@ -9,10 +9,20 @@ import { logInteraction } from "@/db/queries/interactions";
 import { completeTask } from "@/db/queries/tasks";
 import { getContactById } from "@/db/queries/contacts";
 import { insertMessage } from "@/db/queries/messages";
+import { insertMessageAttachment } from "@/db/queries/message-attachments";
 import { MessageGenerationOrchestratorFactory } from "@/lib/messages/message-generation-orchestrator-factory";
 import { LlmGenerationServiceFactory } from "@/lib/ai/llm-generation-service-factory";
 import { GmailServiceFactory } from "@/lib/gmail/gmail-service-factory";
 import { GmailCredentialsNotFoundError, GmailApiError } from "@/lib/gmail/gmail-errors";
+import { getAttachmentStorageService } from "@/lib/gmail/attachment-storage-service";
+import type { MimeAttachment } from "@/lib/gmail/mime-message-strategy";
+import {
+  ALLOWED_ATTACHMENT_MIME_TYPES,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_ATTACHMENT_BYTES,
+  MAX_TOTAL_ATTACHMENT_BYTES,
+  isAllowedAttachmentMimeType,
+} from "@/lib/gmail/attachment-limits";
 import {
   parseChannelIntent,
   messageIntentToInteractionType,
@@ -21,6 +31,7 @@ import {
   type MessageLocale,
 } from "@/lib/messages/types";
 import {
+  AttachmentRejectedError,
   InvalidInputError,
   MessageActionInteractionInsertFailedError,
   GmailNotConnectedError,
@@ -138,10 +149,63 @@ type ParsedCommit = {
 };
 
 function parseCommitFormData(formData: FormData): ParsedCommit {
-  const parsed = commitSchema.safeParse(Object.fromEntries(formData));
+  // FormData.entries() would include File entries — we only want the scalar
+  // commit fields here. The `attachments` field is extracted separately by
+  // `parseAttachmentsFromFormData()` for the Gmail send path.
+  const scalar: Record<string, FormDataEntryValue> = {};
+  for (const [key, value] of formData.entries()) {
+    if (key === "attachments") continue;
+    if (typeof value === "string") scalar[key] = value;
+  }
+  const parsed = commitSchema.safeParse(scalar);
   if (!parsed.success) throw new InvalidInputError(parsed.error);
   const { channel, intent } = parseChannelIntent(parsed.data.channelIntent);
   return { data: parsed.data, channel, intent };
+}
+
+/**
+ * Reads attached File entries from the dialog's FormData and returns them
+ * as MIME-ready `{ filename, mimeType, content }` triples. Enforces the
+ * limits from `attachment-limits.ts` defensively — even if the client
+ * validates upstream, the server is the authoritative gate.
+ *
+ * Returns an empty array when no attachments are present (text-only send).
+ */
+async function parseAttachmentsFromFormData(
+  formData: FormData,
+): Promise<MimeAttachment[]> {
+  const raw = formData.getAll("attachments").filter((v): v is File => v instanceof File);
+  if (raw.length === 0) return [];
+
+  if (raw.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+    throw new AttachmentRejectedError(
+      `Too many files (max ${MAX_ATTACHMENTS_PER_MESSAGE})`,
+    );
+  }
+
+  let totalBytes = 0;
+  const result: MimeAttachment[] = [];
+  for (const file of raw) {
+    if (!isAllowedAttachmentMimeType(file.type)) {
+      throw new AttachmentRejectedError(
+        `Unsupported file type "${file.type}" — allowed: ${ALLOWED_ATTACHMENT_MIME_TYPES.join(", ")}`,
+      );
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      throw new AttachmentRejectedError(
+        `"${file.name}" exceeds ${Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024)} MB per-file cap`,
+      );
+    }
+    totalBytes += file.size;
+    if (totalBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+      throw new AttachmentRejectedError(
+        `Combined attachment size exceeds ${Math.round(MAX_TOTAL_ATTACHMENT_BYTES / 1024 / 1024)} MB cap`,
+      );
+    }
+    const buf = Buffer.from(await file.arrayBuffer());
+    result.push({ filename: file.name, mimeType: file.type, content: buf });
+  }
+  return result;
 }
 
 /**
@@ -163,8 +227,12 @@ async function persistSentMessage(args: {
   intent: MessageIntent;
   gmail?: { threadId: string; messageId: string };
   summary: string | null;
+  /** Pre-validated, in-memory attachment payloads. Persisted to Supabase
+   *  Storage + `message_attachments` AFTER the message row is created,
+   *  because the storage path is keyed on `message_id`. Defaults to []. */
+  attachments?: MimeAttachment[];
 }): Promise<{ messageId: string; interactionId: string; taskCompleted: boolean }> {
-  const { orgId, userId, data, channel, intent, gmail, summary } = args;
+  const { orgId, userId, data, channel, intent, gmail, summary, attachments } = args;
   const taskId = data.taskId && data.taskId !== "" ? data.taskId : null;
   const orientation =
     data.orientation && data.orientation !== "" ? data.orientation : null;
@@ -216,7 +284,38 @@ async function persistSentMessage(args: {
   });
   if (!interaction) throw new MessageActionInteractionInsertFailedError();
 
-  // 4. Complete the originating task, if any.
+  // 4. Persist attachments (Storage + metadata rows). Done AFTER the message
+  //    row exists because the Storage path is keyed on `message_id`. Failures
+  //    here are logged but do NOT block — Gmail already sent the message, and
+  //    the user can re-upload if needed via a future retry path.
+  if (attachments && attachments.length > 0) {
+    const storage = getAttachmentStorageService();
+    for (const att of attachments) {
+      try {
+        const uploaded = await storage.upload({
+          organizationId: orgId,
+          messageId: inserted.id,
+          filename: att.filename,
+          mimeType: att.mimeType,
+          content: att.content,
+        });
+        await insertMessageAttachment({
+          organizationId: orgId,
+          messageId: inserted.id,
+          storageBucket: uploaded.storageBucket,
+          storagePath: uploaded.storagePath,
+          filename: att.filename,
+          mimeType: att.mimeType,
+          sizeBytes: att.content.byteLength,
+          uploadedBy: userId,
+        });
+      } catch (err) {
+        console.error("[persistSentMessage] attachment archive failed (non-fatal)", err);
+      }
+    }
+  }
+
+  // 5. Complete the originating task, if any.
   let taskCompleted = false;
   if (taskId) {
     await completeTask(orgId, taskId, userId);
@@ -313,6 +412,10 @@ export async function sendMessageViaGmailAction(
   formData: FormData,
 ): Promise<SendMessageViaGmailResult> {
   const { data, channel, intent } = parseCommitFormData(formData);
+  // Attachments are extracted+validated separately because they're File
+  // entries, not scalars. The function throws AttachmentRejectedError on
+  // any limit violation (size, count, mime type).
+  const attachments = await parseAttachmentsFromFormData(formData);
   const { activeOrganization, user } = await getActiveOrg();
 
   const contact = await getContactById(activeOrganization.id, data.contactId);
@@ -320,7 +423,10 @@ export async function sendMessageViaGmailAction(
 
   const { subject, body } = splitSubjectAndBody(data.content, data.locale);
 
-  // 1. Gmail send. Failure here means we never persist anything.
+  // 1. Gmail send — attachments travel in the multipart MIME built by
+  //    GmailService. Failure here means we never persist anything in the
+  //    DB and nothing landed in Storage (we only push to Storage after
+  //    Gmail confirms).
   let sendResult;
   try {
     sendResult = await GmailServiceFactory.getInstance().send({
@@ -328,6 +434,7 @@ export async function sendMessageViaGmailAction(
       to: contact.email,
       subject: subject || (data.locale === "fr" ? "(sans objet)" : "(no subject)"),
       body,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
   } catch (err) {
     if (err instanceof GmailCredentialsNotFoundError) {
@@ -340,7 +447,8 @@ export async function sendMessageViaGmailAction(
   }
 
   // 2. Now that Gmail accepted the send, persist the message row + log the
-  //    outbound interaction + complete the task (all inside persistSentMessage).
+  //    outbound interaction + archive attachments + complete the task (all
+  //    inside persistSentMessage).
   const summary = subject || body.slice(0, 120).trim() || null;
   const persisted = await persistSentMessage({
     orgId: activeOrganization.id,
@@ -350,6 +458,7 @@ export async function sendMessageViaGmailAction(
     intent,
     gmail: { threadId: sendResult.threadId, messageId: sendResult.messageId },
     summary,
+    attachments,
   });
 
   revalidatePath(`/contacts/${data.contactId}`);

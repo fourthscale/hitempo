@@ -18,6 +18,7 @@ Features are implemented in order. Each one builds on the previous. The number i
 | 08 | ~~Email digest & background jobs~~ | — | ➡️ Inngest infra rolled into sprint 10 (reply polling), morning digest deferred to V1 |
 | 09 | CSV import & polish + responsive design | `09-csv-import-polish.md` | ✅ done |
 | 10 | Gmail integration (send + reply tracking) | `10-gmail-integration.md` | ✅ done |
+| 10.5 | Gmail outbound attachments (PDF) | `10.5-gmail-attachments.md` | ⏳ code complete, migration pending |
 
 Briefs are written one at a time, just before starting that sprint. Each brief incorporates lessons learned from previous sprints.
 

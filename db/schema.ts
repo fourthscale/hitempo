@@ -616,7 +616,7 @@ export const llmUsageRelations = relations(llmUsage, ({ one, many }) => ({
   messages: many(messages),
 }));
 
-export const messagesRelations = relations(messages, ({ one }) => ({
+export const messagesRelations = relations(messages, ({ one, many }) => ({
   organization: one(organizations, {
     fields: [messages.organizationId],
     references: [organizations.id],
@@ -636,6 +636,55 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   llmUsage: one(llmUsage, {
     fields: [messages.llmUsageId],
     references: [llmUsage.id],
+  }),
+  attachments: many(messageAttachments),
+}));
+
+/**
+ * Files attached to outbound messages — PDF devis / présentations the rep
+ * adds to a Gmail send. One message can carry multiple attachments.
+ *
+ * Files live in the private Supabase Storage bucket `message-attachments`
+ * under the path `{organization_id}/{message_id}/{uuid}-{filename}`. We
+ * keep both `storage_bucket` and `storage_path` so the bucket name is not
+ * hardcoded in code and can be migrated later if needed.
+ *
+ * Lifecycle : created on Send via Gmail (action-level transaction), deleted
+ * if the Gmail call fails (garbage collection). Bytes are NOT stored in the
+ * DB — only the metadata pointer.
+ */
+export const messageAttachments = pgTable(
+  "message_attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    storageBucket: text("storage_bucket").notNull().default("message-attachments"),
+    storagePath: text("storage_path").notNull(),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    uploadedBy: uuid("uploaded_by").notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    byMessage: index("idx_message_attachments_message").on(t.messageId),
+    byOrg: index("idx_message_attachments_org").on(t.organizationId, t.uploadedAt),
+  }),
+);
+
+export const messageAttachmentsRelations = relations(messageAttachments, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [messageAttachments.organizationId],
+    references: [organizations.id],
+  }),
+  message: one(messages, {
+    fields: [messageAttachments.messageId],
+    references: [messages.id],
   }),
 }));
 

@@ -68,3 +68,13 @@ export class GmailSendFailedError extends UserFacingActionError {
     super(`Gmail send failed: ${reason}`);
   }
 }
+
+/** An uploaded attachment exceeded the per-file or per-message size cap,
+ *  or used an unsupported MIME type. The dialog already validates these
+ *  client-side ; this is defense-in-depth for direct action calls. */
+export class AttachmentRejectedError extends UserFacingActionError {
+  public readonly code = "ATTACHMENT_REJECTED";
+  constructor(public readonly reason: string) {
+    super(`Attachment rejected: ${reason}`);
+  }
+}

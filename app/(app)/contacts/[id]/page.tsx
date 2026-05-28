@@ -6,6 +6,7 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { getContactById } from "@/db/queries/contacts";
 import { getInteractionsByContact } from "@/db/queries/interactions";
+import { getAttachmentsByMessageIds } from "@/db/queries/message-attachments";
 import { getTasksByContact } from "@/db/queries/tasks";
 import { getBrandBriefStatus } from "@/db/queries/brand";
 import { deleteContactAction } from "@/lib/actions/contacts";
@@ -55,6 +56,18 @@ export default async function ContactDetailPage({
     getTasksByContact(orgId, id),
     getBrandBriefStatus(orgId),
   ]);
+
+  // Bulk-fetch attachments for all messages referenced by these interactions
+  // in a single query, then dispatch into a Map for O(1) lookup when mapping
+  // each row into the TimelineInteraction payload below.
+  const messageIdsInTimeline = Array.from(
+    new Set(
+      interactionHistory
+        .map((i) => i.messageId)
+        .filter((id): id is string => id !== null),
+    ),
+  );
+  const attachmentsByMessageId = await getAttachmentsByMessageIds(orgId, messageIdsInTimeline);
 
   const locale = await getLocale();
   const t = await getTranslations("pages.contacts");
@@ -282,6 +295,13 @@ export default async function ContactDetailPage({
             summary: i.summary,
             occurredAt: i.occurredAt,
             messageId: i.messageId,
+            attachments: i.messageId
+              ? (attachmentsByMessageId.get(i.messageId) ?? []).map((a) => ({
+                  id: a.id,
+                  filename: a.filename,
+                  sizeBytes: a.sizeBytes,
+                }))
+              : undefined,
           }))}
           labels={
             {
@@ -328,6 +348,10 @@ export default async function ContactDetailPage({
                 other: tInteractionChannel("other"),
               },
               replyHeader: tInteractions("replyHeader"),
+              attachments: {
+                sectionLabel: tInteractions("attachments.sectionLabel"),
+                downloadError: tInteractions("attachments.downloadError"),
+              },
             } satisfies InteractionsTimelineLabels
           }
         />

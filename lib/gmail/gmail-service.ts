@@ -6,6 +6,7 @@ import {
 } from "./gmail-credentials-service";
 import { getGoogleOAuthConfig, refreshAccessToken } from "./google-oauth";
 import { GmailApiError } from "./gmail-errors";
+import { MimeMessageBuilder, type MimeAttachment } from "./mime-message-strategy";
 
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 
@@ -25,6 +26,10 @@ export type GmailSendInput = {
    *  follow-ups). The first send leaves this undefined and lets Gmail
    *  create a new thread. */
   replyToThreadId?: string;
+  /** Optional PDF attachments. Caller is responsible for enforcing size
+   *  and type limits (see lib/gmail/attachment-limits.ts) — this layer
+   *  trusts the bytes it's handed and only encodes them into MIME. */
+  attachments?: MimeAttachment[];
 };
 
 export type GmailSendResult = {
@@ -54,12 +59,14 @@ export class GmailService {
     const creds = await this.credentials.requireForUser(input.userId);
     const accessToken = await this.ensureFreshAccessToken(creds);
 
-    const raw = buildMimeMessage({
+    const mimeInput = {
       from: creds.gmailAddress,
       to: input.to,
       subject: input.subject,
       body: input.body,
-    });
+      attachments: input.attachments,
+    };
+    const raw = MimeMessageBuilder.forInput(mimeInput).build(mimeInput);
 
     const requestBody: { raw: string; threadId?: string } = { raw };
     if (input.replyToThreadId) requestBody.threadId = input.replyToThreadId;
@@ -114,51 +121,3 @@ export class GmailService {
   }
 }
 
-// ---------------------------------------------------------------------------
-// MIME builder (private to this module)
-// ---------------------------------------------------------------------------
-
-/**
- * Builds an RFC 2822 message and returns it URL-safe-base64 encoded, the
- * exact format `users.messages.send` expects in its `raw` field.
- *
- * - Subject is RFC 2047 encoded when it contains non-ASCII.
- * - Body is sent as plain text UTF-8, transfer-encoded base64. We don't ship
- *   HTML in MVP — keeps deliverability simple and matches the AI generator.
- */
-function buildMimeMessage(input: {
-  from: string;
-  to: string;
-  subject: string;
-  body: string;
-}): string {
-  const subject = needsRfc2047(input.subject)
-    ? encodeRfc2047(input.subject)
-    : input.subject;
-
-  const headers = [
-    `From: ${input.from}`,
-    `To: ${input.to}`,
-    `Subject: ${subject}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: base64",
-  ].join("\r\n");
-
-  const bodyB64 = Buffer.from(input.body, "utf8").toString("base64");
-  const message = `${headers}\r\n\r\n${bodyB64}`;
-
-  return Buffer.from(message, "utf8")
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-function needsRfc2047(s: string): boolean {
-  return /[^\x20-\x7E]/.test(s);
-}
-
-function encodeRfc2047(s: string): string {
-  return `=?UTF-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
-}

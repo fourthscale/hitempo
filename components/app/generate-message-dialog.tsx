@@ -4,7 +4,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, RefreshCw, Copy, X, Loader2, MessageSquarePlus, Check } from "lucide-react";
+import { Sparkles, RefreshCw, Copy, X, Loader2, MessageSquarePlus, Check, Paperclip, FileText } from "lucide-react";
 import { GmailIcon } from "@/components/app/gmail-icon";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
@@ -31,6 +31,13 @@ import {
   type MessageChannel,
   type MessageLocale,
 } from "@/lib/messages/types";
+import {
+  ALLOWED_ATTACHMENT_MIME_TYPES,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_ATTACHMENT_BYTES,
+  MAX_TOTAL_ATTACHMENT_BYTES,
+  isAllowedAttachmentMimeType,
+} from "@/lib/gmail/attachment-limits";
 
 const CHANNEL_INTENT_VALUES: ChannelIntent[] = [
   "email-first_contact",
@@ -107,6 +114,11 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
   const [gmailSent, setGmailSent] = useState(false);
   const [gmailSending, setGmailSending] = useState(false);
   const [gmailError, setGmailError] = useState<string | null>(null);
+  // Attachments — Gmail-send only. We keep File objects in state so the user
+  // can drop/reorder/remove before committing. Real upload to Supabase
+  // Storage happens server-side AFTER the Gmail send succeeds.
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const { channel } = parseChannelIntent(channelIntent);
@@ -122,7 +134,68 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
     setGmailSent(false);
     setGmailSending(false);
     setGmailError(null);
+    setAttachments([]);
+    setAttachmentError(null);
     setOrientation("");
+  }
+
+  /**
+   * Validates incoming files against the shared attachment limits and pushes
+   * the accepted ones into state. Rejected files surface a single, focused
+   * error message — the picker stays usable.
+   */
+  function addAttachments(files: FileList | File[] | null) {
+    if (!files) return;
+    setAttachmentError(null);
+    const incoming = Array.from(files);
+    if (incoming.length === 0) return;
+
+    if (attachments.length + incoming.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+      setAttachmentError(
+        t("attachments.errors.tooMany", { max: MAX_ATTACHMENTS_PER_MESSAGE }),
+      );
+      return;
+    }
+
+    const accepted: File[] = [];
+    let runningTotal = attachments.reduce((sum, f) => sum + f.size, 0);
+    for (const f of incoming) {
+      if (!isAllowedAttachmentMimeType(f.type)) {
+        setAttachmentError(
+          t("attachments.errors.unsupportedType", {
+            filename: f.name,
+            allowed: ALLOWED_ATTACHMENT_MIME_TYPES.join(", "),
+          }),
+        );
+        return;
+      }
+      if (f.size > MAX_ATTACHMENT_BYTES) {
+        setAttachmentError(
+          t("attachments.errors.tooLarge", {
+            filename: f.name,
+            max: Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024),
+          }),
+        );
+        return;
+      }
+      runningTotal += f.size;
+      if (runningTotal > MAX_TOTAL_ATTACHMENT_BYTES) {
+        setAttachmentError(
+          t("attachments.errors.totalTooLarge", {
+            max: Math.round(MAX_TOTAL_ATTACHMENT_BYTES / 1024 / 1024),
+          }),
+        );
+        return;
+      }
+      accepted.push(f);
+    }
+
+    setAttachments((prev) => [...prev, ...accepted]);
+  }
+
+  function removeAttachment(idx: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+    setAttachmentError(null);
   }
 
   function handleOpenChange(next: boolean) {
@@ -217,6 +290,11 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
     if (step.kind !== "result" || gmailSent || gmailSending) return;
     const fd = buildCommitFormData();
     if (!fd) return;
+    // Attach the selected files. They travel as native File entries under
+    // the "attachments" key — the server action's parser picks them up.
+    for (const file of attachments) {
+      fd.append("attachments", file, file.name);
+    }
     setGmailError(null);
     setGmailSending(true);
 
@@ -334,6 +412,10 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
               gmailSending={gmailSending}
               gmailError={gmailError}
               onSendViaGmail={handleSendViaGmail}
+              attachments={attachments}
+              onAddAttachments={addAttachments}
+              onRemoveAttachment={removeAttachment}
+              attachmentError={attachmentError}
               mode={props.mode}
               onGenerate={runGenerate}
               onRegenerate={runGenerate}
@@ -515,6 +597,10 @@ type ResultColumnProps = {
   gmailSending: boolean;
   gmailError: string | null;
   onSendViaGmail: () => void;
+  attachments: File[];
+  onAddAttachments: (files: FileList | File[] | null) => void;
+  onRemoveAttachment: (idx: number) => void;
+  attachmentError: string | null;
   onGenerate: () => void;
   onRegenerate: () => void;
   onCopy: () => void;
@@ -623,6 +709,20 @@ function ResultColumn(p: ResultColumnProps) {
                 {p.t("legend.signalInjected")}
               </span>
             </div>
+          )}
+
+          {/* Attachments picker — only when sending via Gmail makes sense
+              (email channel + Gmail connected). The actual files are
+              uploaded server-side only after the Gmail send succeeds. */}
+          {p.channel === "email" && p.gmail.connected && (
+            <AttachmentsPicker
+              attachments={p.attachments}
+              onAddAttachments={p.onAddAttachments}
+              onRemoveAttachment={p.onRemoveAttachment}
+              error={p.attachmentError}
+              disabled={p.gmailSent || p.gmailSending}
+              t={p.t}
+            />
           )}
 
           {/* Action bar */}
@@ -800,4 +900,100 @@ function renderAnnotated(text: string, ctx: AnnotationContext): ReactNode {
     }
     return <span key={i}>{s.text}</span>;
   });
+}
+
+// ---------------------------------------------------------------------------
+// AttachmentsPicker — file picker + list with size + remove
+// ---------------------------------------------------------------------------
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+type AttachmentsPickerProps = {
+  attachments: File[];
+  onAddAttachments: (files: FileList | File[] | null) => void;
+  onRemoveAttachment: (idx: number) => void;
+  error: string | null;
+  disabled: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  t: any;
+};
+
+function AttachmentsPicker(p: AttachmentsPickerProps) {
+  const reachedMax = p.attachments.length >= MAX_ATTACHMENTS_PER_MESSAGE;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+          {p.t("attachments.label")}
+        </Label>
+        <span className="text-[11px] text-muted-foreground">
+          {p.t("attachments.hint", {
+            max: MAX_ATTACHMENTS_PER_MESSAGE,
+            sizeMb: Math.round(MAX_ATTACHMENT_BYTES / 1024 / 1024),
+          })}
+        </span>
+      </div>
+
+      {/* Add button — wraps a hidden <input type=file>. We use a label so
+          keyboard navigation lands on the visible control. */}
+      <label
+        className={cn(
+          "inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium",
+          "border border-dashed border-border bg-secondary/40 hover:bg-secondary cursor-pointer",
+          (p.disabled || reachedMax) && "opacity-60 cursor-not-allowed hover:bg-secondary/40",
+        )}
+      >
+        <Paperclip className="h-3.5 w-3.5" />
+        {p.t("attachments.add")}
+        <input
+          type="file"
+          accept={ALLOWED_ATTACHMENT_MIME_TYPES.join(",")}
+          multiple
+          className="hidden"
+          disabled={p.disabled || reachedMax}
+          onChange={(e) => {
+            p.onAddAttachments(e.target.files);
+            // Reset the input so picking the same file twice still triggers onChange.
+            e.target.value = "";
+          }}
+        />
+      </label>
+
+      {p.attachments.length > 0 && (
+        <ul className="space-y-1">
+          {p.attachments.map((file, idx) => (
+            <li
+              key={`${file.name}-${idx}`}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-md border border-border bg-background text-xs"
+            >
+              <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="flex-1 min-w-0 truncate" title={file.name}>
+                {file.name}
+              </span>
+              <span className="text-muted-foreground shrink-0">
+                {formatBytes(file.size)}
+              </span>
+              <button
+                type="button"
+                onClick={() => p.onRemoveAttachment(idx)}
+                disabled={p.disabled}
+                aria-label={p.t("attachments.remove")}
+                className="text-muted-foreground hover:text-rose-600 disabled:opacity-50 cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {p.error && (
+        <p className="text-[11px] text-rose-700">{p.error}</p>
+      )}
+    </div>
+  );
 }

@@ -1,18 +1,25 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { CornerDownRight, List, FoldVertical, Reply } from "lucide-react";
+import { useState, useMemo, useTransition } from "react";
+import { CornerDownRight, List, FoldVertical, Reply, FileText, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   InteractionOutcomeMenu,
   type InteractionOutcome,
 } from "@/components/app/interaction-outcome-menu";
+import { getAttachmentDownloadUrlAction } from "@/lib/actions/message-attachments";
 
 /**
  * Minimal shape the timeline needs. Anything richer is for the parent's
  * benefit ; the timeline only consumes these fields.
  */
+export type TimelineAttachment = {
+  id: string;
+  filename: string;
+  sizeBytes: number;
+};
+
 export type TimelineInteraction = {
   id: string;
   type: string;
@@ -24,6 +31,9 @@ export type TimelineInteraction = {
   /** FK back to the originating `messages` row. Used to group an outbound
    *  with its `email_received` reply. */
   messageId: string | null;
+  /** Attachments tied to the originating `messages` row (Gmail send). Empty
+   *  for inbound or non-Gmail outbound rows. */
+  attachments?: TimelineAttachment[];
 };
 
 export type InteractionsTimelineLabels = {
@@ -41,6 +51,11 @@ export type InteractionsTimelineLabels = {
   channelLabels: Record<string, string>;
   /** Short label rendered above the indented reply ("Réponse" / "Reply"). */
   replyHeader: string;
+  /** Section heading + download error message for attachments. */
+  attachments: {
+    sectionLabel: string;
+    downloadError: string;
+  };
 };
 
 export function InteractionsTimeline({
@@ -190,10 +205,86 @@ function InteractionRow({
             {interaction.summary}
           </p>
         )}
+        {interaction.attachments && interaction.attachments.length > 0 && (
+          <AttachmentsList
+            attachments={interaction.attachments}
+            labels={labels.attachments}
+          />
+        )}
       </div>
       <div className="text-xs text-muted-foreground shrink-0">
         {formatter.format(new Date(interaction.occurredAt))}
       </div>
+    </div>
+  );
+}
+
+function formatBytesShort(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function AttachmentsList({
+  attachments,
+  labels,
+}: {
+  attachments: TimelineAttachment[];
+  labels: InteractionsTimelineLabels["attachments"];
+}) {
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  function handleDownload(attachmentId: string) {
+    setError(null);
+    setPendingId(attachmentId);
+    startTransition(async () => {
+      try {
+        const { url } = await getAttachmentDownloadUrlAction({ attachmentId });
+        // window.open opens the signed URL in a new tab — Supabase Storage
+        // returns the file with the right Content-Disposition so the browser
+        // downloads instead of rendering inline.
+        window.open(url, "_blank", "noopener");
+      } catch {
+        setError(labels.downloadError);
+      } finally {
+        setPendingId(null);
+      }
+    });
+  }
+
+  return (
+    <div className="mt-2 space-y-1">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {labels.sectionLabel}
+      </p>
+      <ul className="space-y-1">
+        {attachments.map((att) => (
+          <li key={att.id}>
+            <button
+              type="button"
+              onClick={() => handleDownload(att.id)}
+              disabled={pendingId === att.id}
+              className={cn(
+                "inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs",
+                "border border-border bg-background hover:bg-secondary cursor-pointer",
+                "disabled:opacity-60 disabled:cursor-not-allowed",
+              )}
+              title={att.filename}
+            >
+              {pendingId === att.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              ) : (
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              <span className="max-w-[240px] truncate">{att.filename}</span>
+              <span className="text-muted-foreground">{formatBytesShort(att.sizeBytes)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error && <p className="text-[11px] text-rose-700">{error}</p>}
     </div>
   );
 }

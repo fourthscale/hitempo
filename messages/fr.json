@@ -687,7 +687,11 @@
       "clearOutcome": "Effacer le résultat",
       "modeGrouped": "Groupé",
       "modeList": "Liste",
-      "replyHeader": "Réponse"
+      "replyHeader": "Réponse",
+      "attachments": {
+        "sectionLabel": "Pièces jointes",
+        "downloadError": "Impossible d'ouvrir cette pièce jointe. Réessaie."
+      }
     },
     "settings": {
       "placeholder": "D'autres paramètres arriveront dans un sprint ultérieur.",
@@ -877,6 +881,18 @@
         "gmailSent": "Envoyé",
         "gmailSendFailed": "L'envoi a échoué, veuillez réessayer.",
         "connectGmailHint": "Connecter Gmail pour envoyer en un clic"
+      },
+      "attachments": {
+        "label": "Pièces jointes",
+        "hint": "PDF · max {max} fichiers · {sizeMb} Mo par fichier",
+        "add": "Ajouter une pièce jointe",
+        "remove": "Retirer",
+        "errors": {
+          "tooMany": "Maximum {max} pièces jointes par message.",
+          "unsupportedType": "« {filename} » n'est pas accepté (types autorisés : {allowed}).",
+          "tooLarge": "« {filename } » dépasse la limite de {max} Mo par fichier.",
+          "totalTooLarge": "Le total des pièces jointes dépasse {max} Mo."
+        }
       },
       "emptyState": "Choisis tes paramètres et clique sur Générer.",
       "legend": {
