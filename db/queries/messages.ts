@@ -125,3 +125,33 @@ export async function getMessageById(orgId: string, messageId: string) {
     ),
   });
 }
+
+/**
+ * Flip a message to `sent` and persist the Gmail-side identifiers
+ * (`gmail_thread_id`, `gmail_message_id`). `sentAt` is set server-side so
+ * the timeline always agrees with our clock, not the caller's.
+ *
+ * Used by `sendMessageViaGmailAction` immediately after a successful
+ * Gmail API send.
+ */
+export async function markMessageSentViaGmail(
+  orgId: string,
+  messageId: string,
+  gmail: { threadId: string; messageId: string },
+): Promise<void> {
+  await getDb()
+    .update(messages)
+    .set({
+      status: "sent",
+      sentAt: new Date(),
+      gmailThreadId: gmail.threadId,
+      gmailMessageId: gmail.messageId,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(messages.organizationId, orgId),
+        eq(messages.id, messageId),
+      ),
+    );
+}

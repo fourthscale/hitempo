@@ -40,3 +40,31 @@ export class MessageActionInteractionInsertFailedError extends UserFacingActionE
     super("Failed to insert interaction for sent message");
   }
 }
+
+/**
+ * "Envoyer via Gmail" was clicked but the user has not connected Gmail
+ * in /settings/profile. The UI normally hides the button in that case,
+ * but the action is defensive against direct calls / stale dialogs.
+ */
+export class GmailNotConnectedError extends UserFacingActionError {
+  public readonly code = "GMAIL_NOT_CONNECTED";
+  constructor() {
+    super("Gmail is not connected for this user");
+  }
+}
+
+/** Contact has no email on file — cannot send. */
+export class ContactEmailMissingError extends UserFacingActionError {
+  public readonly code = "CONTACT_EMAIL_MISSING";
+  constructor(public readonly contactId: string) {
+    super(`Contact ${contactId} has no email address`);
+  }
+}
+
+/** Gmail API rejected the send (rate limit, invalid recipient, etc). */
+export class GmailSendFailedError extends UserFacingActionError {
+  public readonly code = "GMAIL_SEND_FAILED";
+  constructor(public readonly reason: string) {
+    super(`Gmail send failed: ${reason}`);
+  }
+}

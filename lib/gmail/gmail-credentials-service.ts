@@ -47,6 +47,22 @@ export class GmailCredentialsService {
     private readonly cipher: TokenCipher,
   ) {}
 
+  /**
+   * Lightweight "is this user connected ?" check for UI gating. Avoids the
+   * decrypt cost of `getForUser` when the caller only needs the connection
+   * state + the Gmail address to display.
+   */
+  public async getConnectionStatus(
+    userId: string,
+  ): Promise<{ connected: boolean; address: string | null }> {
+    const row = await this.db.query.userGmailCredentials.findFirst({
+      where: eq(userGmailCredentials.userId, userId),
+      columns: { gmailAddress: true },
+    });
+    if (!row) return { connected: false, address: null };
+    return { connected: true, address: row.gmailAddress };
+  }
+
   public async getForUser(userId: string): Promise<DecryptedGmailCredentials | null> {
     const row = await this.db.query.userGmailCredentials.findFirst({
       where: eq(userGmailCredentials.userId, userId),

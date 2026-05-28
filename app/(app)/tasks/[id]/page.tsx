@@ -5,6 +5,7 @@ import {
   Mail, Phone, MapPin, RefreshCcw, Search, Calendar, User, AlertTriangle,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
+import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { getTaskDetail } from "@/db/queries/tasks";
 import { getInteractionsByTask } from "@/db/queries/interactions";
 import { getOrgMembersWithNames } from "@/db/queries/members";
@@ -45,6 +46,7 @@ export default async function TaskDetailPage({
   const { id } = await params;
   const { activeOrganization, user } = await getActiveOrg();
   const orgId = activeOrganization.id;
+  const gmailStatus = await GmailCredentialsServiceFactory.getInstance().getConnectionStatus(user.id);
   const locale = await getLocale();
 
   const [task, taskInteractions, members, brandBriefStatus] = await Promise.all([
@@ -122,6 +124,7 @@ export default async function TaskDetailPage({
             task.company.signalDetectedAt,
           ),
           brandBriefStatus,
+          gmail: gmailStatus,
         }
       : undefined;
 

@@ -107,6 +107,7 @@ export function TaskDetailActions({
           preferredLocaleHint={generate.preferredLocaleHint}
           detectedSignal={generate.detectedSignal}
           brandBriefStatus={generate.brandBriefStatus}
+          gmail={generate.gmail}
         />
       )}
 

@@ -845,7 +845,12 @@
         "markTaskDoneDone": "Tâche terminée",
         "close": "Fermer",
         "fromTask": "Générer un message",
-        "fromContact": "Générer un message"
+        "fromContact": "Générer un message",
+        "sendViaGmail": "Envoyer via Gmail",
+        "gmailSending": "Envoi…",
+        "gmailSent": "Envoyé",
+        "gmailSendFailed": "L'envoi a échoué, veuillez réessayer.",
+        "connectGmailHint": "Connecter Gmail pour envoyer en un clic"
       },
       "emptyState": "Choisis tes paramètres et clique sur Générer.",
       "legend": {

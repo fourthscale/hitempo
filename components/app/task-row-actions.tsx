@@ -43,6 +43,7 @@ export type TaskGenerateContext = {
   preferredLocaleHint: string;
   detectedSignal: { type: string; daysAgo: number; isFresh: boolean } | null;
   brandBriefStatus: BrandBriefStatus;
+  gmail: { connected: boolean; address: string | null };
 };
 
 export function TaskRowActions({
@@ -130,6 +131,7 @@ export function TaskRowActions({
           preferredLocaleHint={generate.preferredLocaleHint}
           detectedSignal={generate.detectedSignal}
           brandBriefStatus={generate.brandBriefStatus}
+          gmail={generate.gmail}
         />
       )}
 

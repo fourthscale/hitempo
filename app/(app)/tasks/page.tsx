@@ -5,6 +5,7 @@ import {
   ChevronDown, LayoutList, LayoutGrid, Plus, User,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
+import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { getTasksByOrg, countOverdueTasksByOrg, countTodayTasksByOrg, countPendingTasksByOrg, countCompletedTasksThisWeek } from "@/db/queries/tasks";
 import { getWeeklyInteractionStats } from "@/db/queries/interactions";
 import { getOrgMembersWithNames } from "@/db/queries/members";
@@ -116,6 +117,7 @@ export default async function TasksPage({
 
   const { activeOrganization, user } = await getActiveOrg();
   const orgId = activeOrganization.id;
+  const gmailStatus = await GmailCredentialsServiceFactory.getInstance().getConnectionStatus(user.id);
   const locale = await getLocale();
   const t = await getTranslations("pages.tasks");
   const tTaskType = await getTranslations("taskType");
@@ -338,6 +340,7 @@ export default async function TasksPage({
               memberMap={memberMap}
               currentUserId={user.id}
               brandBriefStatus={brandBriefStatus}
+              gmailStatus={gmailStatus}
             />
           ))}
         </div>
@@ -384,6 +387,7 @@ export default async function TasksPage({
                       memberMap={memberMap}
                       currentUserId={user.id}
                       brandBriefStatus={brandBriefStatus}
+                      gmailStatus={gmailStatus}
                     />
                   ))}
                 </div>
@@ -417,6 +421,7 @@ async function TaskRow({
   memberMap,
   currentUserId,
   brandBriefStatus,
+  gmailStatus,
 }: {
   task: TaskWithContext;
   now: Date;
@@ -428,6 +433,7 @@ async function TaskRow({
   memberMap: Record<string, string>;
   currentUserId: string;
   brandBriefStatus: BrandBriefStatus;
+  gmailStatus: { connected: boolean; address: string | null };
 }) {
   const tMessages = await getTranslations("pages.messages");
 
@@ -453,6 +459,7 @@ async function TaskRow({
             task.company.signalDetectedAt,
           ),
           brandBriefStatus,
+          gmail: gmailStatus,
         }
       : undefined;
 

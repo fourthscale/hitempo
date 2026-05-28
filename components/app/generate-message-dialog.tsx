@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Sparkles, RefreshCw, Copy, X, Loader2, MessageSquarePlus, Check } from "lucide-react";
+import { GmailIcon } from "@/components/app/gmail-icon";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
 import {
@@ -12,6 +13,7 @@ import {
   updateMessageStatusAction,
   updateMessageContentAction,
   logSentInteractionAction,
+  sendMessageViaGmailAction,
   type GenerateMessageResult,
 } from "@/lib/actions/messages";
 import { Button } from "@/components/ui/button";
@@ -72,6 +74,11 @@ export type GenerateMessageDialogProps = {
 
   /** Per-locale "is the brief configured" flags ; gates the action client-side. */
   brandBriefStatus: { fr: { configured: boolean; excerpt: string | null }; en: { configured: boolean; excerpt: string | null } };
+
+  /** Gmail OAuth state for this user — drives the "Envoyer via Gmail" button. */
+  gmail: { connected: boolean; address: string | null };
+
+  /** Channel can only be "email" for the Gmail send button to make sense. */
 };
 
 type Step =
@@ -99,6 +106,9 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
   const [editMode, setEditMode] = useState(false);
   const [copied, setCopied] = useState(false);
   const [interactionLogged, setInteractionLogged] = useState(false);
+  const [gmailSent, setGmailSent] = useState(false);
+  const [gmailSending, setGmailSending] = useState(false);
+  const [gmailError, setGmailError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const { channel } = parseChannelIntent(channelIntent);
@@ -111,6 +121,9 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
     setEditMode(false);
     setCopied(false);
     setInteractionLogged(false);
+    setGmailSent(false);
+    setGmailSending(false);
+    setGmailError(null);
     setOrientation("");
   }
 
@@ -195,6 +208,38 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
       setInteractionLogged(true);
       router.refresh();
     });
+  }
+
+  async function handleSendViaGmail() {
+    if (step.kind !== "result" || gmailSent || gmailSending) return;
+    setGmailError(null);
+    setGmailSending(true);
+
+    // Persist any edits first so what we send matches what's shown.
+    const fdContent = new FormData();
+    fdContent.append("messageId", step.result.messageId);
+    if (step.subject) fdContent.append("subject", step.subject);
+    fdContent.append("body", step.body);
+    try {
+      await updateMessageContentAction(fdContent);
+
+      const fd = new FormData();
+      fd.append("messageId", step.result.messageId);
+      await sendMessageViaGmailAction(fd);
+
+      setGmailSent(true);
+      // Sending = sent + logged + task closed. No separate log step.
+      setInteractionLogged(true);
+      router.refresh();
+    } catch (err) {
+      setGmailError(
+        err instanceof Error && err.message
+          ? err.message
+          : t("actions.gmailSendFailed"),
+      );
+    } finally {
+      setGmailSending(false);
+    }
   }
 
   return (
@@ -288,6 +333,11 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
               onEditMode={setEditMode}
               interactionLogged={interactionLogged}
               onLogInteraction={handleLogInteraction}
+              gmail={props.gmail}
+              gmailSent={gmailSent}
+              gmailSending={gmailSending}
+              gmailError={gmailError}
+              onSendViaGmail={handleSendViaGmail}
               mode={props.mode}
               onGenerate={runGenerate}
               onRegenerate={runGenerate}
@@ -462,6 +512,13 @@ type ResultColumnProps = {
   /** When "task", the log button label flips to "Mark task as done" because
    *  the server action also completes the task transparently. */
   mode: "task" | "contact";
+  // Gmail send state — when connected & channel=email, primary action shifts
+  // from "Log interaction" to "Send via Gmail" (which also logs + closes task).
+  gmail: { connected: boolean; address: string | null };
+  gmailSent: boolean;
+  gmailSending: boolean;
+  gmailError: string | null;
+  onSendViaGmail: () => void;
   onGenerate: () => void;
   onRegenerate: () => void;
   onCopy: () => void;
@@ -599,9 +656,12 @@ function ResultColumn(p: ResultColumnProps) {
                 )}
                 {p.copied ? p.t("actions.copied") : p.t("actions.copy")}
               </Button>
+              {/* Manual log/close — always present. Use when the message was sent
+                  from elsewhere (LinkedIn, another mail client, etc.). */}
               <Button
                 type="button"
                 size="sm"
+                variant={p.channel === "email" && p.gmail.connected ? "outline" : "default"}
                 onClick={p.onLogInteraction}
                 disabled={p.interactionLogged}
               >
@@ -614,6 +674,57 @@ function ResultColumn(p: ResultColumnProps) {
                   ? p.t(p.mode === "task" ? "actions.markTaskDoneDone" : "actions.logInteractionDone")
                   : p.t(p.mode === "task" ? "actions.markTaskDone" : "actions.logInteraction")}
               </Button>
+
+              {/* Primary action when Gmail is connected and we're on email channel.
+                  Send-via-Gmail also performs the log + task-complete side effects,
+                  so when it succeeds the Log button also flips to "done".
+                  Gmail-branded styling : white bg, official 4-color envelope mark,
+                  neutral Google border — matches the connect button in /settings/profile. */}
+              {p.channel === "email" && p.gmail.connected && (
+                <button
+                  type="button"
+                  onClick={p.onSendViaGmail}
+                  disabled={p.gmailSent || p.gmailSending}
+                  title={p.gmail.address ?? undefined}
+                  className={cn(
+                    "inline-flex items-center gap-2 h-9 pl-3 pr-3.5 rounded-md",
+                    "bg-white border border-[#dadce0] text-[#3c4043] text-sm font-medium",
+                    "hover:shadow-md hover:bg-[#f8faff] transition-all cursor-pointer",
+                    "disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:hover:bg-white",
+                  )}
+                >
+                  {p.gmailSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  ) : p.gmailSent ? (
+                    <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                  ) : (
+                    <GmailIcon className="h-4 w-4 shrink-0" />
+                  )}
+                  <span>
+                    {p.gmailSending
+                      ? p.t("actions.gmailSending")
+                      : p.gmailSent
+                      ? p.t("actions.gmailSent")
+                      : p.t("actions.sendViaGmail")}
+                  </span>
+                </button>
+              )}
+
+              {/* "Not connected" helper — only on email channel. Subtle, full-width. */}
+              {p.channel === "email" && !p.gmail.connected && (
+                <p className="w-full text-[11px] text-muted-foreground">
+                  <Link href="/settings/profile" className="text-brand-teal hover:underline">
+                    {p.t("actions.connectGmailHint")}
+                  </Link>
+                </p>
+              )}
+
+              {/* Gmail send error */}
+              {p.gmailError && (
+                <p className="w-full text-[11px] text-rose-700">
+                  {p.gmailError}
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-2 pt-1 rounded-md border border-border bg-secondary/30 p-3">

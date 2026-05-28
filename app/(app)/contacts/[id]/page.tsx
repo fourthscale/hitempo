@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getTranslations, getLocale } from "next-intl/server";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
+import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { getContactById } from "@/db/queries/contacts";
 import { getInteractionsByContact } from "@/db/queries/interactions";
 import { getTasksByContact } from "@/db/queries/tasks";
@@ -43,8 +44,9 @@ export default async function ContactDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { activeOrganization } = await getActiveOrg();
+  const { activeOrganization, user } = await getActiveOrg();
   const orgId = activeOrganization.id;
+  const gmailStatus = await GmailCredentialsServiceFactory.getInstance().getConnectionStatus(user.id);
   const contact = await getContactById(orgId, id);
   if (!contact) notFound();
 
@@ -131,6 +133,7 @@ export default async function ContactDetailPage({
                   contact.company.signalDetectedAt,
                 )}
                 brandBriefStatus={brandBriefStatus}
+                gmail={gmailStatus}
               />
             )}
             <Link href={`/contacts/${contact.id}/edit`}>

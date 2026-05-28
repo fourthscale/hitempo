@@ -479,6 +479,17 @@ export const messages = pgTable(
 
     status: messageStatus("status").notNull().default("draft"),
 
+    // Gmail send + reply tracking (sprint 10).
+    // sentAt set when status flips to 'sent'. gmail_thread_id / gmail_message_id
+    // captured from the Gmail API send response. reply_received_at flipped by
+    // the polling job (Slice C). last_polled_at drives the partial index used
+    // to keep the polling query cheap.
+    sentAt:            timestamp("sent_at",            { withTimezone: true }),
+    gmailThreadId:     text("gmail_thread_id"),
+    gmailMessageId:    text("gmail_message_id"),
+    replyReceivedAt:   timestamp("reply_received_at",  { withTimezone: true }),
+    lastPolledAt:      timestamp("last_polled_at",     { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -486,6 +497,9 @@ export const messages = pgTable(
     byContact: index("idx_messages_contact").on(t.contactId, t.createdAt),
     byCompany: index("idx_messages_company").on(t.companyId, t.createdAt),
     byOrg:     index("idx_messages_org").on(t.organizationId, t.createdAt),
+    // Partial index keeps the reply-polling scan cheap: only sent messages with a Gmail
+    // thread and no reply yet are candidates.
+    pendingReply: index("idx_messages_pending_reply").on(t.lastPolledAt),
   }),
 );
 
