@@ -34,6 +34,17 @@ export const contactRole = pgEnum("contact_role", [
   "decision_maker", "influencer", "user", "prescriber", "assistant", "other",
 ]);
 
+/**
+ * Whether a contact is a real named person or a generic channel
+ * (info@hotel.fr, switchboard number) where no person is known yet.
+ * Generic contacts have nullable first/last names but must carry at
+ * least one channel (email or phone) — enforced by a CHECK constraint
+ * in the migration + Zod at the action layer.
+ */
+export const contactKind = pgEnum("contact_kind", [
+  "person", "generic",
+]);
+
 export const interactionType = pgEnum("interaction_type", [
   "first_contact", "follow_up", "call", "visit", "linkedin",
   "meeting", "demo", "proposal_sent", "note", "email_received",
@@ -292,10 +303,18 @@ export const contacts = pgTable(
       .references(() => companies.id, { onDelete: "cascade" }),
     siteId: uuid("site_id").references(() => sites.id, { onDelete: "set null" }),
 
-    firstName: text("first_name").notNull(),
-    lastName: text("last_name").notNull(),
+    // kind = 'person' (default) requires first+last name ; kind = 'generic'
+    // allows null names but requires at least one channel. Enforced by the
+    // contacts_kind_consistency CHECK constraint in the migration.
+    kind: contactKind("kind").notNull().default("person"),
+
+    // Nullable since sprint 10.8 : generic contacts (info@…) carry no name.
+    firstName: text("first_name"),
+    lastName: text("last_name"),
     // fullName is added as a STORED generated column in the migration SQL
     // (Drizzle's generated-columns DSL is not 100% reliable across versions).
+    // For generic contacts (null names) full_name is NULL — callers use
+    // resolveContactDisplayName() instead, never full_name directly.
     jobTitle: text("job_title"),
     role: contactRole("role"),
 

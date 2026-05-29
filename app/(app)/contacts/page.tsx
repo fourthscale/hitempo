@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { Plus, Upload, User } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { listContactsByOrg } from "@/db/queries/contacts";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { PageHeader } from "@/components/app/page-header";
 import { EmptyState } from "@/components/app/empty-state";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,7 @@ export default async function ContactsPage() {
                       href={`/contacts/${contact.id}`}
                       className="font-medium text-foreground hover:text-brand-teal"
                     >
-                      {contact.firstName} {contact.lastName}
+                      {resolveContactDisplayName(contact)}
                     </Link>
                     {contact.jobTitle && (
                       <div className="text-xs text-muted-foreground">{contact.jobTitle}</div>
@@ -110,7 +111,7 @@ export default async function ContactsPage() {
                 <tr key={contact.id} className="hover:bg-secondary/30">
                   <td className="px-4 py-3">
                     <Link href={`/contacts/${contact.id}`} className="font-medium hover:text-brand-teal">
-                      {contact.firstName} {contact.lastName}
+                      {resolveContactDisplayName(contact)}
                     </Link>
                     {contact.jobTitle && (
                       <div className="text-xs text-muted-foreground">{contact.jobTitle}</div>

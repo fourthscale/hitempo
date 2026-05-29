@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { getActiveOrg } from "@/lib/auth/context";
 import { getContactById } from "@/db/queries/contacts";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { listSitesByOrgWithCompany } from "@/db/queries/sites";
 import { getDb } from "@/db/client";
 import { companies } from "@/db/schema";
@@ -35,7 +36,7 @@ export default async function EditContactPage({
   return (
     <div className="max-w-[800px] mx-auto">
       <PageHeader
-        title={t("editTitle", { name: `${contact.firstName} ${contact.lastName}` })}
+        title={t("editTitle", { name: resolveContactDisplayName(contact) })}
         right={
           <Link href={`/contacts/${contact.id}`} className="text-sm text-muted-foreground hover:underline">
             ← {t("backToDetail")}

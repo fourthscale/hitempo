@@ -10,42 +10,23 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { InvalidInputError } from "./user-facing-action-error";
 import { withActionError } from "./wrap-action-error";
 import { emptyStringsToNull } from "./normalize";
+import { contactBodySchema } from "@/lib/contacts/contact-kind";
 
-const baseSchema = {
-  companyId: z.string().uuid(),
-  siteId: z
-    .string()
-    .uuid()
-    .optional()
-    .or(z.literal("")),
-  firstName: z.string().min(1).max(100),
-  lastName: z.string().min(1).max(100),
-  jobTitle: z.string().max(150).optional().or(z.literal("")),
-  role: z
-    .enum(["decision_maker", "influencer", "user", "prescriber", "assistant", "other"])
-    .optional()
-    .or(z.literal("")),
-  email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().max(50).optional().or(z.literal("")),
-  linkedinUrl: z.string().url().optional().or(z.literal("")),
-  preferredLanguage: z.string().max(10).default("fr"),
-  preferredChannel: z
-    .enum(["email", "phone", "linkedin", "in_person"])
-    .optional()
-    .or(z.literal("")),
-  relevance: z.preprocess(
-    (v) => (v === "" || v === null || v === undefined ? null : Number(v)),
-    z.number().int().min(1).max(5).nullable().optional(),
-  ),
-  status: z.string().max(50).optional(),
-  notes: z.string().max(5000).optional().or(z.literal("")),
-};
+type ContactRole =
+  | "decision_maker"
+  | "influencer"
+  | "user"
+  | "prescriber"
+  | "assistant"
+  | "other";
 
-const createSchema = z.object(baseSchema);
-const updateSchema = z.object({ id: z.string().uuid(), ...baseSchema });
+const updateSchema = z.intersection(
+  z.object({ id: z.string().uuid() }),
+  contactBodySchema,
+);
 
 async function _createContactAction(formData: FormData) {
-  const parsed = createSchema.safeParse(Object.fromEntries(formData));
+  const parsed = contactBodySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) throw new InvalidInputError(parsed.error);
 
   const { activeOrganization } = await getActiveOrg();
@@ -57,12 +38,11 @@ async function _createContactAction(formData: FormData) {
       organizationId: activeOrganization.id,
       companyId: data.companyId as string,
       siteId: (data.siteId as string | null) ?? null,
-      firstName: data.firstName as string,
-      lastName: data.lastName as string,
+      kind: parsed.data.kind,
+      firstName: (data.firstName as string | null) ?? null,
+      lastName: (data.lastName as string | null) ?? null,
       jobTitle: (data.jobTitle as string | null) ?? null,
-      role: data.role
-        ? (data.role as "decision_maker" | "influencer" | "user" | "prescriber" | "assistant" | "other")
-        : null,
+      role: data.role ? (data.role as ContactRole) : null,
       email: (data.email as string | null) ?? null,
       phone: (data.phone as string | null) ?? null,
       linkedinUrl: (data.linkedinUrl as string | null) ?? null,
@@ -91,12 +71,11 @@ async function _updateContactAction(formData: FormData) {
     .set({
       companyId: data.companyId as string,
       siteId: (data.siteId as string | null) ?? null,
-      firstName: data.firstName as string,
-      lastName: data.lastName as string,
+      kind: parsed.data.kind,
+      firstName: (data.firstName as string | null) ?? null,
+      lastName: (data.lastName as string | null) ?? null,
       jobTitle: (data.jobTitle as string | null) ?? null,
-      role: data.role
-        ? (data.role as "decision_maker" | "influencer" | "user" | "prescriber" | "assistant" | "other")
-        : null,
+      role: data.role ? (data.role as ContactRole) : null,
       email: (data.email as string | null) ?? null,
       phone: (data.phone as string | null) ?? null,
       linkedinUrl: (data.linkedinUrl as string | null) ?? null,

@@ -64,6 +64,7 @@ const CONTACTS: TemplateSpec = {
     "organisation_ref",
     "company_organisation_ref",
     "site_organisation_ref",
+    "kind",
     "first_name",
     "last_name",
     "job_title",
@@ -83,6 +84,7 @@ const CONTACTS: TemplateSpec = {
     "CONTACT-001",
     "ACME-001",
     "SITE-001",
+    "person",
     "Jane",
     "Example",
     "General Manager",
@@ -164,6 +166,7 @@ const ALL_IN_ONE: TemplateSpec = {
     "site_notes",
     // Contact (optional — leave blank to skip contact creation)
     "contact_organisation_ref",
+    "contact_kind",
     "contact_first_name",
     "contact_last_name",
     "contact_job_title",
@@ -208,6 +211,7 @@ const ALL_IN_ONE: TemplateSpec = {
     "Flagship location.",
     // Contact
     "CONTACT-001",
+    "person",
     "Jane",
     "Example",
     "General Manager",

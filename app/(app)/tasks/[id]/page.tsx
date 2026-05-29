@@ -23,6 +23,7 @@ import {
   getMessageDefaultLocale,
   getDetectedSignalProp,
 } from "@/lib/messages/task-defaults";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import type { TaskGenerateContext } from "@/components/app/task-row-actions";
 
 function taskTypeIcon(type: string) {
@@ -109,7 +110,7 @@ export default async function TaskDetailPage({
   const generateCtx: TaskGenerateContext | undefined =
     messageDefaults && task.contact && task.company
       ? {
-          contactDisplayName: `${task.contact.firstName} ${task.contact.lastName}`,
+          contactDisplayName: resolveContactDisplayName(task.contact),
           companyDisplayName: task.company.name,
           contactFirstName: task.contact.firstName,
           contactLastName: task.contact.lastName,
@@ -117,7 +118,7 @@ export default async function TaskDetailPage({
           defaultChannelIntent: messageDefaults.channelIntent,
           defaultLocale: getMessageDefaultLocale(task.contact.preferredLanguage),
           preferredLocaleHint: tMessages("fields.languageHint", {
-            contact: `${task.contact.firstName} ${task.contact.lastName}`,
+            contact: resolveContactDisplayName(task.contact),
           }),
           detectedSignal: getDetectedSignalProp(
             task.company.signalType,
@@ -271,7 +272,7 @@ export default async function TaskDetailPage({
                                   href={`/contacts/${interaction.contact.id}`}
                                   className="hover:text-brand-teal"
                                 >
-                                  {interaction.contact.firstName} {interaction.contact.lastName}
+                                  {resolveContactDisplayName(interaction.contact)}
                                 </Link>
                               </>
                             )}
@@ -356,7 +357,7 @@ export default async function TaskDetailPage({
                       href={`/contacts/${task.contact.id}`}
                       className="hover:text-brand-teal"
                     >
-                      {task.contact.firstName} {task.contact.lastName}
+                      {resolveContactDisplayName(task.contact)}
                     </Link>
                     {task.contact.jobTitle && (
                       <p className="text-xs text-muted-foreground mt-0.5">

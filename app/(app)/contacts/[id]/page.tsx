@@ -25,6 +25,7 @@ import {
   getMessageDefaultLocale,
   getDetectedSignalProp,
 } from "@/lib/messages/task-defaults";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { cn } from "@/lib/utils";
 
 const INTERACTION_TYPES = [
@@ -83,6 +84,8 @@ export default async function ContactDetailPage({
   const tContactStatus = await getTranslations("contactStatus");
   const tMessages = await getTranslations("pages.messages");
 
+  const contactDisplayName = resolveContactDisplayName(contact);
+
   const interactionTypeOptions = INTERACTION_TYPES.map((v) => ({
     value: v,
     label: tInteractionType(v),
@@ -99,7 +102,7 @@ export default async function ContactDetailPage({
   return (
     <div className="max-w-[1000px] mx-auto">
       <PageHeader
-        title={`${contact.firstName} ${contact.lastName}`}
+        title={contactDisplayName}
         subtitle={
           <span>
             {contact.jobTitle ?? "—"}
@@ -126,7 +129,7 @@ export default async function ContactDetailPage({
                 label={tMessages("actions.fromContact")}
                 contactId={contact.id}
                 companyId={contact.company.id}
-                contactDisplayName={`${contact.firstName} ${contact.lastName}`}
+                contactDisplayName={contactDisplayName}
                 companyDisplayName={contact.company.name}
                 annotationContact={{
                   firstName: contact.firstName,
@@ -140,7 +143,7 @@ export default async function ContactDetailPage({
                 }
                 defaultLocale={getMessageDefaultLocale(contact.preferredLanguage)}
                 preferredLocaleHint={tMessages("fields.languageHint", {
-                  contact: `${contact.firstName} ${contact.lastName}`,
+                  contact: contactDisplayName,
                 })}
                 detectedSignal={getDetectedSignalProp(
                   contact.company.signalType,

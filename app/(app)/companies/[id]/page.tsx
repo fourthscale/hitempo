@@ -35,6 +35,7 @@ import { CompanyTabs } from "@/components/app/company-tabs";
 import { SitesSection } from "@/components/app/sites-section";
 import { PageHeader } from "@/components/app/page-header";
 import { PrimaryContactDialog } from "@/components/app/primary-contact-dialog";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { cn } from "@/lib/utils";
 
 function ScoreBreakdownRows({
@@ -397,9 +398,11 @@ export default async function CompanyDetailPage({
                       currentPrimaryId={company.primaryContactId ?? null}
                       contacts={company.contacts.map((c) => ({
                         id: c.id,
+                        kind: c.kind,
                         firstName: c.firstName,
                         lastName: c.lastName,
                         jobTitle: c.jobTitle,
+                        email: c.email,
                       }))}
                       action={setPrimaryContactAction}
                       triggerLabel={
@@ -418,11 +421,11 @@ export default async function CompanyDetailPage({
               {primaryContact ? (
                 <div className="flex items-start gap-4">
                   <div className="h-10 w-10 rounded-full bg-brand-amber/90 text-white flex items-center justify-center text-xs font-semibold shrink-0">
-                    {initialsFromName(`${primaryContact.firstName} ${primaryContact.lastName}`)}
+                    {initialsFromName(resolveContactDisplayName(primaryContact))}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium">
-                      {primaryContact.firstName} {primaryContact.lastName}
+                      {resolveContactDisplayName(primaryContact)}
                     </div>
                     <div className="text-sm text-muted-foreground">{primaryContact.jobTitle ?? "—"}</div>
                     <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-muted-foreground">
@@ -589,7 +592,7 @@ async function CompanyTasksCard({
               )}
               {task.contact && (
                 <div className="text-xs text-muted-foreground">
-                  {task.contact.firstName} {task.contact.lastName}
+                  {resolveContactDisplayName(task.contact)}
                 </div>
               )}
             </li>
@@ -669,7 +672,7 @@ async function CompanyInteractionsCard({
                   </span>
                   {interaction.contact && (
                     <div className="text-xs text-muted-foreground">
-                      {interaction.contact.firstName} {interaction.contact.lastName}
+                      {resolveContactDisplayName(interaction.contact)}
                     </div>
                   )}
                   {interaction.summary && (
@@ -715,8 +718,9 @@ async function ContactsTabPanel({
   companyId: string;
   contacts: {
     id: string;
-    firstName: string;
-    lastName: string;
+    kind: "person" | "generic";
+    firstName: string | null;
+    lastName: string | null;
     jobTitle: string | null;
     role: string | null;
     email: string | null;
@@ -757,7 +761,7 @@ async function ContactsTabPanel({
                 <tr key={c.id} className="hover:bg-secondary/30">
                   <td className="px-4 py-3">
                     <Link href={`/contacts/${c.id}`} className="font-medium hover:text-brand-teal">
-                      {c.firstName} {c.lastName}
+                      {resolveContactDisplayName(c)}
                     </Link>
                     {c.jobTitle && <div className="text-xs text-muted-foreground">{c.jobTitle}</div>}
                   </td>

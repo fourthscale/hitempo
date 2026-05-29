@@ -31,8 +31,8 @@ export async function getTasksByOrg(
       },
       contact: {
         columns: {
-          id: true, firstName: true, lastName: true, jobTitle: true,
-          preferredLanguage: true,
+          id: true, kind: true, firstName: true, lastName: true, jobTitle: true,
+          email: true, preferredLanguage: true,
         },
       },
     },
@@ -57,7 +57,7 @@ export async function getTasksDashboard(orgId: string, assigneeId?: string | nul
     ),
     with: {
       company: { columns: { id: true, name: true, score: true, signalType: true, notes: true } },
-      contact: { columns: { id: true, firstName: true, lastName: true, jobTitle: true } },
+      contact: { columns: { id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true } },
     },
     orderBy: [asc(tasks.dueAt)],
     limit: 10,
@@ -153,7 +153,7 @@ export async function getTasksByCompany(orgId: string, companyId: string) {
       or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
     ),
     with: {
-      contact: { columns: { id: true, firstName: true, lastName: true, jobTitle: true } },
+      contact: { columns: { id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true } },
     },
     orderBy: [asc(tasks.dueAt)],
     limit: 20,
@@ -266,7 +266,7 @@ export async function getTaskById(orgId: string, taskId: string) {
     where: and(eq(tasks.id, taskId), eq(tasks.organizationId, orgId)),
     with: {
       company: { columns: { id: true, name: true } },
-      contact: { columns: { id: true, firstName: true, lastName: true } },
+      contact: { columns: { id: true, kind: true, firstName: true, lastName: true, email: true } },
     },
   });
 }
@@ -280,7 +280,7 @@ export async function getTaskDetail(orgId: string, taskId: string) {
         columns: { id: true, name: true, score: true, signalType: true, signalDetectedAt: true },
       },
       contact: {
-        columns: { id: true, firstName: true, lastName: true, jobTitle: true, preferredLanguage: true },
+        columns: { id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true, preferredLanguage: true },
       },
     },
   });
@@ -337,7 +337,7 @@ export async function getContactsForTaskForm(orgId: string, companyId?: string |
       eq(contacts.companyId, companyId),
       isNull(contacts.deletedAt),
     ),
-    columns: { id: true, firstName: true, lastName: true, jobTitle: true },
+    columns: { id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true },
     orderBy: [asc(contacts.lastName)],
     limit: 100,
   });

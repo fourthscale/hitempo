@@ -29,8 +29,11 @@ export type OutboundMessageContext = {
   /** Provided only when the user toggled "include signal" ON. */
   signal: { type: string; detectedAt: Date; ageDays: number } | null;
   contact: {
-    firstName: string;
-    lastName: string;
+    /** "generic" contacts (info@…) have no personal name — the prompt
+     *  instructs a neutral salutation instead of a first-name greeting. */
+    kind: "person" | "generic";
+    firstName: string | null;
+    lastName: string | null;
     jobTitle: string | null;
     preferredLanguage: string;
     relevance: number | null;
@@ -109,6 +112,12 @@ function buildFrench(ctx: OutboundMessageContext) {
     );
   }
 
+  if (ctx.contact.kind === "generic") {
+    systemSections.push(
+      `- Le contact est une adresse générique (pas de personne nommée) : commence par une salutation neutre ("Bonjour," ou "Bonjour madame, monsieur,") sans prénom, et n'invente jamais de nom de personne`,
+    );
+  }
+
   const userSections: string[] = [
     `Génère un message pour ce prospect.`,
     "",
@@ -120,7 +129,9 @@ function buildFrench(ctx: OutboundMessageContext) {
     `Score hitempo : ${ctx.company.score ?? "—"}/100`,
     "",
     `## Contact`,
-    `${ctx.contact.firstName} ${ctx.contact.lastName} · ${ctx.contact.jobTitle ?? "—"}`,
+    ctx.contact.kind === "generic"
+      ? `Adresse générique (pas de personne nommée) · ${ctx.contact.jobTitle ?? "—"}`
+      : `${formatContactName(ctx.contact)} · ${ctx.contact.jobTitle ?? "—"}`,
     "",
     `## Historique d'interactions (${ctx.interactions.length} ${ctx.interactions.length === 1 ? "dernière" : "dernières"})`,
     ctx.interactions.length === 0
@@ -211,6 +222,12 @@ function buildEnglish(ctx: OutboundMessageContext) {
     );
   }
 
+  if (ctx.contact.kind === "generic") {
+    systemSections.push(
+      `- The contact is a generic address (no named person) : start with a neutral greeting ("Hello," or "Hello,") without a first name, and never invent a person's name`,
+    );
+  }
+
   const userSections: string[] = [
     `Generate a message for this prospect.`,
     "",
@@ -222,7 +239,9 @@ function buildEnglish(ctx: OutboundMessageContext) {
     `hitempo score: ${ctx.company.score ?? "—"}/100`,
     "",
     `## Contact`,
-    `${ctx.contact.firstName} ${ctx.contact.lastName} · ${ctx.contact.jobTitle ?? "—"}`,
+    ctx.contact.kind === "generic"
+      ? `Generic address (no named person) · ${ctx.contact.jobTitle ?? "—"}`
+      : `${formatContactName(ctx.contact)} · ${ctx.contact.jobTitle ?? "—"}`,
     "",
     `## Interaction history (${ctx.interactions.length} most recent)`,
     ctx.interactions.length === 0
@@ -271,6 +290,12 @@ function buildEnglish(ctx: OutboundMessageContext) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Joins the available name parts for a person contact. Generic contacts
+ *  are handled by the caller (this is only reached for `kind === 'person'`). */
+function formatContactName(contact: { firstName: string | null; lastName: string | null }): string {
+  return [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() || "—";
+}
 
 function formatInline(items: string[]): string {
   if (items.length === 0) return "(aucun)";

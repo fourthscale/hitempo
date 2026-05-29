@@ -39,25 +39,47 @@ const ROLE_VALUES = [
 
 const CHANNEL_VALUES = ["email", "phone", "linkedin", "in_person"] as const;
 
-const rowSchema = z.object({
-  organisation_ref: nullableString(80),
-  company_organisation_ref: z.string().trim().min(1).max(80),
-  site_organisation_ref: nullableString(80),
-  first_name: z.string().trim().min(1).max(100),
-  last_name: z.string().trim().min(1).max(100),
-  job_title: nullableString(150),
-  role: nullableEnum(ROLE_VALUES),
-  email: nullableEmail(),
-  phone: nullableString(50),
-  linkedin_url: nullableUrl(),
-  preferred_language: nullableString(10),
-  preferred_channel: nullableEnum(CHANNEL_VALUES),
-  relevance: nullableInt(1, 5),
-  status: nullableString(50),
-  is_primary_for_company: nullableBool(),
-  is_primary_for_site: nullableBool(),
-  notes: nullableString(5_000),
-});
+const KIND_VALUES = ["person", "generic"] as const;
+
+const rowSchema = z
+  .object({
+    organisation_ref: nullableString(80),
+    company_organisation_ref: z.string().trim().min(1).max(80),
+    site_organisation_ref: nullableString(80),
+    // kind defaults to "person" when the column is absent/empty (backwards
+    // compatible with pre-10.8 templates).
+    kind: z.preprocess(
+      (v) => (v === "" || v == null ? "person" : String(v).toLowerCase().trim()),
+      z.enum(KIND_VALUES),
+    ),
+    // Nullable since 10.8 ; the superRefine enforces the per-kind invariant.
+    first_name: nullableString(100),
+    last_name: nullableString(100),
+    job_title: nullableString(150),
+    role: nullableEnum(ROLE_VALUES),
+    email: nullableEmail(),
+    phone: nullableString(50),
+    linkedin_url: nullableUrl(),
+    preferred_language: nullableString(10),
+    preferred_channel: nullableEnum(CHANNEL_VALUES),
+    relevance: nullableInt(1, 5),
+    status: nullableString(50),
+    is_primary_for_company: nullableBool(),
+    is_primary_for_site: nullableBool(),
+    notes: nullableString(5_000),
+  })
+  .superRefine((data, ctx) => {
+    if (data.kind === "person") {
+      if (!data.first_name) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["first_name"], message: "first_name required for a person contact" });
+      }
+      if (!data.last_name) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["last_name"], message: "last_name required for a person contact" });
+      }
+    } else if (!data.email && !data.phone) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["email"], message: "generic contact requires an email or phone" });
+    }
+  });
 
 type ParsedRow = z.infer<typeof rowSchema>;
 
@@ -241,6 +263,7 @@ async function insertContact(
       companyId,
       siteId,
       organisationRef: data.organisation_ref,
+      kind: data.kind,
       firstName: data.first_name,
       lastName: data.last_name,
       jobTitle: data.job_title,
@@ -272,6 +295,7 @@ function buildUpdateValues(
     updatedAt: new Date(),
     companyId,
     siteId,
+    kind: data.kind,
   };
   if (data.first_name != null) out.firstName = data.first_name;
   if (data.last_name != null) out.lastName = data.last_name;
@@ -289,9 +313,13 @@ function buildUpdateValues(
 }
 
 function formatLabel(data: ParsedRow): string {
-  const name = `${data.first_name} ${data.last_name}`.trim();
+  const name =
+    [data.first_name, data.last_name].filter(Boolean).join(" ").trim() ||
+    data.email ||
+    data.phone ||
+    "Contact générique";
   if (data.organisation_ref) return `${name} · ${data.organisation_ref}`;
-  if (data.email) return `${name} · ${data.email}`;
+  if (data.email && !name.includes(data.email)) return `${name} · ${data.email}`;
   return name;
 }
 

@@ -20,8 +20,10 @@ export type AnnotatedSegment =
   | { kind: "signal"; text: string };
 
 export type AnnotationContext = {
-  contactFirstName: string;
-  contactLastName: string;
+  // Nullable for generic contacts (info@…) which have no personal name —
+  // the term filter below drops empty/null terms so nothing is highlighted.
+  contactFirstName: string | null;
+  contactLastName: string | null;
   contactJobTitle: string | null;
   companyName: string;
   signalKeywords: string[];
@@ -38,7 +40,7 @@ export function annotateMessage(
     ctx.contactLastName,
     ctx.companyName,
     ...(ctx.contactJobTitle ? [ctx.contactJobTitle] : []),
-  ].filter((s) => s && s.trim().length > 0);
+  ].filter((s): s is string => !!s && s.trim().length > 0);
 
   const signalTerms = ctx.signalKeywords.filter((s) => s && s.trim().length > 0);
 

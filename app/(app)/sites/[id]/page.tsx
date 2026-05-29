@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { MapPin, Building2 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { getSiteWithDetails } from "@/db/queries/sites";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { setSitePrimaryContactAction } from "@/lib/actions/sites";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
@@ -111,7 +112,7 @@ export default async function SiteDetailPage({
                       <tr key={c.id} className="hover:bg-secondary/30">
                         <td className="px-4 py-3">
                           <Link href={`/contacts/${c.id}`} className="font-medium hover:text-brand-teal">
-                            {c.firstName} {c.lastName}
+                            {resolveContactDisplayName(c)}
                           </Link>
                           {c.jobTitle && (
                             <div className="text-xs text-muted-foreground">{c.jobTitle}</div>
@@ -171,7 +172,7 @@ export default async function SiteDetailPage({
                       href={`/contacts/${currentPrimary.id}`}
                       className="text-brand-teal hover:underline"
                     >
-                      {currentPrimary.firstName} {currentPrimary.lastName}
+                      {resolveContactDisplayName(currentPrimary)}
                     </Link>
                   </dd>
                 </div>

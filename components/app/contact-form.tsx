@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FormFooter } from "@/components/app/form-footer";
 import { Card } from "@/components/ui/card";
 import { CompanySiteSelects } from "./company-site-selects";
+import { ContactKindFields } from "./contact-kind-fields";
 
 const CONTACT_ROLES = ["decision_maker", "influencer", "user", "prescriber", "assistant", "other"] as const;
 const CONTACT_CHANNELS = ["email", "phone", "linkedin", "in_person"] as const;
@@ -14,6 +15,7 @@ const CONTACT_LOCALES = ["fr", "en"] as const;
 
 type ContactInitial = {
   id?: string;
+  kind?: "person" | "generic" | null;
   companyId?: string | null;
   siteId?: string | null;
   firstName?: string | null;
@@ -71,37 +73,26 @@ export async function ContactForm({
           defaultSiteId={selectedSiteId}
         />
 
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="firstName">{t("firstName")} *</Label>
-          <Input id="firstName" name="firstName" required defaultValue={initial?.firstName ?? ""} maxLength={100} />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="lastName">{t("lastName")} *</Label>
-          <Input id="lastName" name="lastName" required defaultValue={initial?.lastName ?? ""} maxLength={100} />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="jobTitle">{t("jobTitle")}</Label>
-          <Input id="jobTitle" name="jobTitle" defaultValue={initial?.jobTitle ?? ""} maxLength={150} />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="role">{t("role")}</Label>
-          <select
-            id="role"
-            name="role"
-            defaultValue={initial?.role ?? ""}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          >
-            <option value="">—</option>
-            {CONTACT_ROLES.map((v) => (
-              <option key={v} value={v}>
-                {tRole(v)}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ContactKindFields
+          initialKind={initial?.kind ?? "person"}
+          initialFirstName={initial?.firstName}
+          initialLastName={initial?.lastName}
+          initialJobTitle={initial?.jobTitle}
+          initialRole={initial?.role}
+          initialLinkedinUrl={initial?.linkedinUrl}
+          roleOptions={CONTACT_ROLES.map((v) => ({ value: v, label: tRole(v) }))}
+          labels={{
+            kindLabel: t("kindLabel"),
+            kindPerson: t("kindPerson"),
+            kindGeneric: t("kindGeneric"),
+            firstName: t("firstName"),
+            lastName: t("lastName"),
+            jobTitle: t("jobTitle"),
+            role: t("role"),
+            linkedin: t("linkedin"),
+            genericHint: t("genericHint"),
+          }}
+        />
 
         <div className="flex flex-col gap-1">
           <Label htmlFor="email">{t("email")}</Label>
@@ -111,17 +102,6 @@ export async function ContactForm({
         <div className="flex flex-col gap-1">
           <Label htmlFor="phone">{t("phone")}</Label>
           <Input id="phone" name="phone" defaultValue={initial?.phone ?? ""} maxLength={50} />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="linkedinUrl">{t("linkedin")}</Label>
-          <Input
-            id="linkedinUrl"
-            name="linkedinUrl"
-            type="url"
-            defaultValue={initial?.linkedinUrl ?? ""}
-            placeholder="https://linkedin.com/in/..."
-          />
         </div>
 
         <div className="flex flex-col gap-1">

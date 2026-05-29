@@ -16,6 +16,7 @@ import {
 } from "@/db/queries/interactions";
 import { listCompaniesByOrg } from "@/db/queries/companies";
 import { scoreGrade, scoreBadgeClasses } from "@/lib/scoring/grade";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -276,7 +277,7 @@ export default async function DashboardPage() {
                           <>
                             {" — "}
                             <Link href={`/contacts/${task.contact.id}`} className="hover:text-brand-teal">
-                              {task.contact.firstName} {task.contact.lastName}
+                              {resolveContactDisplayName(task.contact)}
                             </Link>
                             {task.contact.jobTitle && `, ${task.contact.jobTitle}`}
                           </>
@@ -354,7 +355,7 @@ export default async function DashboardPage() {
                         </span>
                         {interaction.contact && (
                           <span className="text-muted-foreground">
-                            {" — "}{interaction.contact.firstName} {interaction.contact.lastName}
+                            {" — "}{resolveContactDisplayName(interaction.contact)}
                           </span>
                         )}
                         {interaction.company && (

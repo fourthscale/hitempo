@@ -12,12 +12,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { resolveContactDisplayName, type ContactKind } from "@/lib/contacts/contact-kind";
 
 type ContactOption = {
   id: string;
-  firstName: string;
-  lastName: string;
+  kind?: ContactKind | null;
+  firstName: string | null;
+  lastName: string | null;
   jobTitle: string | null;
+  email?: string | null;
 };
 
 /**
@@ -87,7 +90,7 @@ export function PrimaryContactDialog({
               <option value="">{noneLabel}</option>
               {contacts.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.firstName} {c.lastName}
+                  {resolveContactDisplayName(c)}
                   {c.jobTitle ? ` — ${c.jobTitle}` : ""}
                 </option>
               ))}

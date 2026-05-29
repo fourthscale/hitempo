@@ -21,7 +21,14 @@ export async function listCompaniesByOrg(orgId: string) {
  */
 export type CompanyListRow = Awaited<ReturnType<typeof listCompaniesByOrg>>[number] & {
   primarySite: { city: string | null; postalCode: string | null; addressLine1: string | null } | null;
-  topContact: { firstName: string; lastName: string; jobTitle: string | null } | null;
+  topContact: {
+    id: string;
+    kind: "person" | "generic";
+    firstName: string | null;
+    lastName: string | null;
+    jobTitle: string | null;
+    email: string | null;
+  } | null;
 };
 
 export async function listCompaniesByOrgEnriched(orgId: string): Promise<CompanyListRow[]> {
@@ -44,7 +51,7 @@ export async function listCompaniesByOrgEnriched(orgId: string): Promise<Company
 
   const allContacts = await db.query.contacts.findMany({
     where: and(eq(contacts.organizationId, orgId), isNull(contacts.deletedAt)),
-    columns: { companyId: true, firstName: true, lastName: true, jobTitle: true, relevance: true },
+    columns: { companyId: true, id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true, relevance: true },
     orderBy: [desc(contacts.relevance), asc(contacts.lastName)],
   });
   const topByCompany = new Map<string, (typeof allContacts)[number]>();

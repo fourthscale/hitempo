@@ -17,6 +17,7 @@ import {
   getMessageDefaultLocale,
   getDetectedSignalProp,
 } from "@/lib/messages/task-defaults";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { scoreGrade, scoreBadgeClasses } from "@/lib/scoring/grade";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -444,7 +445,7 @@ async function TaskRow({
   const generateCtx: TaskGenerateContext | undefined =
     messageDefaults && task.contact && task.company
       ? {
-          contactDisplayName: `${task.contact.firstName} ${task.contact.lastName}`,
+          contactDisplayName: resolveContactDisplayName(task.contact),
           companyDisplayName: task.company.name,
           contactFirstName: task.contact.firstName,
           contactLastName: task.contact.lastName,
@@ -452,7 +453,7 @@ async function TaskRow({
           defaultChannelIntent: messageDefaults.channelIntent,
           defaultLocale: getMessageDefaultLocale(task.contact.preferredLanguage),
           preferredLocaleHint: tMessages("fields.languageHint", {
-            contact: `${task.contact.firstName} ${task.contact.lastName}`,
+            contact: resolveContactDisplayName(task.contact),
           }),
           detectedSignal: getDetectedSignalProp(
             task.company.signalType,
@@ -549,7 +550,7 @@ async function TaskRow({
               <span className="text-muted-foreground">
                 {" "}—{" "}
                 <Link href={`/contacts/${task.contact.id}`} className="hover:text-brand-teal">
-                  {task.contact.firstName} {task.contact.lastName}
+                  {resolveContactDisplayName(task.contact)}
                 </Link>
                 {task.contact.jobTitle && `, ${task.contact.jobTitle}`}
               </span>

@@ -65,7 +65,7 @@ export async function getInteractionsByTask(orgId: string, taskId: string) {
     ),
     with: {
       company: { columns: { id: true, name: true } },
-      contact: { columns: { id: true, firstName: true, lastName: true } },
+      contact: { columns: { id: true, kind: true, firstName: true, lastName: true, email: true } },
     },
     orderBy: [desc(interactions.occurredAt)],
     limit: 50,
@@ -79,7 +79,7 @@ export async function getInteractionsByCompany(orgId: string, companyId: string)
       eq(interactions.companyId, companyId),
     ),
     with: {
-      contact: { columns: { id: true, firstName: true, lastName: true, jobTitle: true } },
+      contact: { columns: { id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true } },
     },
     orderBy: [desc(interactions.occurredAt)],
     limit: 50,
@@ -91,7 +91,7 @@ export async function getRecentInteractionsByOrg(orgId: string, limit = 5) {
     where: eq(interactions.organizationId, orgId),
     with: {
       company: { columns: { id: true, name: true } },
-      contact: { columns: { id: true, firstName: true, lastName: true } },
+      contact: { columns: { id: true, kind: true, firstName: true, lastName: true, email: true } },
     },
     orderBy: [desc(interactions.occurredAt)],
     limit,

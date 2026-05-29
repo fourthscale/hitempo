@@ -35,8 +35,9 @@ const STATUS_CONFIG: Record<TaskStatus, { Icon: React.ElementType; className: st
 export type TaskGenerateContext = {
   contactDisplayName: string;
   companyDisplayName: string;
-  contactFirstName: string;
-  contactLastName: string;
+  // Nullable for generic contacts (info@…).
+  contactFirstName: string | null;
+  contactLastName: string | null;
   contactJobTitle: string | null;
   defaultChannelIntent: ChannelIntent;
   defaultLocale: MessageLocale;

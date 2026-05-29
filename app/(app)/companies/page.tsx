@@ -4,6 +4,7 @@ import { Plus, Upload, ChevronDown, Building2 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { listCompaniesByOrgEnriched } from "@/db/queries/companies";
 import { scoreGrade, scoreBadgeClasses } from "@/lib/scoring/grade";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { PageHeader } from "@/components/app/page-header";
 import { EmptyState } from "@/components/app/empty-state";
 import { Button } from "@/components/ui/button";
@@ -146,7 +147,7 @@ export default async function CompaniesPage() {
                       )}
                       {c.topContact && (
                         <span className="text-muted-foreground">
-                          · {c.topContact.firstName} {c.topContact.lastName}
+                          · {resolveContactDisplayName(c.topContact)}
                         </span>
                       )}
                     </div>
@@ -252,7 +253,7 @@ export default async function CompaniesPage() {
                       {c.topContact ? (
                         <>
                           <div className="text-foreground">
-                            {c.topContact.firstName} {c.topContact.lastName}
+                            {resolveContactDisplayName(c.topContact)}
                           </div>
                           {c.topContact.jobTitle && (
                             <div className="text-xs text-muted-foreground">{c.topContact.jobTitle}</div>

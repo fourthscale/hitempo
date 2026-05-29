@@ -62,10 +62,11 @@ export type GenerateMessageDialogProps = {
   contactDisplayName: string;
   companyDisplayName: string;
 
-  /** Resolved by the caller from the contact (firstName, lastName, jobTitle, companyName). */
+  /** Resolved by the caller from the contact (firstName, lastName, jobTitle, companyName).
+   *  Names are nullable for generic contacts (info@…). */
   annotationContact: {
-    firstName: string;
-    lastName: string;
+    firstName: string | null;
+    lastName: string | null;
     jobTitle: string | null;
   };
 

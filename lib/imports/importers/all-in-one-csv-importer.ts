@@ -25,8 +25,9 @@ import {
  * Section detection (which of site/contact to create) :
  *   - **site**    present iff `site_name` is set (the only required field
  *     of the site section). Other site_* fields tag along.
- *   - **contact** present iff BOTH `contact_first_name` AND
- *     `contact_last_name` are set.
+ *   - **contact** present iff a name is set (person) OR `contact_kind` is
+ *     "generic" with an email/phone. A person row requires both names ; a
+ *     generic row requires at least one channel (mirrors the DB CHECK).
  *
  * Linking :
  *   - company is upserted by `company_organisation_ref`
@@ -83,8 +84,14 @@ const rowSchema = z.object({
   site_is_primary: nullableBool(),
   site_standing: nullableInt(1, 5),
   site_notes: nullableString(2_000),
-  // Contact — optional (presence = first_name + last_name both set)
+  // Contact — optional. Presence = a name is set OR an explicit generic
+  // contact with a channel (see hasContactSection). kind defaults to
+  // "person" when the column is absent/empty (backwards compatible).
   contact_organisation_ref: nullableString(80),
+  contact_kind: z.preprocess(
+    (v) => (v === "" || v == null ? "person" : String(v).toLowerCase().trim()),
+    z.enum(["person", "generic"]),
+  ),
   contact_first_name: nullableString(100),
   contact_last_name: nullableString(100),
   contact_job_title: nullableString(150),
@@ -116,13 +123,9 @@ export class AllInOneCsvImporter implements CsvImporter {
 
     // Cross-field checks
     if (hasContactSection(data)) {
-      if (!data.contact_first_name || !data.contact_last_name) {
-        return {
-          line,
-          status: "error",
-          field: "contact_first_name",
-          message: "contact section requires both first_name and last_name",
-        };
+      const contactError = validateContactSection(data);
+      if (contactError) {
+        return { line, status: "error", ...contactError };
       }
     }
 
@@ -155,13 +158,9 @@ export class AllInOneCsvImporter implements CsvImporter {
     const data = parsed.data;
 
     if (hasContactSection(data)) {
-      if (!data.contact_first_name || !data.contact_last_name) {
-        return {
-          line,
-          status: "error",
-          field: "contact_first_name",
-          message: "contact section requires both first_name and last_name",
-        };
+      const contactError = validateContactSection(data);
+      if (contactError) {
+        return { line, status: "error", ...contactError };
       }
     }
 
@@ -233,10 +232,37 @@ function hasSiteSection(data: ParsedRow): boolean {
 }
 
 function hasContactSection(data: ParsedRow): boolean {
-  return (
+  const hasName =
     (data.contact_first_name != null && data.contact_first_name.length > 0) ||
-    (data.contact_last_name != null && data.contact_last_name.length > 0)
-  );
+    (data.contact_last_name != null && data.contact_last_name.length > 0);
+  // A generic contact has no name — its presence is signalled by a channel
+  // when the kind column explicitly says "generic".
+  const hasGenericChannel =
+    data.contact_kind === "generic" &&
+    ((data.contact_email != null && data.contact_email.length > 0) ||
+      (data.contact_phone != null && data.contact_phone.length > 0));
+  return hasName || hasGenericChannel;
+}
+
+/**
+ * Per-kind validation for the contact section. Returns an error message or
+ * null if valid. Mirrors the contacts-mode invariant + the DB CHECK.
+ */
+function validateContactSection(data: ParsedRow): { field: string; message: string } | null {
+  if (data.contact_kind === "person") {
+    if (!data.contact_first_name || !data.contact_last_name) {
+      return {
+        field: "contact_first_name",
+        message: "person contact requires both first_name and last_name",
+      };
+    }
+  } else if (!data.contact_email && !data.contact_phone) {
+    return {
+      field: "contact_email",
+      message: "generic contact requires an email or phone",
+    };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -450,6 +476,7 @@ async function upsertContact(
         updatedAt: new Date(),
         companyId,
         siteId,
+        kind: data.contact_kind,
       };
       if (data.contact_first_name != null) update.firstName = data.contact_first_name;
       if (data.contact_last_name != null) update.lastName = data.contact_last_name;
@@ -515,8 +542,9 @@ async function insertContact(
       companyId,
       siteId,
       organisationRef: data.contact_organisation_ref,
-      firstName: data.contact_first_name as string,
-      lastName: data.contact_last_name as string,
+      kind: data.contact_kind,
+      firstName: data.contact_first_name,
+      lastName: data.contact_last_name,
       jobTitle: data.contact_job_title,
       role: data.contact_role,
       email: data.contact_email,
@@ -547,7 +575,12 @@ function formatLabel(data: ParsedRow): string {
   if (data.company_organisation_ref) parts.push(data.company_organisation_ref);
   if (hasSiteSection(data) && data.site_city) parts.push(data.site_city);
   if (hasContactSection(data)) {
-    parts.push(`${data.contact_first_name} ${data.contact_last_name}`.trim());
+    const contactLabel =
+      [data.contact_first_name, data.contact_last_name].filter(Boolean).join(" ").trim() ||
+      data.contact_email ||
+      data.contact_phone ||
+      "Contact générique";
+    parts.push(contactLabel);
   }
   return parts.join(" · ");
 }

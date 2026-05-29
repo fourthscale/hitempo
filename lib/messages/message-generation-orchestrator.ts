@@ -125,6 +125,7 @@ export class MessageGenerationOrchestrator {
       },
       signal: companySignal,
       contact: {
+        kind: contact.kind,
         firstName: contact.firstName,
         lastName: contact.lastName,
         jobTitle: contact.jobTitle,

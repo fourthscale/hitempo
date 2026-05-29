@@ -1,9 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { resolveContactDisplayName, type ContactKind } from "@/lib/contacts/contact-kind";
 
 type Company = { id: string; name: string };
-type Contact = { id: string; firstName: string; lastName: string; jobTitle: string | null };
+type Contact = {
+  id: string;
+  kind?: ContactKind | null;
+  firstName: string | null;
+  lastName: string | null;
+  jobTitle: string | null;
+  email?: string | null;
+};
 
 export function CompanyContactSelect({
   companies,
@@ -77,7 +85,7 @@ export function CompanyContactSelect({
           <option value="">{placeholderContact}</option>
           {contacts.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.firstName} {c.lastName}{c.jobTitle ? ` · ${c.jobTitle}` : ""}
+              {resolveContactDisplayName(c)}{c.jobTitle ? ` · ${c.jobTitle}` : ""}
             </option>
           ))}
         </select>
