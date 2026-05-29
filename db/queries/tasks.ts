@@ -235,6 +235,46 @@ export async function createTask(
   return row;
 }
 
+/**
+ * Insert a task on behalf of the sequence engine (runs as the admin pool,
+ * outside an RLS user session) and link it to its enrolment. Distinct from
+ * `createTask` (RLS, user-driven) : takes an explicit `db` and the
+ * `sequenceEnrolmentId` FK.
+ */
+export async function insertTaskForEnrolment(
+  db: Db,
+  orgId: string,
+  data: {
+    assigneeId: string | null;
+    sequenceEnrolmentId: string;
+    type: typeof tasks.$inferInsert["type"];
+    title: string;
+    description?: string | null;
+    companyId?: string | null;
+    contactId?: string | null;
+    dueAt?: Date | null;
+  },
+) {
+  const [row] = await db
+    .insert(tasks)
+    .values({
+      organizationId: orgId,
+      assigneeId: data.assigneeId,
+      sequenceEnrolmentId: data.sequenceEnrolmentId,
+      type: data.type,
+      title: data.title,
+      description: data.description ?? null,
+      priority: "medium",
+      dueAt: data.dueAt ?? null,
+      companyId: data.companyId ?? null,
+      contactId: data.contactId ?? null,
+      status: "pending",
+    })
+    .returning({ id: tasks.id });
+  if (!row) throw new Error("insertTaskForEnrolment: no row returned");
+  return row;
+}
+
 export async function completeTask(
   orgId: string,
   taskId: string,

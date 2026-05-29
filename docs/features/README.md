@@ -20,7 +20,7 @@ Features are implemented in order. Each one builds on the previous. The number i
 | 10 | Gmail integration (send + reply tracking) | `10-gmail-integration.md` | ✅ done |
 | 10.5 | Gmail outbound attachments (PDF) | `10.5-gmail-attachments.md` | ⏳ code complete, migration pending |
 | 10.8 | Generic contacts (`info@…` without faking a name) | `10.8-generic-contacts.md` | ✅ done (migration applied cloud + local) |
-| 11 | Sequences — Phase A: task-mode engine | `11-sequences-phase-a.md` | 📝 brief written |
+| 11 | Sequences — Phase A: task-mode engine | `11-sequences-phase-a.md` | ✅ done (local; cloud migration `20260529121500_sequences_soft_step_refs` push pending) |
 
 Briefs are written one at a time, just before starting that sprint. Each brief incorporates lessons learned from previous sprints.
 

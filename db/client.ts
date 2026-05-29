@@ -13,6 +13,15 @@ import type { Db } from "@/lib/db/db-client";
 
 export type { Db };
 
+/** The transaction handle drizzle passes to a `db.transaction(tx => …)` callback. */
+export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/**
+ * Either the top-level pool or a transaction handle. Query helpers accept this
+ * so the same helper runs standalone or inside a `.transaction()` block.
+ */
+export type DbOrTx = Db | Tx;
+
 /** RLS-bound pool. The pool 95% of queries should use. */
 export function getDb(): Db {
   return DbClientFactory.getInstance().getRls();

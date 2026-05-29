@@ -113,6 +113,44 @@ export const messageIntent = pgEnum("message_intent", [
   "proposal_send", "reconnect", "other",
 ]);
 
+// ---------------------------------------------------------------------------
+// Sequences (sprint 11). See docs/features/11-sequences-phase-a.md.
+// Enums are designed graph-native + forward-compatible : Phase B/C add new
+// action types via `ALTER TYPE ... ADD VALUE` (O(1), no row migration).
+// ---------------------------------------------------------------------------
+
+export const sequenceStatus = pgEnum("sequence_status", [
+  "active", "paused",
+  "completed_exhausted", "completed_success", "completed_cascaded",
+  "stopped_opted_out", "stopped_manual",
+]);
+
+export const sequenceStepActionType = pgEnum("sequence_step_action_type", [
+  // Legacy Phase-A names (kept in the DB enum so values are never dropped ;
+  // no longer produced by the editor or templates).
+  "create_task_manual",
+  "create_task_with_ai_draft",
+  "wait_delay",
+  "enroll_in_sequence",
+  "end_success",
+  // Active taxonomy (Klaviyo-style palette : Messages / Field / Data / Logic).
+  "send_email",
+  "phone_call",
+  "send_linkedin", // palette "later", executor registered for forward-compat
+  "update_contact",
+  "conditional_split",
+  "conditional_switch",
+]);
+
+export const sequenceStepDelayUnit = pgEnum("sequence_step_delay_unit", [
+  "minutes", "hours", "days",
+]);
+
+export const sequenceEndReason = pgEnum("sequence_end_reason", [
+  "exhausted", "success", "cascaded", "opted_out", "manual",
+  "safety_loop_cap_reached",
+]);
+
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
   slug: text("slug").notNull().unique(),
@@ -329,6 +367,9 @@ export const contacts = pgTable(
     relevance: integer("relevance"),
 
     status: text("status").notNull().default("to_contact"),
+    // Optional owner override. Defaults (null) to the company owner —
+    // see companies.ownerId. Soft reference (no FK to auth.users).
+    ownerId: uuid("owner_id"),
     optedOut: boolean("opted_out").notNull().default(false),
     optedOutAt: timestamp("opted_out_at", { withTimezone: true }),
     optedOutReason: text("opted_out_reason"),
@@ -428,7 +469,11 @@ export const tasks = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
     completedBy: uuid("completed_by"),
 
-    sequenceRunId: uuid("sequence_run_id"),
+    // Sprint 11 : the existing `sequence_run_id` placeholder column is now
+    // the FK back to the sequence_enrolments row that generated this task.
+    // Kept the column name (additive — no migration on tasks) but exposed
+    // under a clearer property. Nullable : most tasks aren't sequence-driven.
+    sequenceEnrolmentId: uuid("sequence_run_id"),
     messageId: uuid("message_id"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -438,6 +483,7 @@ export const tasks = pgTable(
     byAssigneeDue: index("idx_tasks_assignee_due").on(t.assigneeId, t.dueAt),
     byOrgStatus:   index("idx_tasks_org_status").on(t.organizationId, t.status),
     byCompany:     index("idx_tasks_company").on(t.companyId),
+    bySequenceEnrolment: index("idx_tasks_sequence_enrolment").on(t.sequenceEnrolmentId),
   }),
 );
 
@@ -744,4 +790,210 @@ export const userGmailCredentials = pgTable("user_gmail_credentials", {
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
 }, (t) => ({
   byOrg: index("idx_gmail_creds_org").on(t.organizationId),
+}));
+
+// ===========================================================================
+// Sequences (sprint 11). See docs/features/11-sequences-phase-a.md.
+//
+// Graph-native model : steps navigate via `next_step_ids` jsonb (not
+// step_order), predicates (`condition`/`filter`) and `action_config` are
+// polymorphic jsonb dispatched by typed Factories in lib/sequences. Phase A
+// ships a limited set of action/predicate types ; B/C extend without schema
+// change. The CHECK constraint + partial unique index are appended manually
+// in the migration SQL (Drizzle DSL doesn't model them reliably).
+// ===========================================================================
+
+export const sequences = pgTable(
+  "sequences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+
+    name: text("name").notNull(),
+    description: text("description"),
+    isActive: boolean("is_active").notNull().default(true),
+
+    // Targeting (eligibility) — empty array = no restriction on that axis.
+    targetRelationshipTypes: text("target_relationship_types").array().notNull().default(sql`ARRAY[]::text[]`),
+    targetSiteTypes:         text("target_site_types").array().notNull().default(sql`ARRAY[]::text[]`),
+    targetContactRoles:      text("target_contact_roles").array().notNull().default(sql`ARRAY[]::text[]`),
+    targetLocales:           text("target_locales").array().notNull().default(sql`ARRAY[]::text[]`),
+
+    // Built-in exclusion guards.
+    excludeIfCompanyHasActiveSequence: boolean("exclude_if_company_has_active_sequence").notNull().default(true),
+    excludeIfCompanyRelationshipIn:    text("exclude_if_company_relationship_in").array().notNull().default(sql`ARRAY[]::text[]`),
+    cooldownAfterCompletedDays:        integer("cooldown_after_completed_days"),
+
+    // Draft + publish + lock cycle. The engine NEVER reads draftDefinition.
+    draftDefinition: jsonb("draft_definition"),
+    draftSavedAt:    timestamp("draft_saved_at", { withTimezone: true }),
+    editingLockedBy: uuid("editing_locked_by"),
+    editingLockedAt: timestamp("editing_locked_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => ({
+    byOrgActive: index("idx_sequences_org_active").on(t.organizationId, t.isActive),
+  }),
+);
+
+export const sequenceSteps = pgTable(
+  "sequence_steps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sequenceId: uuid("sequence_id")
+      .notNull()
+      .references(() => sequences.id, { onDelete: "cascade" }),
+
+    // Display hint only — the engine navigates via nextStepIds.
+    stepOrder: integer("step_order").notNull(),
+
+    actionType: sequenceStepActionType("action_type").notNull(),
+    actionConfig: jsonb("action_config").notNull().default({}),
+
+    // { "default": "<step-id>" } in Phase A (or null = terminal). Phase B
+    // adds { "yes","no" } / { "cases","default" }.
+    nextStepIds: jsonb("next_step_ids"),
+
+    // Polymorphic predicates : { type, config? } or null (= always).
+    condition: jsonb("condition"),
+    filter:    jsonb("filter"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    bySequence: uniqueIndex("uniq_sequence_steps_order").on(t.sequenceId, t.stepOrder),
+  }),
+);
+
+export const sequenceEnrolments = pgTable(
+  "sequence_enrolments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    sequenceId: uuid("sequence_id")
+      .notNull()
+      .references(() => sequences.id, { onDelete: "cascade" }),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    assigneeId: uuid("assignee_id"),
+
+    status: sequenceStatus("status").notNull().default("active"),
+
+    // Soft reference (NO FK) by design : publish swaps the whole sequence_steps
+    // set, regenerating ids. The engine resolves the live step from this id,
+    // falling back to currentStepOrder, and ends the enrolment as
+    // completed_exhausted when the cursor overshoots the new step count. A hard
+    // FK would block the publish swap and contradict that model.
+    currentStepId:    uuid("current_step_id").notNull(),
+    currentStepOrder: integer("current_step_order").notNull(),
+    nextDueAt:        timestamp("next_due_at", { withTimezone: true }).notNull(),
+
+    // Loop-safety + idempotence (see migration / brief).
+    lastExecutionCounter: integer("last_execution_counter").notNull().default(0),
+    maxExecutionCount:    integer("max_execution_count").notNull().default(200),
+
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt:   timestamp("ended_at", { withTimezone: true }),
+    endReason: sequenceEndReason("end_reason"),
+  },
+  (t) => ({
+    byDue:      index("idx_seq_enrolments_due").on(t.organizationId, t.status, t.nextDueAt),
+    byContact:  index("idx_seq_enrolments_contact").on(t.contactId, t.status),
+    byCompany:  index("idx_seq_enrolments_company").on(t.companyId, t.status),
+    // "Only one active/paused enrolment of the same sequence per contact" —
+    // partial unique index appended in migration SQL via .where().
+    uniqActive: uniqueIndex("uniq_seq_enrolments_active_per_contact")
+      .on(t.sequenceId, t.contactId)
+      .where(sql`status IN ('active', 'paused')`),
+  }),
+);
+
+export const sequenceStepExecutions = pgTable(
+  "sequence_step_executions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    enrolmentId: uuid("enrolment_id")
+      .notNull()
+      .references(() => sequenceEnrolments.id, { onDelete: "cascade" }),
+    // Soft reference (NO FK) : the audit trail must survive a publish swap that
+    // deletes the step row it points to (see currentStepId note above).
+    stepId:     uuid("step_id").notNull(),
+    stepOrder:  integer("step_order").notNull(),
+    actionType: sequenceStepActionType("action_type").notNull(),
+
+    // Monotonic per-enrolment counter backing the idempotence UNIQUE.
+    executionCounter: integer("execution_counter").notNull(),
+
+    executedAt: timestamp("executed_at", { withTimezone: true }).notNull().defaultNow(),
+    taskId:     uuid("task_id"),
+    outcome:    text("outcome").notNull(), // 'executed' | 'skipped_filter' | 'skipped_condition'
+    notes:      text("notes"),
+  },
+  (t) => ({
+    byEnrolment: index("idx_seq_executions_enrolment").on(t.enrolmentId),
+    uniqCounter: uniqueIndex("uniq_seq_executions_counter").on(t.enrolmentId, t.executionCounter),
+  }),
+);
+
+export const sequencesRelations = relations(sequences, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [sequences.organizationId],
+    references: [organizations.id],
+  }),
+  steps: many(sequenceSteps),
+  enrolments: many(sequenceEnrolments),
+}));
+
+export const sequenceStepsRelations = relations(sequenceSteps, ({ one }) => ({
+  sequence: one(sequences, {
+    fields: [sequenceSteps.sequenceId],
+    references: [sequences.id],
+  }),
+}));
+
+export const sequenceEnrolmentsRelations = relations(sequenceEnrolments, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [sequenceEnrolments.organizationId],
+    references: [organizations.id],
+  }),
+  sequence: one(sequences, {
+    fields: [sequenceEnrolments.sequenceId],
+    references: [sequences.id],
+  }),
+  company: one(companies, {
+    fields: [sequenceEnrolments.companyId],
+    references: [companies.id],
+  }),
+  contact: one(contacts, {
+    fields: [sequenceEnrolments.contactId],
+    references: [contacts.id],
+  }),
+  currentStep: one(sequenceSteps, {
+    fields: [sequenceEnrolments.currentStepId],
+    references: [sequenceSteps.id],
+  }),
+  executions: many(sequenceStepExecutions),
+}));
+
+export const sequenceStepExecutionsRelations = relations(sequenceStepExecutions, ({ one }) => ({
+  enrolment: one(sequenceEnrolments, {
+    fields: [sequenceStepExecutions.enrolmentId],
+    references: [sequenceEnrolments.id],
+  }),
+  step: one(sequenceSteps, {
+    fields: [sequenceStepExecutions.stepId],
+    references: [sequenceSteps.id],
+  }),
 }));

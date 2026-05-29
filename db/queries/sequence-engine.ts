@@ -1,0 +1,146 @@
+import "server-only";
+import { and, desc, eq, gte } from "drizzle-orm";
+import type { DbOrTx } from "@/db/client";
+import {
+  sequenceEnrolments,
+  contacts,
+  companies,
+  organizations,
+  interactions,
+} from "@/db/schema";
+import type {
+  SequenceContactCtx,
+  SequenceCompanyCtx,
+  SequenceOrgCtx,
+  SequenceInteractionCtx,
+} from "@/lib/sequences/types";
+
+/**
+ * Engine-only loaders (run on the admin pool, cross-org). They assemble the
+ * minimal entity context the predicate evaluators + step executors need,
+ * keeping the engine free of ad-hoc joins.
+ */
+
+/** Full enrolment row by id, ignoring org scope (the engine is trusted). */
+export async function getEnrolmentForEngine(db: DbOrTx, id: string) {
+  return db.query.sequenceEnrolments.findFirst({
+    where: eq(sequenceEnrolments.id, id),
+  });
+}
+
+export type EnrolmentEntityContext = {
+  contact: SequenceContactCtx;
+  company: SequenceCompanyCtx;
+  organization: SequenceOrgCtx;
+};
+
+/**
+ * Load the contact / company / org context for an enrolment in one round of
+ * lookups. Returns undefined if any of the three is missing (deleted), letting
+ * the engine end the enrolment defensively.
+ */
+export async function getEnrolmentEntityContext(
+  db: DbOrTx,
+  input: { organizationId: string; companyId: string; contactId: string },
+): Promise<EnrolmentEntityContext | undefined> {
+  const [contact, company, organization] = await Promise.all([
+    db.query.contacts.findFirst({
+      where: and(eq(contacts.organizationId, input.organizationId), eq(contacts.id, input.contactId)),
+      columns: {
+        id: true,
+        kind: true,
+        firstName: true,
+        lastName: true,
+        jobTitle: true,
+        preferredLanguage: true,
+        optedOut: true,
+        status: true,
+        role: true,
+        ownerId: true,
+      },
+    }),
+    db.query.companies.findFirst({
+      where: and(eq(companies.organizationId, input.organizationId), eq(companies.id, input.companyId)),
+      columns: {
+        id: true,
+        name: true,
+        primaryLocale: true,
+        relationshipType: true,
+        signalType: true,
+        signalDetectedAt: true,
+        ownerId: true,
+      },
+    }),
+    db.query.organizations.findFirst({
+      where: eq(organizations.id, input.organizationId),
+      columns: { id: true, defaultLocale: true },
+    }),
+  ]);
+
+  if (!contact || !company || !organization) return undefined;
+
+  return {
+    contact: {
+      id: contact.id,
+      kind: contact.kind,
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      jobTitle: contact.jobTitle,
+      preferredLanguage: contact.preferredLanguage,
+      optedOut: contact.optedOut,
+      status: contact.status,
+      role: contact.role,
+      ownerId: contact.ownerId,
+    },
+    company: {
+      id: company.id,
+      name: company.name,
+      primaryLocale: company.primaryLocale,
+      relationshipType: company.relationshipType,
+      signalType: company.signalType,
+      signalDetectedAt: company.signalDetectedAt,
+      ownerId: company.ownerId,
+    },
+    organization: {
+      id: organization.id,
+      defaultLocale: organization.defaultLocale,
+    },
+  };
+}
+
+/**
+ * Interactions for a contact since `since` (the previous step's execution time,
+ * or enrolment start for the first step). Drives the history-based predicates.
+ */
+export async function getInteractionsSince(
+  db: DbOrTx,
+  orgId: string,
+  contactId: string,
+  since: Date,
+): Promise<SequenceInteractionCtx[]> {
+  const rows = await db
+    .select({
+      id: interactions.id,
+      type: interactions.type,
+      outcome: interactions.outcome,
+      status: interactions.status,
+      occurredAt: interactions.occurredAt,
+    })
+    .from(interactions)
+    .where(
+      and(
+        eq(interactions.organizationId, orgId),
+        eq(interactions.contactId, contactId),
+        gte(interactions.occurredAt, since),
+      ),
+    )
+    .orderBy(desc(interactions.occurredAt));
+
+  return rows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    outcome: r.outcome,
+    status: r.status,
+    occurredAt: r.occurredAt,
+  }));
+}

@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import { companies } from "@/db/schema";
 import { listSitesByOrgWithCompany } from "@/db/queries/sites";
 import { createContactAction } from "@/lib/actions/contacts";
+import { getOrgMembersWithNames } from "@/db/queries/members";
 import { ContactForm } from "@/components/app/contact-form";
 import { PageHeader } from "@/components/app/page-header";
 
@@ -26,6 +27,10 @@ export default async function NewContactPage({
       .orderBy(asc(companies.name)),
     listSitesByOrgWithCompany(activeOrganization.id),
   ]);
+  const owners = (await getOrgMembersWithNames(activeOrganization.id)).map((m) => ({
+    id: m.userId,
+    name: m.displayName,
+  }));
 
   return (
     <div className="max-w-[800px] mx-auto">
@@ -42,6 +47,7 @@ export default async function NewContactPage({
         submitLabel={t("createSubmit")}
         companies={companyList}
         sites={siteList}
+        owners={owners}
         defaultCompanyId={preselect}
       />
     </div>

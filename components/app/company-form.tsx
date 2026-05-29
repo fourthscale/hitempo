@@ -27,6 +27,7 @@ type CompanyInitial = {
   signalSource?: string | null;
   notes?: string | null;
   parentId?: string | null;
+  ownerId?: string | null;
 };
 
 export async function CompanyForm({
@@ -34,6 +35,7 @@ export async function CompanyForm({
   submitLabel,
   initial,
   parentCandidates,
+  owners,
 }: {
   action: (formData: FormData) => Promise<void> | void;
   submitLabel: string;
@@ -41,6 +43,8 @@ export async function CompanyForm({
   /** Other companies in the same org that this company can have as parent.
    *  Should NOT include the current company itself (would create a cycle). */
   parentCandidates: { id: string; name: string }[];
+  /** Org members the account can be owned by. */
+  owners: { id: string; name: string }[];
 }) {
   const [t, tRel, tStatus, tLang] = await Promise.all([
     getTranslations("pages.companies.fields"),
@@ -103,6 +107,23 @@ export async function CompanyForm({
             {RELATIONSHIP_TYPES.map((v) => (
               <option key={v} value={v}>
                 {tRel(v)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="ownerId">{t("owner")}</Label>
+          <select
+            id="ownerId"
+            name="ownerId"
+            defaultValue={initial?.ownerId ?? ""}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="">—</option>
+            {owners.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
               </option>
             ))}
           </select>

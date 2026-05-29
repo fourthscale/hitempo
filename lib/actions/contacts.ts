@@ -51,6 +51,7 @@ async function _createContactAction(formData: FormData) {
       relevance: (data.relevance as number | null) ?? null,
       status: (data.status as string) || "to_contact",
       notes: (data.notes as string | null) ?? null,
+      ownerId: (data.ownerId as string | null) ?? null,
     })
     .returning();
 
@@ -84,6 +85,7 @@ async function _updateContactAction(formData: FormData) {
       relevance: (data.relevance as number | null) ?? null,
       status: (data.status as string) || "to_contact",
       notes: (data.notes as string | null) ?? null,
+      ownerId: (data.ownerId as string | null) ?? null,
       updatedAt: new Date(),
     })
     .where(

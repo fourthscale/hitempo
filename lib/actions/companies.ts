@@ -33,6 +33,7 @@ const baseSchema = {
   signalSource: z.string().max(200).optional().or(z.literal("")),
   notes: z.string().max(5000).optional().or(z.literal("")),
   parentId: z.string().uuid().optional().or(z.literal("")),
+  ownerId: z.string().uuid().optional().or(z.literal("")),
 };
 
 const createSchema = z.object(baseSchema);
@@ -66,6 +67,7 @@ async function _createCompanyAction(formData: FormData) {
       signalSource: (data.signalSource as string | null) ?? null,
       notes: (data.notes as string | null) ?? null,
       parentId: (data.parentId as string | null) ?? null,
+      ownerId: (data.ownerId as string | null) ?? null,
     })
     .returning();
 
@@ -106,6 +108,7 @@ async function _updateCompanyAction(formData: FormData) {
       signalSource: (data.signalSource as string | null) ?? null,
       notes: (data.notes as string | null) ?? null,
       parentId,
+      ownerId: (data.ownerId as string | null) ?? null,
       updatedAt: new Date(),
     })
     .where(

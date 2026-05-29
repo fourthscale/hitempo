@@ -6,6 +6,11 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { getContactById } from "@/db/queries/contacts";
 import { getInteractionsByContact } from "@/db/queries/interactions";
+import { listEnrolmentsForContact } from "@/db/queries/sequence-enrolments";
+import { getActiveSequencesForTargeting } from "@/db/queries/sequences";
+import { getOrgMembersWithNames } from "@/db/queries/members";
+import { getDb } from "@/db/client";
+import { ContactSequencesSection } from "@/components/app/sequences/contact-sequences-section";
 import { getAttachmentsByMessageIds } from "@/db/queries/message-attachments";
 import { getTasksByContact } from "@/db/queries/tasks";
 import { getBrandBriefStatus } from "@/db/queries/brand";
@@ -52,11 +57,14 @@ export default async function ContactDetailPage({
   const contact = await getContactById(orgId, id);
   if (!contact) notFound();
 
-  const [interactionHistory, contactTasks, brandBriefStatus] = await Promise.all([
-    getInteractionsByContact(orgId, id),
-    getTasksByContact(orgId, id),
-    getBrandBriefStatus(orgId),
-  ]);
+  const [interactionHistory, contactTasks, brandBriefStatus, contactEnrolments, activeSequences] =
+    await Promise.all([
+      getInteractionsByContact(orgId, id),
+      getTasksByContact(orgId, id),
+      getBrandBriefStatus(orgId),
+      listEnrolmentsForContact(getDb(), orgId, id),
+      getActiveSequencesForTargeting(getDb(), orgId),
+    ]);
 
   // Bulk-fetch attachments for all messages referenced by these interactions
   // in a single query, then dispatch into a Map for O(1) lookup when mapping
@@ -69,6 +77,14 @@ export default async function ContactDetailPage({
     ),
   );
   const attachmentsByMessageId = await getAttachmentsByMessageIds(orgId, messageIdsInTimeline);
+
+  // Resolve the owner : contact override → company owner (inherited).
+  const members = await getOrgMembersWithNames(orgId);
+  const resolvedOwnerId = contact.ownerId ?? contact.company?.ownerId ?? null;
+  const ownerName = resolvedOwnerId
+    ? (members.find((m) => m.userId === resolvedOwnerId)?.displayName ?? null)
+    : null;
+  const ownerInherited = !contact.ownerId && Boolean(contact.company?.ownerId);
 
   const locale = await getLocale();
   const t = await getTranslations("pages.contacts");
@@ -202,6 +218,15 @@ export default async function ContactDetailPage({
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{t("fields.preferredLanguage")}</div>
           <div className="text-sm">{contact.preferredLanguage}</div>
         </Card>
+        <Card className="p-5">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{t("fields.owner")}</div>
+          <div className="text-sm">
+            {ownerName ?? "—"}
+            {ownerInherited && ownerName && (
+              <span className="text-muted-foreground"> · {t("fields.ownerInheritedHint")}</span>
+            )}
+          </div>
+        </Card>
       </div>
 
       {contact.notes && (
@@ -256,6 +281,23 @@ export default async function ContactDetailPage({
           </ul>
         )}
       </Card>
+
+      {/* Sequences section */}
+      {contact.company && (
+        <ContactSequencesSection
+          contactId={contact.id}
+          companyId={contact.company.id}
+          enrolments={contactEnrolments.map((e) => ({
+            id: e.id,
+            sequenceName: e.sequenceName,
+            status: e.status,
+            currentStepOrder: e.currentStepOrder,
+          }))}
+          availableSequences={activeSequences
+            .filter((s) => !contactEnrolments.some((e) => e.sequenceId === s.id && (e.status === "active" || e.status === "paused")))
+            .map((s) => ({ id: s.id, name: s.name }))}
+        />
+      )}
 
       {/* Interactions section */}
       <Card className="p-6">

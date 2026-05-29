@@ -9,6 +9,7 @@ import { listSitesByOrgWithCompany } from "@/db/queries/sites";
 import { getDb } from "@/db/client";
 import { companies } from "@/db/schema";
 import { updateContactAction } from "@/lib/actions/contacts";
+import { getOrgMembersWithNames } from "@/db/queries/members";
 import { ContactForm } from "@/components/app/contact-form";
 import { PageHeader } from "@/components/app/page-header";
 
@@ -30,6 +31,10 @@ export default async function EditContactPage({
       .orderBy(asc(companies.name)),
     listSitesByOrgWithCompany(activeOrganization.id),
   ]);
+  const owners = (await getOrgMembersWithNames(activeOrganization.id)).map((m) => ({
+    id: m.userId,
+    name: m.displayName,
+  }));
 
   const t = await getTranslations("pages.contacts");
 
@@ -48,6 +53,7 @@ export default async function EditContactPage({
         submitLabel={t("updateSubmit")}
         companies={companyList}
         sites={siteList}
+        owners={owners}
         initial={contact}
       />
     </div>

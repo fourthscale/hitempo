@@ -46,6 +46,7 @@ const sharedContactFields = {
   ),
   status: z.string().max(50).optional(),
   notes: z.string().max(5000).optional().or(z.literal("")),
+  ownerId: z.string().uuid().optional().or(z.literal("")),
 };
 
 /**

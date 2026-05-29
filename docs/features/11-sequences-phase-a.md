@@ -1138,4 +1138,68 @@ features are opt-in via the new step types and predicates.
 
 ## Implementation notes
 
-_To fill at the end._
+Shipped 2026-05-29 (Opus 4.8). Structure complete, a few features deliberately
+deferred (the user asked for the full structural rollout, limited features OK).
+
+### Schema decisions
+
+- **`tasks.sequence_run_id` reused as the enrolment FK** (Drizzle property
+  `sequenceEnrolmentId`) → zero migration on `tasks`, purely additive.
+- **`current_step_id` and `sequence_step_executions.step_id` are SOFT references
+  (no FK)** — migration `20260529121500_sequences_soft_step_refs`. Publish swaps
+  the whole `sequence_steps` set (new UUIDs), so a hard FK would block the swap
+  and the executions audit must survive it. The engine resolves the live step by
+  id with a fallback to `current_step_order`, ending overshoot enrolments as
+  `completed_exhausted`. This migration is applied **local only** — cloud push
+  still pending (additive `DROP CONSTRAINT IF EXISTS`, safe to replay).
+- The drizzle snapshot was regenerated (0015) but its `.sql` was removed from
+  `db/.drizzle-out/` to avoid `db:sync` duplicating the hand-written idempotent
+  migration. Snapshot + journal retained so future diffs are correct.
+
+### Architecture (all OOP per house style)
+
+- **Predicates**: `SequencePredicateEvaluator` Strategy + `…Factory` registry
+  (6 history evaluators). **Executors**: `SequenceStepExecutor` Strategy +
+  `SequenceStepExecutorFactory` (5 action types). New types register with no
+  engine change.
+- **Locale is data, not flow**: `resolveLocalizedString` fallback chain
+  contact.preferredLanguage → company.primaryLocale → org.defaultLocale →
+  `default` → any. `LocalizedString` everywhere on contact-facing copy.
+- **Editing**: `SequenceEditingService` (lock / draft / publish / discard /
+  impact preview) + factory (RLS pool). Publish = single transaction: validate
+  graph → remap author ids to UUIDs → replace steps → clear draft + lock.
+- **Eligibility**: pure `SequenceEligibilityChecker` (opt-out hard reject + 3
+  guards: active-on-contact, active-on-company, cooldown). `SequenceEnrolmentService`
+  loads facts + enrols. **Engine**: `SequenceEngine` (admin pool) +
+  `EngineExecutorServices` + factory. Idempotent on `(enrolment_id,
+  execution_counter)`; loop cap via `max_execution_count`.
+- **Inngest**: `sequence-tick` (2 crons, business vs off-hours) fans out
+  `sequences/advance`; per-enrolment handler also listens to
+  `sequences/task.completed` (emitted from task completion in `tasks.ts` +
+  `messages.ts`).
+
+### Deferred in Phase A (structure present, feature limited)
+
+- **AI draft at cron time** — `EngineExecutorServices.generateDraftForTask` is a
+  no-op returning `{drafted:false}`. Running the message orchestrator inside the
+  cron would fight RLS and produce a stale draft; the task is created and the rep
+  generates a fresh draft on open via the existing dialog (action_config carries
+  channel/intent/orientation). Wire it up in Phase B if desired.
+- **Publish impact-preview modal** — `previewPublishImpact()` exists on the
+  service but isn't surfaced in the editor UI; publish proceeds directly and the
+  engine ends overshoot enrolments on next tick.
+- **Predicate window** — the engine passes interactions since `enrolment.startedAt`
+  (not since the previous step) to the evaluators. Fine for the Phase-A history
+  predicates ("have they ever replied"); tighten in Phase B if needed.
+- **Drag-to-reorder** — the React Flow editor uses dagre auto-layout (no free
+  positioning); steps are added via the palette and linked by dragging edges.
+  Entry = lowest `step_order`.
+
+### Tests
+
+`tests/sequences/` — locale resolver, 6 predicate evaluators + factory,
+eligibility checker, 5 executors + factory, targeting matcher, draft-schema graph
+validator, built-in templates (each validated against the graph validator). 65
+sequence tests green. The engine itself is orchestration over unit-tested parts
+(no dedicated integration test yet). The 4 pre-existing
+`message-generation-orchestrator` failures are unrelated (fail on `main` too).

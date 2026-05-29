@@ -7,6 +7,7 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { getSenderName } from "@/lib/auth/sender-name";
 import { logInteraction } from "@/db/queries/interactions";
 import { completeTask } from "@/db/queries/tasks";
+import { emitSequenceTaskCompleted } from "@/lib/sequences/engine/emit-task-completed";
 import { getContactById } from "@/db/queries/contacts";
 import { insertMessage } from "@/db/queries/messages";
 import { insertMessageAttachment } from "@/db/queries/message-attachments";
@@ -319,6 +320,7 @@ async function persistSentMessage(args: {
   let taskCompleted = false;
   if (taskId) {
     await completeTask(orgId, taskId, userId);
+    await emitSequenceTaskCompleted(orgId, taskId);
     taskCompleted = true;
   }
 

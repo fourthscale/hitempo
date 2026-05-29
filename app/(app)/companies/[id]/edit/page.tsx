@@ -7,6 +7,7 @@ import { getCompanyById } from "@/db/queries/companies";
 import { getDb } from "@/db/client";
 import { companies } from "@/db/schema";
 import { updateCompanyAction } from "@/lib/actions/companies";
+import { getOrgMembersWithNames } from "@/db/queries/members";
 import { CompanyForm } from "@/components/app/company-form";
 import { PageHeader } from "@/components/app/page-header";
 
@@ -34,6 +35,11 @@ export default async function EditCompanyPage({
     )
     .orderBy(asc(companies.name));
 
+  const owners = (await getOrgMembersWithNames(activeOrganization.id)).map((m) => ({
+    id: m.userId,
+    name: m.displayName,
+  }));
+
   const t = await getTranslations("pages.companies");
 
   return (
@@ -51,6 +57,7 @@ export default async function EditCompanyPage({
         submitLabel={t("updateSubmit")}
         initial={company}
         parentCandidates={parentCandidates}
+        owners={owners}
       />
     </div>
   );

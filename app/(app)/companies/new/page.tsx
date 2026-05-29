@@ -5,6 +5,7 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { getDb } from "@/db/client";
 import { companies } from "@/db/schema";
 import { createCompanyAction } from "@/lib/actions/companies";
+import { getOrgMembersWithNames } from "@/db/queries/members";
 import { CompanyForm } from "@/components/app/company-form";
 import { PageHeader } from "@/components/app/page-header";
 
@@ -20,6 +21,11 @@ export default async function NewCompanyPage() {
     )
     .orderBy(asc(companies.name));
 
+  const owners = (await getOrgMembersWithNames(activeOrganization.id)).map((m) => ({
+    id: m.userId,
+    name: m.displayName,
+  }));
+
   return (
     <div className="max-w-[800px] mx-auto">
       <PageHeader
@@ -34,6 +40,7 @@ export default async function NewCompanyPage() {
         action={createCompanyAction}
         submitLabel={t("createSubmit")}
         parentCandidates={parentCandidates}
+        owners={owners}
       />
     </div>
   );

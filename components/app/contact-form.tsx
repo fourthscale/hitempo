@@ -30,6 +30,7 @@ type ContactInitial = {
   relevance?: number | null;
   status?: string | null;
   notes?: string | null;
+  ownerId?: string | null;
 };
 
 export async function ContactForm({
@@ -39,6 +40,7 @@ export async function ContactForm({
   sites,
   initial,
   defaultCompanyId,
+  owners,
 }: {
   action: (formData: FormData) => Promise<void> | void;
   submitLabel: string;
@@ -46,6 +48,8 @@ export async function ContactForm({
   sites: { id: string; name: string; companyId: string; companyName: string }[];
   initial?: ContactInitial;
   defaultCompanyId?: string;
+  /** Org members ; sets an optional owner override (else inherits company owner). */
+  owners: { id: string; name: string }[];
 }) {
   const [t, tRole, tChannel, tStatus, tLang] = await Promise.all([
     getTranslations("pages.contacts.fields"),
@@ -165,6 +169,23 @@ export async function ContactForm({
             {CONTACT_STATUSES.map((v) => (
               <option key={v} value={v}>
                 {tStatus(v)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="ownerId">{t("owner")}</Label>
+          <select
+            id="ownerId"
+            name="ownerId"
+            defaultValue={initial?.ownerId ?? ""}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="">{t("ownerInherit")}</option>
+            {owners.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
               </option>
             ))}
           </select>

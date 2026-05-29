@@ -130,7 +130,13 @@
     "message_not_found": "Ce message est introuvable. Il a peut-être été supprimé.",
     "interaction_insert_failed": "Impossible d'enregistrer cette interaction. Réessaie.",
     "not_found_generic": "L'élément sur lequel tu as agi est introuvable. Il a peut-être été supprimé.",
-    "not_found_interaction": "Cette interaction est introuvable. Elle a peut-être été supprimée."
+    "not_found_interaction": "Cette interaction est introuvable. Elle a peut-être été supprimée.",
+    "sequence_not_found": "Cette séquence est introuvable. Elle a peut-être été supprimée.",
+    "sequence_locked": "Cette séquence est en cours d'édition par quelqu'un d'autre. Réessayez dans quelques minutes.",
+    "sequence_draft_invalid": "Le brouillon de la séquence comporte un problème et ne peut pas être publié. Vérifiez le flux et réessayez.",
+    "sequence_no_draft": "Aucun brouillon en attente à publier.",
+    "enrolment_not_found": "Cette inscription est introuvable.",
+    "contact_not_eligible": "Ce contact ne peut pas être inscrit (désinscrit, déjà dans une séquence, ou en période de pause)."
   },
   "common": {
     "appName": "hitempo",
@@ -427,7 +433,8 @@
         "primaryLocale": "Langue principale",
         "addedAt": "Ajoutée le",
         "relationship": "Relation",
-        "industry": "Secteur"
+        "industry": "Secteur",
+        "owner": "Propriétaire"
       },
       "priorityContact": {
         "title": "Contact prioritaire",
@@ -485,7 +492,8 @@
         "signalSource": "Source du signal",
         "notes": "Notes",
         "parent": "Entreprise parente (groupe)",
-        "parentNone": "— Indépendante (pas de parent)"
+        "parentNone": "— Indépendante (pas de parent)",
+        "owner": "Propriétaire"
       },
       "group": {
         "title": "Relations · Groupe",
@@ -570,7 +578,10 @@
         "preferredChannel": "Canal préféré",
         "relevance": "Pertinence",
         "status": "Statut",
-        "notes": "Notes"
+        "notes": "Notes",
+        "owner": "Propriétaire",
+        "ownerInherit": "Hériter de l'entreprise",
+        "ownerInheritedHint": "hérité du compte"
       }
     },
     "tasks": {
@@ -925,6 +936,213 @@
       "standing": "Standing",
       "primaryContact": "Contact principal",
       "notes": "Notes"
+    },
+    "sequences": {
+      "title": "Séquences",
+      "count": "{count, plural, =0 {Aucune séquence} one {# séquence} other {# séquences}}",
+      "new": "Nouvelle séquence",
+      "edit": "Modifier",
+      "empty": {
+        "title": "Aucune séquence",
+        "description": "Créez votre première séquence de prospection pour automatiser les relances email, appels et visites."
+      },
+      "status": {
+        "draft": "Brouillon",
+        "published": "Publiée",
+        "paused": "En pause"
+      },
+      "activeEnrolments": "{count, plural, =0 {Aucun contact actif} one {# contact actif} other {# contacts actifs}}",
+      "draftPending": "Brouillon en attente",
+      "locked": "En cours d'édition",
+      "sections": {
+        "steps": "Étapes",
+        "enrolments": "Contacts inscrits",
+        "targeting": "Ciblage"
+      },
+      "noSteps": "Cette séquence n'a pas encore d'étapes publiées.",
+      "noEnrolments": "Aucun contact inscrit pour l'instant.",
+      "stepType": {
+        "send_email": "Envoyer un email",
+        "send_linkedin": "Message LinkedIn",
+        "phone_call": "Appel téléphonique",
+        "update_contact": "Mettre à jour le contact",
+        "wait_delay": "Attente",
+        "conditional_split": "Embranchement (si/sinon)",
+        "conditional_switch": "Aiguillage",
+        "enroll_in_sequence": "Router vers une séquence"
+      },
+      "condition": {
+        "label": "Condition",
+        "none": "Toujours"
+      },
+      "create": {
+        "title": "Nouvelle séquence",
+        "nameLabel": "Nom",
+        "namePlaceholder": "ex. Hôtel prospect — Premier contact",
+        "templateLabel": "Partir d'un modèle",
+        "blank": "Séquence vierge",
+        "submit": "Créer la séquence",
+        "cancel": "Annuler"
+      },
+      "enrolmentStatus": {
+        "active": "Actif",
+        "paused": "En pause",
+        "completed_exhausted": "Terminé",
+        "completed_success": "Gagné",
+        "completed_cascaded": "Transféré",
+        "stopped_opted_out": "Désinscrit",
+        "stopped_manual": "Arrêté"
+      },
+      "editor": {
+        "back": "Retour",
+        "saving": "Enregistrement…",
+        "saved": "Enregistré",
+        "saveError": "Échec de l'enregistrement",
+        "discard": "Supprimer le brouillon",
+        "publish": "Publier",
+        "lockedBanner": "Un autre utilisateur modifie cette séquence. Vous pouvez la consulter mais pas la modifier.",
+        "palette": "Ajouter une étape",
+        "conditions": {
+          "always": "Toujours",
+          "if_no_inbound": "Si pas encore de réponse",
+          "if_responded": "Si réponse reçue",
+          "if_positive_reply": "Si réponse positive",
+          "if_negative_reply": "Si réponse négative",
+          "if_no_answer": "Si appel sans réponse"
+        },
+        "fields": {
+          "actionType": "Type d'étape",
+          "taskType": "Type de tâche",
+          "channel": "Canal",
+          "intent": "Intention",
+          "title": "Titre de la tâche",
+          "description": "Description",
+          "orientation": "Consigne IA",
+          "includeSignal": "Inclure le signal local",
+          "duration": "Durée",
+          "durationUnit": "Unité",
+          "targetSequence": "Séquence cible",
+          "condition": "Condition",
+          "delete": "Supprimer l'étape",
+          "mode": "Message",
+          "subject": "Objet",
+          "body": "Corps",
+          "predicate": "Condition",
+          "property": "Propriété",
+          "setStatus": "Définir le statut",
+          "setRole": "Définir le rôle"
+        },
+        "taskTypes": {
+          "email": "Email",
+          "phone": "Appel",
+          "linkedin": "LinkedIn",
+          "visit": "Visite",
+          "follow_up": "Relance"
+        },
+        "channels": {
+          "email": "Email",
+          "linkedin": "LinkedIn"
+        },
+        "intents": {
+          "first_contact": "Premier contact",
+          "follow_up": "Relance",
+          "meeting_request": "Demande de RDV",
+          "proposal_send": "Proposition",
+          "reconnect": "Reprise de contact"
+        },
+        "units": {
+          "minutes": "Minutes",
+          "hours": "Heures",
+          "days": "Jours"
+        },
+        "end": "Fin",
+        "comingSoon": "bientôt",
+        "groups": {
+          "messages": "Messages",
+          "field": "Terrain",
+          "data": "Données",
+          "logic": "Logique"
+        },
+        "trigger": {
+          "title": "Déclencheur",
+          "manual": "Inscription manuelle depuis une fiche contact."
+        },
+        "modes": {
+          "ai": "Brouillon IA",
+          "defined": "Message défini"
+        },
+        "branch": {
+          "yes": "Si oui",
+          "no": "Si non",
+          "default": "Sinon"
+        },
+        "switchProps": {
+          "relationship": "Relation entreprise",
+          "locale": "Langue du contact"
+        },
+        "split": {
+          "yesHint": "Les contacts qui remplissent ces conditions partent sur la branche OUI :",
+          "elseHint": "Tous les autres suivent la branche SINON."
+        },
+        "switch": {
+          "branch": "Branche {n}",
+          "addBranch": "Ajouter une branche",
+          "elseHint": "Les contacts ne correspondant à aucune branche suivent la branche par défaut."
+        },
+        "assign": {
+          "label": "Attribution",
+          "sales": "Commercial",
+          "agent": "Agent",
+          "owner": "Propriétaire du compte / contact",
+          "specific": "Commercial spécifique"
+        }
+      },
+      "contactSection": {
+        "title": "Séquences",
+        "enrollLabel": "Inscrire dans une séquence…",
+        "enrollButton": "Inscrire",
+        "empty": "Inscrit dans aucune séquence.",
+        "step": "Étape {n}",
+        "pause": "Mettre en pause",
+        "resume": "Reprendre",
+        "stop": "Arrêter"
+      },
+      "cond": {
+        "and": "ET",
+        "or": "OU",
+        "addCondition": "Ajouter une condition",
+        "addGroup": "Ajouter un groupe",
+        "valuePlaceholder": "valeur",
+        "cat": {
+          "contact": "Contact",
+          "company": "Entreprise",
+          "behavior": "Comportement"
+        },
+        "op": {
+          "equals": "est égal à",
+          "not_equals": "est différent de",
+          "contains": "contient",
+          "is_set": "est renseigné",
+          "is_not_set": "n'est pas renseigné",
+          "is_true": "est vrai",
+          "is_false": "est faux",
+          "happened": "a eu lieu",
+          "not_happened": "n'a pas eu lieu"
+        },
+        "dim": {
+          "contact_status": "Statut",
+          "contact_role": "Rôle",
+          "contact_preferredLanguage": "Langue",
+          "contact_optedOut": "Désinscrit",
+          "contact_jobTitle": "Fonction",
+          "company_relationshipType": "Relation",
+          "company_signalType": "Type de signal",
+          "behavior_replied": "A répondu",
+          "behavior_positiveReply": "Réponse positive",
+          "behavior_negativeReply": "Réponse négative",
+          "behavior_callNoAnswer": "Appel sans réponse"
+        }
+      }
     }
   }
 }

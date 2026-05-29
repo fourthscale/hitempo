@@ -8,6 +8,7 @@ import { eq, and } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { tasks } from "@/db/schema";
 import { createTask, completeTask, deleteTask, updateTask } from "@/db/queries/tasks";
+import { emitSequenceTaskCompleted } from "@/lib/sequences/engine/emit-task-completed";
 import { recomputeCompanyScore } from "@/lib/scoring/recompute";
 import { InvalidInputError } from "./user-facing-action-error";
 import { withActionError } from "./wrap-action-error";
@@ -55,6 +56,8 @@ async function _completeTaskAction(formData: FormData) {
 
   const { activeOrganization, user } = await getActiveOrg();
   await completeTask(activeOrganization.id, taskId.data, user.id);
+  // If this task belongs to a sequence, let the engine advance it now.
+  await emitSequenceTaskCompleted(activeOrganization.id, taskId.data);
 
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
@@ -116,6 +119,10 @@ async function _updateTaskStatusAction(formData: FormData) {
     })
     .where(and(eq(tasks.id, taskId), eq(tasks.organizationId, activeOrganization.id)))
     .returning({ companyId: tasks.companyId });
+
+  if (status === "completed") {
+    await emitSequenceTaskCompleted(activeOrganization.id, taskId);
+  }
 
   revalidatePath("/tasks");
   revalidatePath("/dashboard");

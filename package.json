@@ -31,8 +31,10 @@
     "@sentry/nextjs": "^10.54.0",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
+    "@xyflow/react": "^12.10.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dagre": "^0.8.5",
     "drizzle-orm": "^0.45.2",
     "inngest": "^4.5.0",
     "lucide-react": "^1.16.0",
@@ -50,6 +52,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/dagre": "^0.7.54",
     "@types/node": "^24.0.0",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",

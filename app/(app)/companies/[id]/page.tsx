@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { getCompanyWithDetails, getGroupStats } from "@/db/queries/companies";
+import { getOrgMembersWithNames } from "@/db/queries/members";
 import { getInteractionsByCompany, countInteractionsByCompany } from "@/db/queries/interactions";
 import { getTasksByCompany, countTasksByCompany } from "@/db/queries/tasks";
 import {
@@ -111,6 +112,12 @@ export default async function CompanyDetailPage({
   ]);
   const grade = scoreGrade(company.score);
   const initials = initialsFromName(company.name);
+
+  // Resolve the account owner's display name.
+  const members = await getOrgMembersWithNames(activeOrganization.id);
+  const ownerName = company.ownerId
+    ? (members.find((m) => m.userId === company.ownerId)?.displayName ?? null)
+    : null;
 
   // primarySite: NOT a fallback to "first one" — must be explicitly flagged primary.
   const primarySite = company.sites.find((s) => s.isPrimary) ?? null;
@@ -376,6 +383,7 @@ export default async function CompanyDetailPage({
                   }
                 />
                 <InfoRow label={t("info.industry")} value={company.industry} />
+                <InfoRow label={t("info.owner")} value={ownerName} />
               </dl>
             </Card>
 

@@ -2,6 +2,7 @@ import { serve } from "inngest/next";
 
 import { inngest } from "@/lib/inngest/client";
 import { pollGmailRepliesFunctions } from "@/inngest/functions/poll-gmail-replies";
+import { sequenceEngineFunctions } from "@/inngest/functions/sequence-engine";
 
 /**
  * The webhook Inngest's runtime calls to discover, invoke, and replay our
@@ -17,6 +18,7 @@ export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
     ...pollGmailRepliesFunctions,
+    ...sequenceEngineFunctions,
   ],
   // signingKey is auto-discovered from the INNGEST_SIGNING_KEY env var.
 });

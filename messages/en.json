@@ -130,7 +130,13 @@
     "message_not_found": "This message couldn't be found. It may have been deleted.",
     "interaction_insert_failed": "We couldn't log this interaction. Please try again.",
     "not_found_generic": "The item you tried to act on wasn't found. It may have been deleted.",
-    "not_found_interaction": "This interaction couldn't be found. It may have been deleted."
+    "not_found_interaction": "This interaction couldn't be found. It may have been deleted.",
+    "sequence_not_found": "This sequence couldn't be found. It may have been deleted.",
+    "sequence_locked": "This sequence is being edited by someone else. Try again in a few minutes.",
+    "sequence_draft_invalid": "The sequence draft has a problem and can't be published. Review the flow and try again.",
+    "sequence_no_draft": "There's no pending draft to publish.",
+    "enrolment_not_found": "This enrolment couldn't be found.",
+    "contact_not_eligible": "This contact can't be enrolled (opted out, already in a sequence, or in cooldown)."
   },
   "common": {
     "appName": "hitempo",
@@ -427,7 +433,8 @@
         "primaryLocale": "Primary locale",
         "addedAt": "Added on",
         "relationship": "Relationship",
-        "industry": "Industry"
+        "industry": "Industry",
+        "owner": "Owner"
       },
       "priorityContact": {
         "title": "Priority contact",
@@ -485,7 +492,8 @@
         "signalSource": "Signal source",
         "notes": "Notes",
         "parent": "Parent company (group)",
-        "parentNone": "— Independent (no parent)"
+        "parentNone": "— Independent (no parent)",
+        "owner": "Owner"
       },
       "group": {
         "title": "Group relations",
@@ -570,7 +578,10 @@
         "preferredChannel": "Preferred channel",
         "relevance": "Relevance",
         "status": "Status",
-        "notes": "Notes"
+        "notes": "Notes",
+        "owner": "Owner",
+        "ownerInherit": "Inherit from company",
+        "ownerInheritedHint": "inherited from account"
       }
     },
     "tasks": {
@@ -925,6 +936,213 @@
       "standing": "Standing",
       "primaryContact": "Primary contact",
       "notes": "Notes"
+    },
+    "sequences": {
+      "title": "Sequences",
+      "count": "{count, plural, =0 {No sequences} one {# sequence} other {# sequences}}",
+      "new": "New sequence",
+      "edit": "Edit",
+      "empty": {
+        "title": "No sequences yet",
+        "description": "Create your first prospection sequence to automate follow-ups across email, calls and visits."
+      },
+      "status": {
+        "draft": "Draft",
+        "published": "Published",
+        "paused": "Paused"
+      },
+      "activeEnrolments": "{count, plural, =0 {No active contacts} one {# active contact} other {# active contacts}}",
+      "draftPending": "Draft pending",
+      "locked": "Being edited",
+      "sections": {
+        "steps": "Steps",
+        "enrolments": "Enrolled contacts",
+        "targeting": "Targeting"
+      },
+      "noSteps": "This sequence has no published steps yet.",
+      "noEnrolments": "No contacts enrolled yet.",
+      "stepType": {
+        "send_email": "Send email",
+        "send_linkedin": "Send LinkedIn message",
+        "phone_call": "Phone call",
+        "update_contact": "Update contact",
+        "wait_delay": "Wait",
+        "conditional_split": "Conditional split",
+        "conditional_switch": "Conditional switch",
+        "enroll_in_sequence": "Route to sequence"
+      },
+      "condition": {
+        "label": "Condition",
+        "none": "Always"
+      },
+      "create": {
+        "title": "New sequence",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. Hotel prospect — First touch",
+        "templateLabel": "Start from a template",
+        "blank": "Blank sequence",
+        "submit": "Create sequence",
+        "cancel": "Cancel"
+      },
+      "enrolmentStatus": {
+        "active": "Active",
+        "paused": "Paused",
+        "completed_exhausted": "Completed",
+        "completed_success": "Won",
+        "completed_cascaded": "Moved on",
+        "stopped_opted_out": "Opted out",
+        "stopped_manual": "Stopped"
+      },
+      "editor": {
+        "back": "Back",
+        "saving": "Saving…",
+        "saved": "Saved",
+        "saveError": "Save failed",
+        "discard": "Discard draft",
+        "publish": "Publish",
+        "lockedBanner": "Another user is editing this sequence. You can view it but not make changes.",
+        "palette": "Add a step",
+        "conditions": {
+          "always": "Always",
+          "if_no_inbound": "If no reply yet",
+          "if_responded": "If they replied",
+          "if_positive_reply": "If positive reply",
+          "if_negative_reply": "If negative reply",
+          "if_no_answer": "If call unanswered"
+        },
+        "fields": {
+          "actionType": "Step type",
+          "taskType": "Task type",
+          "channel": "Channel",
+          "intent": "Intent",
+          "title": "Task title",
+          "description": "Description",
+          "orientation": "AI guidance",
+          "includeSignal": "Include local signal",
+          "duration": "Duration",
+          "durationUnit": "Unit",
+          "targetSequence": "Target sequence",
+          "condition": "Condition",
+          "delete": "Delete step",
+          "mode": "Message",
+          "subject": "Subject",
+          "body": "Body",
+          "predicate": "Condition",
+          "property": "Property",
+          "setStatus": "Set status",
+          "setRole": "Set role"
+        },
+        "taskTypes": {
+          "email": "Email",
+          "phone": "Call",
+          "linkedin": "LinkedIn",
+          "visit": "Visit",
+          "follow_up": "Follow-up"
+        },
+        "channels": {
+          "email": "Email",
+          "linkedin": "LinkedIn"
+        },
+        "intents": {
+          "first_contact": "First contact",
+          "follow_up": "Follow-up",
+          "meeting_request": "Meeting request",
+          "proposal_send": "Proposal",
+          "reconnect": "Reconnect"
+        },
+        "units": {
+          "minutes": "Minutes",
+          "hours": "Hours",
+          "days": "Days"
+        },
+        "end": "End",
+        "comingSoon": "soon",
+        "groups": {
+          "messages": "Messages",
+          "field": "Field",
+          "data": "Data",
+          "logic": "Logic"
+        },
+        "trigger": {
+          "title": "Trigger",
+          "manual": "Manual enrollment from a contact page."
+        },
+        "modes": {
+          "ai": "AI draft",
+          "defined": "Defined message"
+        },
+        "branch": {
+          "yes": "If yes",
+          "no": "If no",
+          "default": "Otherwise"
+        },
+        "switchProps": {
+          "relationship": "Company relationship",
+          "locale": "Contact language"
+        },
+        "split": {
+          "yesHint": "Contacts matching these conditions go to the YES branch:",
+          "elseHint": "Everyone else follows the ELSE branch."
+        },
+        "switch": {
+          "branch": "Branch {n}",
+          "addBranch": "Add a branch",
+          "elseHint": "Contacts matching no branch follow the default branch."
+        },
+        "assign": {
+          "label": "Assignment",
+          "sales": "Sales",
+          "agent": "Agent",
+          "owner": "Account / contact owner",
+          "specific": "Specific user"
+        }
+      },
+      "contactSection": {
+        "title": "Sequences",
+        "enrollLabel": "Enroll in a sequence…",
+        "enrollButton": "Enroll",
+        "empty": "Not enrolled in any sequence.",
+        "step": "Step {n}",
+        "pause": "Pause",
+        "resume": "Resume",
+        "stop": "Stop"
+      },
+      "cond": {
+        "and": "AND",
+        "or": "OR",
+        "addCondition": "Add condition",
+        "addGroup": "Add group",
+        "valuePlaceholder": "value",
+        "cat": {
+          "contact": "Contact",
+          "company": "Company",
+          "behavior": "Behavior"
+        },
+        "op": {
+          "equals": "equals",
+          "not_equals": "does not equal",
+          "contains": "contains",
+          "is_set": "is set",
+          "is_not_set": "is not set",
+          "is_true": "is true",
+          "is_false": "is false",
+          "happened": "happened",
+          "not_happened": "did not happen"
+        },
+        "dim": {
+          "contact_status": "Status",
+          "contact_role": "Role",
+          "contact_preferredLanguage": "Language",
+          "contact_optedOut": "Opted out",
+          "contact_jobTitle": "Job title",
+          "company_relationshipType": "Relationship",
+          "company_signalType": "Signal type",
+          "behavior_replied": "Replied",
+          "behavior_positiveReply": "Positive reply",
+          "behavior_negativeReply": "Negative reply",
+          "behavior_callNoAnswer": "Call unanswered"
+        }
+      }
     }
   }
 }
