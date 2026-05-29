@@ -140,6 +140,7 @@ export const sequenceStepActionType = pgEnum("sequence_step_action_type", [
   "update_contact",
   "conditional_split",
   "conditional_switch",
+  "merge", // structural passthrough join node (branches converge)
 ]);
 
 export const sequenceStepDelayUnit = pgEnum("sequence_step_delay_unit", [

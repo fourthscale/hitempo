@@ -969,7 +969,8 @@
         "wait_delay": "Wait",
         "conditional_split": "Conditional split",
         "conditional_switch": "Conditional switch",
-        "enroll_in_sequence": "Route to sequence"
+        "enroll_in_sequence": "Route to sequence",
+        "merge": "Join"
       },
       "condition": {
         "label": "Condition",
@@ -995,6 +996,7 @@
       },
       "editor": {
         "back": "Back",
+        "close": "Close",
         "saving": "Saving…",
         "saved": "Saved",
         "saveError": "Save failed",
@@ -1087,7 +1089,26 @@
         "switch": {
           "branch": "Branch {n}",
           "addBranch": "Add a branch",
-          "elseHint": "Contacts matching no branch follow the default branch."
+          "elseHint": "Contacts matching no branch follow the default branch.",
+          "confirmRemove": "Delete this branch and its steps?"
+        },
+        "deletePath": {
+          "title": "Delete step",
+          "hint": "Choose which path to keep — its steps stay and are reconnected. The other paths are deleted.",
+          "keepYes": "Keep the YES path",
+          "keepNo": "Keep the NO path",
+          "keepBranch": "Keep branch {n}",
+          "keepElse": "Keep the ELSE path",
+          "deleteAll": "Delete all paths",
+          "confirm": "Delete",
+          "cancel": "Cancel"
+        },
+        "move": {
+          "hint": "Drag onto a + to move this step"
+        },
+        "join": {
+          "hint": "Drag onto another branch end to join them",
+          "unmergeHint": "Click to undo this join"
         },
         "assign": {
           "label": "Assignment",

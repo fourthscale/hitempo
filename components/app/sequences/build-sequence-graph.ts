@@ -31,32 +31,52 @@ export function buildSequenceGraph(
       durationValue?: number;
       durationUnit?: string;
     };
-    if (step.actionType === "wait_delay") {
-      return `${cfg.durationValue ?? "?"} ${cfg.durationUnit ?? ""}`.trim();
-    }
     if (cfg.titleTemplate) {
       const r = resolveLocalizedString(cfg.titleTemplate, localeCtx);
       if (r) return r;
     }
-    return t(`stepType.${step.actionType}`);
+    if (step.actionType === "wait_delay") {
+      return `${cfg.durationValue ?? "?"} ${cfg.durationUnit ?? ""}`.trim();
+    }
+    // No title set → show nothing (the node already shows the type label).
+    return "";
   };
 
   // --- edges + per-open-branch terminal nodes ---
   const edges: Edge[] = [];
-  const endNodeIds: string[] = [];
+  const endMeta: { id: string; source: string; slot: string }[] = [];
   const byId = new Set(draft.steps.map((s) => s.id));
   const endFor = (source: string, slot: string) => {
     const id = `__end:${source}:${slot}`;
-    endNodeIds.push(id);
+    endMeta.push({ id, source, slot });
     return id;
   };
-  const edge = (source: string, target: string, slot: string, label?: string): Edge => ({
+  const mergeStepIds = new Set(
+    draft.steps.filter((s) => s.actionType === "merge").map((s) => s.id),
+  );
+  const edge = (
+    source: string,
+    target: string,
+    slot: string,
+    label?: string,
+    branch?: { index: number; count: number },
+  ): Edge => ({
     id: `${source}:${slot}->${target}`,
     source,
     target,
     type: "insertable",
     label,
-    data: { sourceId: source, slot },
+    data: {
+      sourceId: source,
+      slot,
+      // Open branch end → offer a join handle on this edge.
+      targetIsEnd: target.startsWith("__end:"),
+      // Target is a merge (convergence) → fan near the source, not the merge col.
+      targetIsMerge: mergeStepIds.has(target),
+      // Position among the source's sibling branches (for fan-out lanes).
+      branchIndex: branch?.index,
+      branchCount: branch?.count,
+    },
     markerEnd: { type: MarkerType.ArrowClosed },
   });
   const resolve = (source: string, slot: string, target: string | undefined) =>
@@ -69,15 +89,18 @@ export function buildSequenceGraph(
   for (const step of draft.steps) {
     const n = step.nextStepIds;
     if (step.actionType === "conditional_split") {
-      edges.push(edge(step.id, resolve(step.id, "yes", n?.yes), "yes", t("editor.branch.yes")));
-      edges.push(edge(step.id, resolve(step.id, "no", n?.no), "no", t("editor.branch.no")));
+      edges.push(edge(step.id, resolve(step.id, "yes", n?.yes), "yes", t("editor.branch.yes"), { index: 0, count: 2 }));
+      edges.push(edge(step.id, resolve(step.id, "no", n?.no), "no", t("editor.branch.no"), { index: 1, count: 2 }));
     } else if (step.actionType === "conditional_switch") {
       const cases = (n?.cases ?? {}) as Record<string, string>;
       const branches = (step.actionConfig as { branches?: unknown[] }).branches ?? [];
+      const count = branches.length + 1;
       branches.forEach((_b, i) =>
-        edges.push(edge(step.id, resolve(step.id, `case:${i}`, cases[String(i)]), `case:${i}`, t("editor.switch.branch", { n: i + 1 }))),
+        edges.push(
+          edge(step.id, resolve(step.id, `case:${i}`, cases[String(i)]), `case:${i}`, t("editor.switch.branch", { n: i + 1 }), { index: i, count }),
+        ),
       );
-      edges.push(edge(step.id, resolve(step.id, "default", n?.default), "default", t("editor.branch.default")));
+      edges.push(edge(step.id, resolve(step.id, "default", n?.default), "default", t("editor.branch.default"), { index: branches.length, count }));
     } else {
       edges.push(edge(step.id, resolve(step.id, "default", n?.default), "default"));
     }
@@ -85,6 +108,15 @@ export function buildSequenceGraph(
 
   // --- nodes ---
   const stepNodes: Node[] = draft.steps.map((step) => {
+    // Merge is a compact passthrough node (its own renderer), not a card.
+    if (step.actionType === "merge") {
+      return {
+        id: step.id,
+        type: "merge",
+        position: { x: 0, y: 0 },
+        data: { label: t("stepType.merge") } as Record<string, unknown>,
+      };
+    }
     const data: SequenceStepNodeData = {
       actionType: step.actionType,
       typeLabel: t(`stepType.${step.actionType}`),
@@ -99,11 +131,11 @@ export function buildSequenceGraph(
       data: data as unknown as Record<string, unknown>,
     };
   });
-  const endNodes: Node[] = endNodeIds.map((id) => ({
-    id,
+  const endNodes: Node[] = endMeta.map((e) => ({
+    id: e.id,
     type: "terminal",
     position: { x: 0, y: 0 },
-    data: { label: t("editor.end") } as Record<string, unknown>,
+    data: { label: t("editor.end"), sourceId: e.source, slot: e.slot } as Record<string, unknown>,
   }));
 
   const nodes: Node[] = [
@@ -117,5 +149,5 @@ export function buildSequenceGraph(
     ...endNodes,
   ];
 
-  return { nodes, edges, endNodeIds };
+  return { nodes, edges, endNodeIds: endMeta.map((e) => e.id) };
 }

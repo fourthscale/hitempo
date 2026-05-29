@@ -8,6 +8,7 @@ import { UpdateContactStepExecutor } from "./step-executors/update-contact-step-
 import { ConditionalSplitStepExecutor } from "./step-executors/conditional-split-step-executor";
 import { ConditionalSwitchStepExecutor } from "./step-executors/conditional-switch-step-executor";
 import { EnrollInSequenceStepExecutor } from "./step-executors/enroll-in-sequence-step-executor";
+import { MergeStepExecutor } from "./step-executors/merge-step-executor";
 
 /**
  * Static registry of step executors keyed by action type (Strategy + Factory).
@@ -26,6 +27,7 @@ export class SequenceStepExecutorFactory {
         new ConditionalSplitStepExecutor(),
         new ConditionalSwitchStepExecutor(),
         new EnrollInSequenceStepExecutor(),
+        new MergeStepExecutor(),
       ] satisfies SequenceStepExecutor[]
     ).map((executor) => [executor.actionType, executor]),
   );

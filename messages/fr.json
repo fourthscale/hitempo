@@ -969,7 +969,8 @@
         "wait_delay": "Attente",
         "conditional_split": "Embranchement (si/sinon)",
         "conditional_switch": "Aiguillage",
-        "enroll_in_sequence": "Router vers une séquence"
+        "enroll_in_sequence": "Router vers une séquence",
+        "merge": "Jonction"
       },
       "condition": {
         "label": "Condition",
@@ -995,6 +996,7 @@
       },
       "editor": {
         "back": "Retour",
+        "close": "Fermer",
         "saving": "Enregistrement…",
         "saved": "Enregistré",
         "saveError": "Échec de l'enregistrement",
@@ -1087,7 +1089,26 @@
         "switch": {
           "branch": "Branche {n}",
           "addBranch": "Ajouter une branche",
-          "elseHint": "Les contacts ne correspondant à aucune branche suivent la branche par défaut."
+          "elseHint": "Les contacts ne correspondant à aucune branche suivent la branche par défaut.",
+          "confirmRemove": "Supprimer cette branche et ses étapes ?"
+        },
+        "deletePath": {
+          "title": "Supprimer l'étape",
+          "hint": "Choisissez le chemin à conserver — ses étapes sont gardées et reconnectées. Les autres chemins sont supprimés.",
+          "keepYes": "Conserver le chemin OUI",
+          "keepNo": "Conserver le chemin NON",
+          "keepBranch": "Conserver la branche {n}",
+          "keepElse": "Conserver le chemin SINON",
+          "deleteAll": "Supprimer tous les chemins",
+          "confirm": "Supprimer",
+          "cancel": "Annuler"
+        },
+        "move": {
+          "hint": "Glissez sur un + pour déplacer cette étape"
+        },
+        "join": {
+          "hint": "Glissez sur une autre fin de branche pour les joindre",
+          "unmergeHint": "Cliquez pour défaire cette jonction"
         },
         "assign": {
           "label": "Attribution",

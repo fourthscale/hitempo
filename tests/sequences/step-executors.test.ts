@@ -104,6 +104,7 @@ describe("SequenceStepExecutorFactory", () => {
         "conditional_split",
         "conditional_switch",
         "enroll_in_sequence",
+        "merge",
       ].sort(),
     );
   });

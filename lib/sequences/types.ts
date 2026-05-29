@@ -33,6 +33,10 @@ export const SEQUENCE_STEP_ACTION_TYPES = [
   "conditional_split",
   "conditional_switch",
   "enroll_in_sequence",
+  // Structural — a passthrough node where branches converge (join). No-op at
+  // execution: the engine traverses straight to its `default`. Not in the
+  // palette ; created by joining two branch ends in the editor.
+  "merge",
 ] as const;
 
 export type SequenceStepActionType = (typeof SEQUENCE_STEP_ACTION_TYPES)[number];

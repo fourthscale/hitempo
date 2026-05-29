@@ -15,6 +15,7 @@ import {
   Split,
   UserCog,
   Workflow,
+  GitMerge,
   ArrowLeft,
   Loader2,
   X,
@@ -24,6 +25,14 @@ import type { DraftDefinition, DraftStep } from "@/lib/sequences/draft-schema";
 import type { SequenceStepActionType, NextStepIds } from "@/lib/sequences/types";
 import { SEQUENCE_PALETTE_GROUPS, SEQUENCE_COMING_SOON } from "@/lib/sequences/types";
 import { emptyGroup } from "@/lib/sequences/conditions";
+import {
+  gcUnreachableSteps,
+  repointRefs,
+  deleteStepKeepingPath,
+  moveStep,
+  joinBranches,
+  unmergeStep,
+} from "@/lib/sequences/draft-edit";
 import { SequenceStepNode } from "./sequence-step-node";
 import { SequenceStepDetailPanel } from "./sequence-step-detail-panel";
 import { buildSequenceGraph } from "./build-sequence-graph";
@@ -32,8 +41,9 @@ import {
   SequenceInsertEdge,
   TriggerNode,
   TerminalNode,
+  MergeNode,
 } from "./sequence-flow-bits";
-import { useDagreLayout } from "./use-dagre-layout";
+import { useSequenceLayout } from "./use-sequence-layout";
 import {
   saveDraftAction,
   publishSequenceAction,
@@ -42,7 +52,12 @@ import {
   releaseLockAction,
 } from "@/lib/actions/sequences";
 
-const nodeTypes = { sequenceStep: SequenceStepNode, trigger: TriggerNode, terminal: TerminalNode };
+const nodeTypes = {
+  sequenceStep: SequenceStepNode,
+  trigger: TriggerNode,
+  terminal: TerminalNode,
+  merge: MergeNode,
+};
 const edgeTypes = { insertable: SequenceInsertEdge };
 
 const TRIGGER_ID = "__trigger";
@@ -56,6 +71,7 @@ const ICONS: Record<SequenceStepActionType, typeof Mail> = {
   conditional_split: GitBranch,
   conditional_switch: Split,
   enroll_in_sequence: Workflow,
+  merge: GitMerge,
 };
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -78,6 +94,9 @@ function defaultConfig(type: SequenceStepActionType): DraftStep["actionConfig"] 
       return { branches: [{ condition: emptyGroup() }] };
     case "enroll_in_sequence":
       return { targetSequenceId: "" };
+    case "merge":
+      // Created via join, never from the palette ; included for exhaustiveness.
+      return {};
   }
 }
 
@@ -102,10 +121,14 @@ export function SequenceEditor({
   const t = useTranslations("pages.sequences");
   const router = useRouter();
   const [draft, setDraft] = useState<DraftDefinition>(initialDraft);
-  const [selectedId, setSelectedId] = useState<string | null>(initialDraft.entryStepId);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [publishing, setPublishing] = useState(false);
   const [insertCtx, setInsertCtx] = useState<{ sourceId: string; slot: string } | null>(null);
+  const [deletePathFor, setDeletePathFor] = useState<DraftStep | null>(null);
+  const [keepChoice, setKeepChoice] = useState<{ slot: string | null } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [joining, setJoining] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const counter = useRef(initialDraft.steps.length + 1);
   const readOnly = lockedByOther;
@@ -153,19 +176,32 @@ export function SequenceEditor({
 
   const mutate = useCallback(
     (next: DraftDefinition) => {
-      setDraft(next);
-      scheduleSave(next);
+      // Every structural edit goes through here ; GC keeps the graph connected
+      // (a removed switch branch / deleted step can never leave an orphan
+      // island the UI has no insert-point to reconnect).
+      const gced = gcUnreachableSteps(next);
+      setDraft(gced);
+      scheduleSave(gced);
     },
     [scheduleSave],
   );
 
   // --- graph (shared builder ; per-open-branch End nodes → dagre fans out) ---
-  const { nodes: baseNodes, edges } = useMemo(
+  const { nodes: baseNodes, edges: baseEdges } = useMemo(
     () => buildSequenceGraph(draft, { t: t as never, localeCtx, triggerSummary }),
     [draft, t, localeCtx, triggerSummary],
   );
 
-  const { nodes } = useDagreLayout(baseNodes, edges);
+  const { nodes, edgePoints, edgeLaneX } = useSequenceLayout(baseNodes, baseEdges);
+  // Attach routing points + the branch lane X so edges render consistently.
+  const edges = useMemo(
+    () =>
+      baseEdges.map((e) => ({
+        ...e,
+        data: { ...e.data, points: edgePoints[e.id], laneX: edgeLaneX[e.id] },
+      })),
+    [baseEdges, edgePoints, edgeLaneX],
+  );
 
   // --- mutations ---
   const updateStep = (next: DraftStep) =>
@@ -230,18 +266,59 @@ export function SequenceEditor({
   };
 
   const deleteStep = (id: string) => {
-    if (id === draft.entryStepId) {
-      // Re-point entry to the deleted step's default target (or first remaining).
-      const removed = draft.steps.find((s) => s.id === id);
-      const newEntry = removed?.nextStepIds?.default ?? draft.steps.find((s) => s.id !== id)?.id ?? "";
-      const steps = pruneRefs(draft.steps.filter((s) => s.id !== id), id);
-      mutate({ entryStepId: newEntry, steps });
-      setSelectedId(newEntry || null);
+    const removed = draft.steps.find((s) => s.id === id);
+    // A conditional has several outgoing paths : deleting it can't silently
+    // nuke them, so ask which path to keep (the kept subtree is spliced in).
+    if (
+      removed &&
+      (removed.actionType === "conditional_split" || removed.actionType === "conditional_switch")
+    ) {
+      setKeepChoice(null);
+      setDeletePathFor(removed);
       return;
     }
-    mutate({ ...draft, steps: pruneRefs(draft.steps.filter((s) => s.id !== id), id) });
-    setSelectedId(draft.entryStepId);
+    // Merge node : deleting it un-merges (re-opens the joined branches).
+    if (removed?.actionType === "merge") {
+      mutate(unmergeStep(draft, id));
+      setSelectedId(null);
+      return;
+    }
+    // Linear step : heal the chain (predecessors skip to its `default`).
+    const heal = removed?.nextStepIds?.default;
+    const remaining = draft.steps.filter((s) => s.id !== id);
+    const steps = repointRefs(remaining, id, heal);
+    const isEntry = id === draft.entryStepId;
+    const entryStepId = isEntry ? (heal ?? remaining[0]?.id ?? "") : draft.entryStepId;
+    mutate({ entryStepId, steps });
+    setSelectedId(isEntry ? entryStepId || null : draft.entryStepId);
   };
+
+  const confirmDeletePath = () => {
+    if (!deletePathFor || !keepChoice) return;
+    const next = deleteStepKeepingPath(draft, deletePathFor.id, keepChoice.slot);
+    mutate(next);
+    setSelectedId(next.entryStepId || null);
+    setDeletePathFor(null);
+    setKeepChoice(null);
+  };
+
+  // Outgoing paths offered in the "delete path" dialog : keep one (promote its
+  // subtree) or delete every path.
+  const keepOptions: { slot: string | null; label: string }[] = deletePathFor
+    ? deletePathFor.actionType === "conditional_split"
+      ? [
+          { slot: "yes", label: t("editor.deletePath.keepYes") },
+          { slot: "no", label: t("editor.deletePath.keepNo") },
+          { slot: null, label: t("editor.deletePath.deleteAll") },
+        ]
+      : [
+          ...((deletePathFor.actionConfig as { branches?: unknown[] }).branches ?? []).map(
+            (_b, i) => ({ slot: `case:${i}`, label: t("editor.deletePath.keepBranch", { n: i + 1 }) }),
+          ),
+          { slot: "default", label: t("editor.deletePath.keepElse") },
+          { slot: null, label: t("editor.deletePath.deleteAll") },
+        ]
+    : [];
 
   const onPublish = async () => {
     setPublishing(true);
@@ -263,11 +340,41 @@ export function SequenceEditor({
     router.push(`/sequences/${sequenceId}`);
   };
 
+  // Move an existing step onto a "+" (drag & drop). No-op / illegal moves
+  // return null and are ignored.
+  const onMoveStep = (stepId: string, sourceId: string, slot: string) => {
+    const next = moveStep(draft, stepId, sourceId === TRIGGER_ID ? null : sourceId, slot);
+    if (next) {
+      mutate(next);
+      setSelectedId(stepId);
+    }
+  };
+
+  // Join two open branch ends into a new merge node.
+  const onJoin = (aSource: string, aSlot: string, bSource: string, bSlot: string) => {
+    const mergeId = `step-${counter.current++}`;
+    const next = joinBranches(draft, mergeId, aSource, aSlot, bSource, bSlot);
+    if (next) mutate(next);
+  };
+
   const selectedStep = draft.steps.find((s) => s.id === selectedId) ?? null;
 
   return (
     <SequenceFlowContext.Provider
-      value={{ onInsert: (sourceId, slot) => setInsertCtx({ sourceId, slot }), onSelectTrigger: () => setSelectedId(TRIGGER_ID), readOnly }}
+      value={{
+        onInsert: (sourceId, slot) => setInsertCtx({ sourceId, slot }),
+        onSelectTrigger: () => setSelectedId(TRIGGER_ID),
+        readOnly,
+        onMoveStep,
+        onJoin,
+        onDragStateChange: setDragging,
+        onJoinStateChange: setJoining,
+        dragging,
+        joining,
+        selectedId,
+        dragHint: t("editor.move.hint"),
+        joinHint: t("editor.join.hint"),
+      }}
     >
       <div className="flex h-[calc(100vh-8rem)] flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
@@ -324,7 +431,17 @@ export function SequenceEditor({
 
           {!readOnly && selectedId === TRIGGER_ID && (
             <div className="w-80 shrink-0 rounded-lg border border-border bg-card p-4">
-              <h3 className="text-sm font-semibold">{t("editor.trigger.title")}</h3>
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-sm font-semibold">{t("editor.trigger.title")}</h3>
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(null)}
+                  className="-mr-1 -mt-1 rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  aria-label={t("editor.close")}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
               <p className="mt-2 text-sm text-muted-foreground">{t("editor.trigger.manual")}</p>
               <p className="mt-3 text-xs text-muted-foreground">{triggerSummary}</p>
             </div>
@@ -338,6 +455,7 @@ export function SequenceEditor({
                 orgMembers={orgMembers}
                 onChange={updateStep}
                 onDelete={() => deleteStep(selectedStep.id)}
+                onClose={() => setSelectedId(null)}
                 canDelete={draft.steps.length > 1}
               />
             </div>
@@ -391,22 +509,64 @@ export function SequenceEditor({
           </div>
         </div>
       )}
+
+      {/* Delete-path dialog (conditional split / switch) */}
+      {deletePathFor && !readOnly && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => setDeletePathFor(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border border-border bg-card p-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="text-sm font-semibold">{t("editor.deletePath.title")}</h3>
+              <button type="button" onClick={() => setDeletePathFor(null)} aria-label="close">
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+            <p className="mb-3 text-sm text-muted-foreground">{t("editor.deletePath.hint")}</p>
+            <div className="space-y-1.5">
+              {keepOptions.map((opt) => {
+                const key = opt.slot ?? "__all";
+                const checked = (keepChoice?.slot ?? "__all") === key && keepChoice != null;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setKeepChoice({ slot: opt.slot })}
+                    className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${
+                      checked ? "border-brand-teal bg-brand-teal/10" : "border-border"
+                    }`}
+                  >
+                    {opt.label}
+                    <span
+                      className={`h-4 w-4 rounded-full border ${
+                        checked ? "border-brand-teal bg-brand-teal" : "border-input"
+                      }`}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDeletePathFor(null)}>
+                {t("editor.deletePath.cancel")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive"
+                disabled={!keepChoice}
+                onClick={confirmDeletePath}
+              >
+                {t("editor.deletePath.confirm")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </SequenceFlowContext.Provider>
   );
-}
-
-/** Remove references to a deleted step id from every step's nextStepIds. */
-function pruneRefs(steps: DraftStep[], deletedId: string): DraftStep[] {
-  return steps.map((s) => {
-    if (!s.nextStepIds) return s;
-    const n: NonNullable<NextStepIds> = { ...s.nextStepIds };
-    if (n.default === deletedId) delete n.default;
-    if (n.yes === deletedId) delete n.yes;
-    if (n.no === deletedId) delete n.no;
-    if (n.cases) {
-      n.cases = Object.fromEntries(Object.entries(n.cases).filter(([, v]) => v !== deletedId));
-      if (Object.keys(n.cases).length === 0) delete n.cases;
-    }
-    return { ...s, nextStepIds: Object.keys(n).length ? n : null };
-  });
 }

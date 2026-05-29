@@ -1,6 +1,7 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Plus, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import type {
   ConditionalSwitchActionConfig,
   EnrollInSequenceActionConfig,
   TaskAssignment,
+  LocalizedString,
 } from "@/lib/sequences/types";
 
 const INTENTS = ["first_contact", "follow_up", "meeting_request", "proposal_send", "reconnect"] as const;
@@ -42,6 +44,7 @@ export function SequenceStepDetailPanel({
   orgMembers,
   onChange,
   onDelete,
+  onClose,
   canDelete,
 }: {
   step: DraftStep;
@@ -49,9 +52,11 @@ export function SequenceStepDetailPanel({
   orgMembers: { id: string; name: string }[];
   onChange: (next: DraftStep) => void;
   onDelete: () => void;
+  onClose: () => void;
   canDelete: boolean;
 }) {
   const t = useTranslations("pages.sequences");
+  const [confirmBranch, setConfirmBranch] = useState<number | null>(null);
 
   const patchConfig = (patch: Record<string, unknown>) =>
     onChange({ ...step, actionConfig: { ...step.actionConfig, ...patch } });
@@ -64,12 +69,31 @@ export function SequenceStepDetailPanel({
     <div className="flex h-full flex-col gap-5 overflow-y-auto p-4">
       {/* Step type is chosen at insertion (via the "+" palette) and is fixed —
           to change it, delete the step and add the right one. */}
-      <div>
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {t("editor.fields.actionType")}
-        </p>
-        <p className="text-sm font-semibold text-foreground">{t(`stepType.${step.actionType}`)}</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {t("editor.fields.actionType")}
+          </p>
+          <p className="text-sm font-semibold text-foreground">{t(`stepType.${step.actionType}`)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="-mr-1 -mt-1 rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+          aria-label={t("editor.close")}
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
+
+      {/* Title — shown on the node. Available on every step except merge. */}
+      {step.actionType !== "merge" && (
+        <LocalizedStringInput
+          label={t("editor.fields.title")}
+          value={(step.actionConfig as { titleTemplate?: LocalizedString }).titleTemplate}
+          onChange={(v) => patchConfig({ titleTemplate: v })}
+        />
+      )}
 
       {/* ----- Message (email / linkedin) ----- */}
       {isMessage && (() => {
@@ -93,11 +117,6 @@ export function SequenceStepDetailPanel({
                 ))}
               </div>
             </div>
-            <LocalizedStringInput
-              label={t("editor.fields.title")}
-              value={cfg.titleTemplate}
-              onChange={(v) => patchConfig({ titleTemplate: v })}
-            />
             <div className="space-y-1.5">
               <Label>{t("editor.fields.intent")}</Label>
               <select
@@ -153,11 +172,6 @@ export function SequenceStepDetailPanel({
         const cfg = step.actionConfig as Partial<PhoneCallActionConfig>;
         return (
           <>
-            <LocalizedStringInput
-              label={t("editor.fields.title")}
-              value={cfg.titleTemplate}
-              onChange={(v) => patchConfig({ titleTemplate: v })}
-            />
             <LocalizedStringInput
               label={t("editor.fields.description")}
               value={cfg.description}
@@ -297,6 +311,14 @@ export function SequenceStepDetailPanel({
             actionConfig: { branches: branches.filter((_, idx) => idx !== i) },
             nextStepIds: { ...(step.nextStepIds ?? {}), cases: newCases },
           });
+          setConfirmBranch(null);
+        };
+
+        // A branch "has steps" when its case points somewhere — deleting it
+        // drops that path, so ask for confirmation first.
+        const requestRemoveBranch = (i: number) => {
+          if (cases[String(i)]) setConfirmBranch(i);
+          else removeBranch(i);
         };
 
         return (
@@ -307,13 +329,31 @@ export function SequenceStepDetailPanel({
                   <Label>{t("editor.switch.branch", { n: i + 1 })}</Label>
                   <button
                     type="button"
-                    onClick={() => removeBranch(i)}
+                    onClick={() => requestRemoveBranch(i)}
                     className="text-muted-foreground hover:text-destructive"
                     aria-label="remove branch"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
+                {confirmBranch === i && (
+                  <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-2">
+                    <p className="text-xs text-amber-800">{t("editor.switch.confirmRemove")}</p>
+                    <div className="mt-2 flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setConfirmBranch(null)}>
+                        {t("editor.deletePath.cancel")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => removeBranch(i)}
+                      >
+                        {t("editor.deletePath.confirm")}
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <ConditionBuilder
                   value={b.condition ?? emptyGroup()}
                   onChange={(g) =>

@@ -198,6 +198,9 @@ function validateActionConfig(step: DraftStep): string | null {
       return issuesOf(splitConfigSchema.safeParse(step.actionConfig));
     case "conditional_switch":
       return issuesOf(switchConfigSchema.safeParse(step.actionConfig));
+    case "merge":
+      // Passthrough join node — no config to validate.
+      return null;
   }
 }
 

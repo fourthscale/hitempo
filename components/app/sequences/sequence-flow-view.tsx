@@ -12,11 +12,17 @@ import {
   SequenceInsertEdge,
   TriggerNode,
   TerminalNode,
+  MergeNode,
 } from "./sequence-flow-bits";
-import { useDagreLayout } from "./use-dagre-layout";
+import { useSequenceLayout } from "./use-sequence-layout";
 import { buildSequenceGraph } from "./build-sequence-graph";
 
-const nodeTypes = { sequenceStep: SequenceStepNode, trigger: TriggerNode, terminal: TerminalNode };
+const nodeTypes = {
+  sequenceStep: SequenceStepNode,
+  trigger: TriggerNode,
+  terminal: TerminalNode,
+  merge: MergeNode,
+};
 const edgeTypes = { insertable: SequenceInsertEdge };
 const NOOP_CTX = { onInsert: () => {}, onSelectTrigger: () => {}, readOnly: true };
 
@@ -43,11 +49,19 @@ export function SequenceFlowView({
     }),
     [orgLocale],
   );
-  const { nodes: baseNodes, edges } = useMemo(
+  const { nodes: baseNodes, edges: baseEdges } = useMemo(
     () => buildSequenceGraph(draft, { t: t as never, localeCtx, triggerSummary }),
     [draft, t, localeCtx, triggerSummary],
   );
-  const { nodes } = useDagreLayout(baseNodes, edges);
+  const { nodes, edgePoints, edgeLaneX } = useSequenceLayout(baseNodes, baseEdges);
+  const edges = useMemo(
+    () =>
+      baseEdges.map((e) => ({
+        ...e,
+        data: { ...e.data, points: edgePoints[e.id], laneX: edgeLaneX[e.id] },
+      })),
+    [baseEdges, edgePoints, edgeLaneX],
+  );
 
   return (
     <SequenceFlowContext.Provider value={NOOP_CTX}>
