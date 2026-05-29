@@ -25,7 +25,6 @@ const NODE_HEIGHT = 88;
 // the cards.
 export const SEQUENCE_GAP = 40;
 const COL_STEP = NODE_WIDTH + 180;
-const ROW_STEP = NODE_HEIGHT + SEQUENCE_GAP * 4.5; // = 268, room for the chain
 
 type Size = { w: number; h: number };
 const SIZES: Record<string, Size> = {
@@ -73,6 +72,21 @@ export function useSequenceLayout(nodes: Node[], edges: Edge[]): SequenceLayout 
         if (left === 0) queue.push(e.target);
       }
     }
+
+    // --- per-transition row gap : exactly the height the tallest chain on an
+    // edge leaving this rank needs (label / "+" / join), one GAP apart — no
+    // more. Floor of 2 gaps so even a bare "+" has 3-point clearance each side.
+    const maxRank = Math.max(0, ...nodes.map((n) => rank.get(n.id) ?? 0));
+    const rowGap: number[] = Array.from({ length: maxRank + 1 }, () => 2 * SEQUENCE_GAP);
+    for (const e of edges) {
+      if (!byId.has(e.source) || !byId.has(e.target)) continue;
+      const r = rank.get(e.source) ?? 0;
+      const d = e.data as { targetIsEnd?: boolean } | undefined;
+      const count = (e.label ? 1 : 0) + 1 + (d?.targetIsEnd ? 1 : 0); // label? + "+" + join?
+      rowGap[r] = Math.max(rowGap[r]!, (count + 1) * SEQUENCE_GAP);
+    }
+    const rankY: number[] = [0];
+    for (let r = 0; r < maxRank; r++) rankY[r + 1] = rankY[r]! + NODE_HEIGHT + rowGap[r]!;
 
     // --- column slots : tidy post-order DFS in authored order ---
     // Each outgoing edge gets a "lane". A branch with a private subtree uses
@@ -135,7 +149,7 @@ export function useSequenceLayout(nodes: Node[], edges: Edge[]): SequenceLayout 
     const positioned = nodes.map((n) => {
       const s = sizeOf(n);
       const cx = (slot.get(n.id) ?? 0) * COL_STEP;
-      const cy = (rank.get(n.id) ?? 0) * ROW_STEP;
+      const cy = rankY[rank.get(n.id) ?? 0] ?? 0;
       return { ...n, position: { x: cx - s.w / 2, y: cy } };
     });
     const posById = new Map(positioned.map((n) => [n.id, n]));

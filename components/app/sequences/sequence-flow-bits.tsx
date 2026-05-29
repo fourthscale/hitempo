@@ -209,7 +209,7 @@ export function SequenceInsertEdge(props: EdgeProps) {
     // bus to the branch lane, straight down the lane, then converge to the
     // target. No diagonal segments.
     const busY = sourceY + 28;
-    const botY = Math.max(targetY - 36, sourceY + 3 * SEQUENCE_GAP + 16);
+    const botY = Math.max(targetY - 20, busY + 20);
     pts = [
       { x: sourceX, y: sourceY },
       { x: sourceX, y: busY },
