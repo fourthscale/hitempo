@@ -21,24 +21,19 @@ vi.mock("@/db/queries/interactions", () => ({
 }));
 vi.mock("@/db/queries/messages", () => ({
   getRecentMessagesByContact: vi.fn(),
-  insertMessage: vi.fn(),
 }));
 
 import { getBrandBrief } from "@/db/queries/brand";
 import { getCompanyById } from "@/db/queries/companies";
 import { getContactById } from "@/db/queries/contacts";
 import { getRecentInteractionsForPrompt } from "@/db/queries/interactions";
-import {
-  getRecentMessagesByContact,
-  insertMessage,
-} from "@/db/queries/messages";
+import { getRecentMessagesByContact } from "@/db/queries/messages";
 
 import { MessageGenerationOrchestrator } from "@/lib/messages/message-generation-orchestrator";
 import type { LlmGenerationService } from "@/lib/ai/llm-generation-service";
 import {
   CompanyNotFoundError,
   ContactNotFoundError,
-  MessagePersistError,
 } from "@/lib/messages/message-errors";
 import { BrandBriefMissingError } from "@/lib/ai/errors";
 
@@ -110,7 +105,6 @@ function makeLlmServiceMock(): LlmGenerationService {
       },
       usage: { id: "usage-uuid" },
     }),
-    linkUsageToEntity: vi.fn().mockResolvedValue(undefined),
   } as unknown as LlmGenerationService;
 }
 
@@ -120,10 +114,6 @@ beforeEach(() => {
   vi.mocked(getBrandBrief).mockResolvedValue(fakeBrief as never);
   vi.mocked(getRecentInteractionsForPrompt).mockResolvedValue([] as never);
   vi.mocked(getRecentMessagesByContact).mockResolvedValue([] as never);
-  vi.mocked(insertMessage).mockResolvedValue({
-    id: "msg-uuid",
-    createdAt: new Date(),
-  } as never);
 });
 
 // ---------------------------------------------------------------------------
@@ -131,48 +121,39 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("MessageGenerationOrchestrator — happy path", () => {
-  it("calls llmService.generate then persists the message and links the usage backref", async () => {
+  it("calls llmService.generate once and returns the parsed result with the llm_usage id", async () => {
+    // The orchestrator no longer persists the messages row : that's done at
+    // commit time (Send via Gmail or Log interaction). The orchestrator's
+    // contract is purely to generate + return the raw + parsed content +
+    // back-reference to the llm_usage row already created by the Facade.
     const llm = makeLlmServiceMock();
     const orch = new MessageGenerationOrchestrator(llm);
 
     const res = await orch.generate(baseInput());
 
     expect(llm.generate).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(insertMessage)).toHaveBeenCalledTimes(1);
-    expect(llm.linkUsageToEntity).toHaveBeenCalledWith(
-      "usage-uuid",
-      "message",
-      "msg-uuid",
-    );
-
-    expect(res.messageId).toBe("msg-uuid");
     expect(res.channel).toBe("email");
     expect(res.subject).toBe("Bonjour Camille");
     expect(res.body).toContain("Camille, ravie d'échanger.");
+    expect(res.llmUsageId).toBe("usage-uuid");
     expect(res.tokensIn).toBe(300);
     expect(res.tokensOut).toBe(80);
+    expect(res.content).toContain("Objet:");
   });
 
-  it("forwards taskId + orientation through to the persisted row", async () => {
+  it("forwards orientation into the prompt builder", async () => {
     const llm = makeLlmServiceMock();
     const orch = new MessageGenerationOrchestrator(llm);
 
     await orch.generate({
       ...baseInput(),
-      taskId: "task-uuid",
       orientation: "ton plus chaleureux",
     });
 
-    expect(vi.mocked(insertMessage)).toHaveBeenCalledWith(
-      ORG_ID,
-      expect.objectContaining({
-        taskId: "task-uuid",
-        orientation: "ton plus chaleureux",
-        contactId: CONTACT_ID,
-        companyId: COMPANY_ID,
-        userId: USER_ID,
-      }),
-    );
+    // Orientation flows through buildOutboundMessagePrompt → user prompt.
+    const call = vi.mocked(llm.generate).mock.calls[0]![0];
+    const prompts = call.input.systemPrompt + "\n" + call.input.userPrompt;
+    expect(prompts).toContain("ton plus chaleureux");
   });
 
   it("passes the correct LLM context (org, user, type=outbound_message)", async () => {
@@ -221,29 +202,10 @@ describe("MessageGenerationOrchestrator — error paths", () => {
     );
   });
 
-  it("wraps insertMessage failures in MessagePersistError (preserves cause)", async () => {
-    const cause = new Error("constraint violation");
-    vi.mocked(insertMessage).mockRejectedValueOnce(cause);
-    const orch = new MessageGenerationOrchestrator(makeLlmServiceMock());
-
-    const err = await orch.generate(baseInput()).catch((e) => e);
-    expect(err).toBeInstanceOf(MessagePersistError);
-    expect(err.code).toBe("MESSAGE_PERSIST");
-    expect(err.cause).toBe(cause);
-  });
-
-  it("wraps linkUsageToEntity failures in MessagePersistError", async () => {
-    const llm = makeLlmServiceMock();
-    vi.mocked(llm.linkUsageToEntity).mockRejectedValueOnce(
-      new Error("update failed"),
-    );
-    const orch = new MessageGenerationOrchestrator(llm);
-
-    const err = await orch.generate(baseInput()).catch((e) => e);
-    expect(err).toBeInstanceOf(MessagePersistError);
-    expect(err.code).toBe("MESSAGE_PERSIST");
-    expect(err.message).toContain("linkUsageToEntity");
-  });
+  // Note : persistence-related failures (insertMessage / linkUsageToEntity)
+  // are not tested here — the orchestrator no longer persists. The messages
+  // row + llm_usage back-reference are written at commit time (Send Gmail or
+  // Log interaction) by the action layer, which has its own coverage.
 });
 
 describe("MessageGenerationOrchestrator — signal block", () => {
