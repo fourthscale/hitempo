@@ -534,7 +534,7 @@ async function TaskRow({
           )}
           {!isOverdue && !isCompleted && task.dueAt && (
             <span className="text-xs text-muted-foreground">
-              · {new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(task.dueAt)}
+              · {new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(task.dueAt)}
             </span>
           )}
         </div>
