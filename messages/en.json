@@ -1121,6 +1121,29 @@
           "agent": "Agent",
           "owner": "Account / contact owner",
           "specific": "Specific user"
+        },
+        "scheduling": {
+          "title": "Scheduling",
+          "hintContactTz": "Times below are in the CONTACT's timezone. The engine converts to the sale's timezone and finds a free slot in their agenda.",
+          "preferredHour": "Preferred hour",
+          "estimatedDuration": "Duration (min)",
+          "businessHoursStart": "Business hours start",
+          "businessHoursEnd": "Business hours end",
+          "allowedWeekdays": "Allowed days",
+          "weekdayShort": {
+            "mon": "Mon",
+            "tue": "Tue",
+            "wed": "Wed",
+            "thu": "Thu",
+            "fri": "Fri",
+            "sat": "Sat",
+            "sun": "Sun"
+          },
+          "scheduledOffset": "Schedule offset (business days)",
+          "scheduledOffsetHint": "0 = today (or next business day) at preferred hour.",
+          "setDueAt": "Set a hard deadline",
+          "dueOffset": "Deadline offset from scheduled (business days)",
+          "dueAtAllDay": "Whole-day deadline (no specific hour)"
         }
       },
       "contactSection": {

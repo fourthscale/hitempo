@@ -1121,6 +1121,29 @@
           "agent": "Agent",
           "owner": "Propriétaire du compte / contact",
           "specific": "Commercial spécifique"
+        },
+        "scheduling": {
+          "title": "Planification",
+          "hintContactTz": "Les heures ci-dessous sont dans le fuseau du CONTACT. L'engine convertit dans le fuseau du commercial et place dans un créneau libre de son agenda.",
+          "preferredHour": "Heure préférée",
+          "estimatedDuration": "Durée (min)",
+          "businessHoursStart": "Plage horaire début",
+          "businessHoursEnd": "Plage horaire fin",
+          "allowedWeekdays": "Jours autorisés",
+          "weekdayShort": {
+            "mon": "Lun",
+            "tue": "Mar",
+            "wed": "Mer",
+            "thu": "Jeu",
+            "fri": "Ven",
+            "sat": "Sam",
+            "sun": "Dim"
+          },
+          "scheduledOffset": "Décalage exécution (jours ouvrés)",
+          "scheduledOffsetHint": "0 = aujourd'hui (ou prochain jour ouvré) à l'heure préférée.",
+          "setDueAt": "Définir une échéance ferme",
+          "dueOffset": "Décalage de l'échéance depuis l'exécution (jours ouvrés)",
+          "dueAtAllDay": "Échéance journée entière (sans heure précise)"
         }
       },
       "contactSection": {

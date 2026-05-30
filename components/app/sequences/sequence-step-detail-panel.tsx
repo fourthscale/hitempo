@@ -21,6 +21,8 @@ import type {
   TaskAssignment,
   LocalizedString,
 } from "@/lib/sequences/types";
+import type { TaskScheduling } from "@/lib/sequences/scheduling";
+import { DEFAULT_SCHEDULING } from "@/lib/sequences/scheduling";
 
 const INTENTS = ["first_contact", "follow_up", "meeting_request", "proposal_send", "reconnect"] as const;
 const UNITS = ["minutes", "hours", "days"] as const;
@@ -386,6 +388,14 @@ export function SequenceStepDetailPanel({
         />
       )}
 
+      {/* ----- Scheduling (task-creating steps only) ----- */}
+      {(isMessage || step.actionType === "phone_call") && (
+        <SchedulingField
+          scheduling={(step.actionConfig as { scheduling?: TaskScheduling }).scheduling}
+          onChange={(s) => patchConfig({ scheduling: s })}
+        />
+      )}
+
       {/* ----- Gating condition (action steps only) ----- */}
       {isAction && step.actionType !== "wait_delay" && (
         <div className="space-y-1.5 border-t border-border pt-4">
@@ -485,5 +495,165 @@ function AssignmentField({
         </select>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scheduling field — collapsible "Planification" block for task-creating
+// steps. All times are entered in the CONTACT's TZ ; the engine converts to
+// the assignee's TZ + finds a free slot at task creation.
+// ---------------------------------------------------------------------------
+
+const WEEKDAY_OPTIONS: { value: number; key: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun" }[] = [
+  { value: 1, key: "mon" },
+  { value: 2, key: "tue" },
+  { value: 3, key: "wed" },
+  { value: 4, key: "thu" },
+  { value: 5, key: "fri" },
+  { value: 6, key: "sat" },
+  { value: 0, key: "sun" },
+];
+
+function SchedulingField({
+  scheduling,
+  onChange,
+}: {
+  scheduling: TaskScheduling | undefined;
+  onChange: (next: TaskScheduling) => void;
+}) {
+  const t = useTranslations("pages.sequences");
+  const s: Required<TaskScheduling> = { ...DEFAULT_SCHEDULING, ...(scheduling ?? {}) };
+  const patch = (p: Partial<TaskScheduling>) => onChange({ ...s, ...p });
+
+  const toggleWeekday = (v: number) => {
+    const has = s.allowedWeekdays.includes(v);
+    const next = has ? s.allowedWeekdays.filter((d) => d !== v) : [...s.allowedWeekdays, v].sort();
+    patch({ allowedWeekdays: next });
+  };
+
+  return (
+    <details className="space-y-3 border-t border-border pt-4">
+      <summary className="cursor-pointer text-sm font-medium">
+        {t("editor.scheduling.title")}
+      </summary>
+
+      <p className="text-[11px] text-muted-foreground">{t("editor.scheduling.hintContactTz")}</p>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>{t("editor.scheduling.preferredHour")}</Label>
+          <Input
+            type="number"
+            min={0}
+            max={23}
+            value={s.preferredHour}
+            onChange={(e) => patch({ preferredHour: Number(e.target.value) })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>{t("editor.scheduling.estimatedDuration")}</Label>
+          <Input
+            type="number"
+            min={1}
+            max={480}
+            value={s.estimatedDurationMinutes}
+            onChange={(e) => patch({ estimatedDurationMinutes: Number(e.target.value) })}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>{t("editor.scheduling.businessHoursStart")}</Label>
+          <Input
+            type="number"
+            min={0}
+            max={23}
+            value={s.businessHours.start}
+            onChange={(e) =>
+              patch({ businessHours: { ...s.businessHours, start: Number(e.target.value) } })
+            }
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>{t("editor.scheduling.businessHoursEnd")}</Label>
+          <Input
+            type="number"
+            min={0}
+            max={23}
+            value={s.businessHours.end}
+            onChange={(e) =>
+              patch({ businessHours: { ...s.businessHours, end: Number(e.target.value) } })
+            }
+          />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>{t("editor.scheduling.allowedWeekdays")}</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {WEEKDAY_OPTIONS.map(({ value, key }) => {
+            const active = s.allowedWeekdays.includes(value);
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => toggleWeekday(value)}
+                className={`rounded-md border px-2 py-1 text-xs ${
+                  active ? "border-brand-teal bg-brand-teal/10" : "border-border"
+                }`}
+              >
+                {t(`editor.scheduling.weekdayShort.${key}`)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>{t("editor.scheduling.scheduledOffset")}</Label>
+        <Input
+          type="number"
+          min={0}
+          max={60}
+          value={s.scheduledOffsetBusinessDays}
+          onChange={(e) => patch({ scheduledOffsetBusinessDays: Number(e.target.value) })}
+        />
+        <p className="text-[11px] text-muted-foreground">{t("editor.scheduling.scheduledOffsetHint")}</p>
+      </div>
+
+      <div className="space-y-2 rounded-md border border-border bg-secondary/20 p-2">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={s.setDueAt}
+            onChange={(e) => patch({ setDueAt: e.target.checked })}
+          />
+          {t("editor.scheduling.setDueAt")}
+        </label>
+        {s.setDueAt && (
+          <>
+            <div className="space-y-1.5">
+              <Label>{t("editor.scheduling.dueOffset")}</Label>
+              <Input
+                type="number"
+                min={0}
+                max={60}
+                value={s.dueOffsetBusinessDays}
+                onChange={(e) => patch({ dueOffsetBusinessDays: Number(e.target.value) })}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={s.dueAtAllDay}
+                onChange={(e) => patch({ dueAtAllDay: e.target.checked })}
+              />
+              {t("editor.scheduling.dueAtAllDay")}
+            </label>
+          </>
+        )}
+      </div>
+    </details>
   );
 }
