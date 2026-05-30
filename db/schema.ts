@@ -169,6 +169,8 @@ export const organizations = pgTable("organizations", {
   plan: organizationPlan("plan").notNull().default("trial"),
   defaultLocale: text("default_locale").notNull().default("fr"),
   supportedLocales: text("supported_locales").array().notNull().default(sql`ARRAY['fr', 'en']`),
+  /** IANA TZ, fallback root for the timezone cascade (member → org). */
+  timezone: text("timezone").notNull().default("Europe/Paris"),
   brandBrief: jsonb("brand_brief").$type<BrandBrief>().default({}),
   settings: jsonb("settings").default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -183,6 +185,16 @@ export const organizationMembers = pgTable("organization_members", {
   role: memberRole("role").notNull().default("commercial"),
   preferredLocale: text("preferred_locale").notNull().default("fr"),
   timezone: text("timezone").notNull().default("Europe/Paris"),
+  /**
+   * Work pattern (WorkPattern from lib/sequences/work-pattern.ts) : the
+   * windows during which the sale is reachable for tasks. Null → defaults
+   * to Mon-Fri 9-12 + 14-17 applied at use site (DEFAULT_WORK_PATTERN).
+   */
+  workPattern: jsonb("work_pattern"),
+  /** Per-day quota for sequence-driven email tasks. */
+  maxEmailsPerDay: integer("max_emails_per_day").notNull().default(25),
+  /** Per-day quota for sequence-driven phone-call tasks. */
+  maxCallsPerDay: integer("max_calls_per_day").notNull().default(10),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
@@ -249,6 +261,8 @@ export const companies = pgTable(
 
     // Business attributes
     primaryLocale: text("primary_locale").notNull().default("fr"),
+    /** Contact-cascade TZ fallback (after contact / site, before org). */
+    timezone: text("timezone"),
     sizeEstimate: text("size_estimate"),
     standing: integer("standing"),
     industry: text("industry"),
@@ -320,6 +334,8 @@ export const sites = pgTable(
     isPrimary: boolean("is_primary").notNull().default(false),
     standing: integer("standing"),
     notes: text("notes"),
+    /** Contact-cascade TZ fallback (after contact, before company). */
+    timezone: text("timezone"),
 
     // Primary contact for THIS site (max 1 per site, enforced by FK uniqueness — only one column reference).
     primaryContactId: uuid("primary_contact_id"),
@@ -374,6 +390,8 @@ export const contacts = pgTable(
 
     preferredLanguage: text("preferred_language").notNull().default("fr"),
     preferredChannel: text("preferred_channel"),
+    /** Contact-cascade TZ root (most specific). */
+    timezone: text("timezone"),
 
     relevance: integer("relevance"),
 
@@ -474,7 +492,11 @@ export const tasks = pgTable(
     priority: taskPriority("priority").notNull().default("medium"),
 
     dueAt: timestamp("due_at", { withTimezone: true }),
+    /** True : the UI hides the hour of `due_at` (whole-day deadline). */
+    dueAtAllDay: boolean("due_at_all_day").notNull().default(false),
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    /** Effective slot duration ; defaulted from the step's scheduling. */
+    estimatedDurationMinutes: integer("estimated_duration_minutes"),
 
     assigneeId: uuid("assignee_id"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
