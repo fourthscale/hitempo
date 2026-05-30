@@ -111,6 +111,29 @@ const taskAssignmentSchema = z
   })
   .optional();
 
+/**
+ * Per-step scheduling config — heures dans la TZ du contact, anti-conflit
+ * et quotas appliqués à la création de la tâche. Voir lib/sequences/scheduling.ts.
+ */
+const taskSchedulingSchema = z
+  .object({
+    preferredHour: z.number().int().min(0).max(23).optional(),
+    businessHours: z
+      .object({
+        start: z.number().int().min(0).max(23),
+        end: z.number().int().min(0).max(23),
+      })
+      .optional(),
+    allowedWeekdays: z.array(z.number().int().min(0).max(6)).optional(),
+    estimatedDurationMinutes: z.number().int().positive().max(480).optional(),
+    setScheduledFor: z.boolean().optional(),
+    scheduledOffsetBusinessDays: z.number().int().min(0).max(60).optional(),
+    setDueAt: z.boolean().optional(),
+    dueOffsetBusinessDays: z.number().int().min(0).max(60).optional(),
+    dueAtAllDay: z.boolean().optional(),
+  })
+  .optional();
+
 const sendMessageConfigSchema = z.object({
   mode: z.enum(["ai", "defined"]),
   channel: z.enum(MESSAGE_CHANNELS),
@@ -121,12 +144,14 @@ const sendMessageConfigSchema = z.object({
   orientation: localizedStringSchema.optional(),
   includeSignal: z.boolean().optional(),
   assignment: taskAssignmentSchema,
+  scheduling: taskSchedulingSchema,
 });
 
 const phoneCallConfigSchema = z.object({
   titleTemplate: localizedStringSchema,
   description: localizedStringSchema.optional(),
   assignment: taskAssignmentSchema,
+  scheduling: taskSchedulingSchema,
 });
 
 const waitDelayConfigSchema = z.object({

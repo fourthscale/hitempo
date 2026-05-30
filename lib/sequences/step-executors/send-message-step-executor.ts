@@ -43,6 +43,7 @@ export class SendMessageStepExecutor implements SequenceStepExecutor {
       type: taskType,
       title,
       description,
+      scheduling: config.scheduling,
     });
 
     if (config.mode === "ai") {

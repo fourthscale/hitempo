@@ -22,6 +22,7 @@ export class PhoneCallStepExecutor implements SequenceStepExecutor {
       type: "phone",
       title: resolveLocalizedString(config.titleTemplate, lc),
       description: config.description ? resolveLocalizedString(config.description, lc) : null,
+      scheduling: config.scheduling,
     });
     return { taskId, navigateTo: "default" };
   }

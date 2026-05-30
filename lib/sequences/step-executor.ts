@@ -9,6 +9,7 @@ import type {
   SequencePredicate,
 } from "./types";
 import type { MessageChannel, MessageIntent } from "@/lib/messages/types";
+import type { TaskScheduling } from "./scheduling";
 
 /**
  * Side-effecting collaborators an executor needs, injected by the engine
@@ -16,7 +17,11 @@ import type { MessageChannel, MessageIntent } from "@/lib/messages/types";
  * with mocks and keeps the engine the only place that touches the DB / LLM.
  */
 export interface SequenceExecutorServices {
-  /** Create a task for the enrolment ; returns the new task id. */
+  /**
+   * Create a task for the enrolment ; returns the new task id. The
+   * implementation handles scheduling (TZ-aware computeTaskSchedule +
+   * findNextFreeSlot) — executors pass the step's `scheduling` block as-is.
+   */
   createTask(input: {
     organizationId: string;
     companyId: string;
@@ -26,6 +31,8 @@ export interface SequenceExecutorServices {
     type: string;
     title: string;
     description: string | null;
+    /** Per-step scheduling config (heures TZ contact, quotas, etc.). */
+    scheduling?: TaskScheduling;
   }): Promise<{ taskId: string }>;
 
   /**

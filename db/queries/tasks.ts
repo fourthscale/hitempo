@@ -252,7 +252,14 @@ export async function insertTaskForEnrolment(
     description?: string | null;
     companyId?: string | null;
     contactId?: string | null;
+    /** When the sale should actually handle the task. */
+    scheduledFor?: Date | null;
+    /** Hard deadline (optional). */
     dueAt?: Date | null;
+    /** UI hint to hide the hour part of dueAt. */
+    dueAtAllDay?: boolean;
+    /** Effective slot duration in minutes (defaulted from step scheduling). */
+    estimatedDurationMinutes?: number | null;
   },
 ) {
   const [row] = await db
@@ -265,7 +272,10 @@ export async function insertTaskForEnrolment(
       title: data.title,
       description: data.description ?? null,
       priority: "medium",
+      scheduledFor: data.scheduledFor ?? null,
       dueAt: data.dueAt ?? null,
+      dueAtAllDay: data.dueAtAllDay ?? false,
+      estimatedDurationMinutes: data.estimatedDurationMinutes ?? null,
       companyId: data.companyId ?? null,
       contactId: data.contactId ?? null,
       status: "pending",

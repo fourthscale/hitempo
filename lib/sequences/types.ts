@@ -15,6 +15,7 @@
 
 import type { MessageChannel, MessageIntent } from "@/lib/messages/types";
 import type { ConditionGroup } from "./conditions";
+import type { TaskScheduling } from "./scheduling";
 
 // ---------------------------------------------------------------------------
 // Action types (mirror the DB enum ; kept here so non-DB code can import it)
@@ -139,6 +140,8 @@ export type SendMessageActionConfig = {
   orientation?: LocalizedString;
   includeSignal?: boolean;
   assignment?: TaskAssignment;
+  /** TZ-contact heures, anti-conflit & quotas. Voir lib/sequences/scheduling.ts. */
+  scheduling?: TaskScheduling;
 };
 
 /** phone_call — a manual call task, no message. */
@@ -146,6 +149,8 @@ export type PhoneCallActionConfig = {
   titleTemplate: LocalizedString;
   description?: LocalizedString;
   assignment?: TaskAssignment;
+  /** TZ-contact heures, anti-conflit & quotas. Voir lib/sequences/scheduling.ts. */
+  scheduling?: TaskScheduling;
 };
 
 export type WaitDelayActionConfig = {
