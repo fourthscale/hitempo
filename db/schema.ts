@@ -147,6 +147,16 @@ export const sequenceStepDelayUnit = pgEnum("sequence_step_delay_unit", [
   "minutes", "hours", "days",
 ]);
 
+/**
+ * How contacts get into a sequence.
+ *  - 'manual' : a user enrols a contact by hand from the contact's page.
+ * Extension points (later): 'signal' (auto-enrol on a Lemlist-style signal),
+ * 'score_threshold', 'rule', etc.
+ */
+export const sequenceTriggerKind = pgEnum("sequence_trigger_kind", [
+  "manual",
+]);
+
 export const sequenceEndReason = pgEnum("sequence_end_reason", [
   "exhausted", "success", "cascaded", "opted_out", "manual",
   "safety_loop_cap_reached",
@@ -815,6 +825,9 @@ export const sequences = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     isActive: boolean("is_active").notNull().default(true),
+
+    /** How contacts enter this sequence. Phase A : only 'manual'. */
+    triggerKind: sequenceTriggerKind("trigger_kind").notNull().default("manual"),
 
     // Targeting (eligibility) — empty array = no restriction on that axis.
     targetRelationshipTypes: text("target_relationship_types").array().notNull().default(sql`ARRAY[]::text[]`),

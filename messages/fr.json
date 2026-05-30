@@ -1067,7 +1067,12 @@
         },
         "trigger": {
           "title": "Déclencheur",
-          "manual": "Inscription manuelle depuis une fiche contact."
+          "manual": "Inscription manuelle depuis une fiche contact.",
+          "kind": {
+            "manual": "Manuel",
+            "dynamic": "Dynamique"
+          },
+          "manualHint": "Les contacts sont ajoutés à cette séquence à la main depuis leur fiche."
         },
         "modes": {
           "ai": "Brouillon IA",

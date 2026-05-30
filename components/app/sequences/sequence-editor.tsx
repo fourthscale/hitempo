@@ -430,7 +430,7 @@ export function SequenceEditor({
           </div>
 
           {!readOnly && selectedId === TRIGGER_ID && (
-            <div className="w-80 shrink-0 rounded-lg border border-border bg-card p-4">
+            <div className="w-80 shrink-0 space-y-4 rounded-lg border border-border bg-card p-4">
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-sm font-semibold">{t("editor.trigger.title")}</h3>
                 <button
@@ -442,8 +442,30 @@ export function SequenceEditor({
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">{t("editor.trigger.manual")}</p>
-              <p className="mt-3 text-xs text-muted-foreground">{triggerSummary}</p>
+
+              {/* Manual / Dynamic toggle. Dynamic is disabled (coming soon) ;
+                  in manual mode there are no eligibility filters — every
+                  contact added by hand is enrolled. */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="flex-1 rounded-md border border-brand-teal bg-brand-teal/10 px-3 py-1.5 text-sm font-medium"
+                >
+                  {t("editor.trigger.kind.manual")}
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  title={t("editor.comingSoon")}
+                  className="flex-1 cursor-not-allowed rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground opacity-50"
+                >
+                  {t("editor.trigger.kind.dynamic")} ({t("editor.comingSoon")})
+                </button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                {t("editor.trigger.manualHint")}
+              </p>
             </div>
           )}
 

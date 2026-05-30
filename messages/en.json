@@ -1067,7 +1067,12 @@
         },
         "trigger": {
           "title": "Trigger",
-          "manual": "Manual enrollment from a contact page."
+          "manual": "Manual enrollment from a contact page.",
+          "kind": {
+            "manual": "Manual",
+            "dynamic": "Dynamic"
+          },
+          "manualHint": "Contacts are added to this sequence by hand from their page."
         },
         "modes": {
           "ai": "AI draft",
