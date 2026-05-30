@@ -703,6 +703,10 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
     fields: [tasks.siteId],
     references: [sites.id],
   }),
+  sequenceEnrolment: one(sequenceEnrolments, {
+    fields: [tasks.sequenceEnrolmentId],
+    references: [sequenceEnrolments.id],
+  }),
   messages: many(messages),
 }));
 

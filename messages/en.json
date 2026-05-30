@@ -640,6 +640,7 @@
         "sortedBy": "Sorted by: AI priority → urgency → score"
       },
       "overdueBadge": "{days, plural, one {# day late} other {# days late}}",
+      "sequenceStepBadge": "step {current}/{total}",
       "searchPlaceholder": "Search a task...",
       "signalPrefix": "Signal: {signal}",
       "assigneeMe": "Me",

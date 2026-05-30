@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations, getLocale } from "next-intl/server";
 import {
-  Mail, Phone, MapPin, RefreshCcw, Search, Calendar, User, AlertTriangle,
+  Mail, Phone, MapPin, RefreshCcw, Search, Calendar, User, AlertTriangle, Workflow,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
@@ -191,6 +191,21 @@ export default async function TaskDetailPage({
                 <AlertTriangle className="h-3.5 w-3.5" />
                 {t("groups.overdue")}
               </span>
+            )}
+
+            {task.sequenceEnrolment?.sequence && (
+              <Link
+                href={`/sequences/${task.sequenceEnrolment.sequence.id}/enrolments/${task.sequenceEnrolment.id}`}
+                className="inline-flex items-center gap-1.5 rounded bg-brand-teal/10 px-2 py-0.5 text-xs font-medium text-brand-teal hover:bg-brand-teal/20"
+              >
+                <Workflow className="h-3.5 w-3.5" />
+                {task.sequenceEnrolment.sequence.name}
+                {task.sequenceEnrolment.sequence.steps.length > 0 &&
+                  ` · ${t("sequenceStepBadge", {
+                    current: task.sequenceEnrolment.currentStepOrder + 1,
+                    total: task.sequenceEnrolment.sequence.steps.length,
+                  })}`}
+              </Link>
             )}
           </div>
         </div>

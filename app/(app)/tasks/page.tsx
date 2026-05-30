@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTranslations, getLocale } from "next-intl/server";
 import {
   Mail, Phone, MapPin, RefreshCcw, Search, Calendar,
-  ChevronDown, LayoutList, LayoutGrid, Plus, User,
+  ChevronDown, LayoutList, LayoutGrid, Plus, User, Workflow,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
@@ -567,6 +567,23 @@ async function TaskRow({
 
         {signalText && (
           <div className="text-xs text-muted-foreground mt-0.5">{signalText}</div>
+        )}
+
+        {task.sequenceEnrolment?.sequence && (
+          <Link
+            href={`/sequences/${task.sequenceEnrolment.sequence.id}/enrolments/${task.sequenceEnrolment.id}`}
+            className="mt-1 inline-flex items-center gap-1.5 rounded bg-brand-teal/10 px-1.5 py-0.5 text-[11px] text-brand-teal hover:bg-brand-teal/20"
+          >
+            <Workflow className="h-3 w-3" />
+            <span className="truncate">
+              {task.sequenceEnrolment.sequence.name}
+              {task.sequenceEnrolment.sequence.steps.length > 0 &&
+                ` · ${t("sequenceStepBadge", {
+                  current: task.sequenceEnrolment.currentStepOrder + 1,
+                  total: task.sequenceEnrolment.sequence.steps.length,
+                })}`}
+            </span>
+          </Link>
         )}
       </div>
 

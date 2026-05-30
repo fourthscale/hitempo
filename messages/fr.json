@@ -640,6 +640,7 @@
         "sortedBy": "Triées par : priorité IA → urgence → score"
       },
       "overdueBadge": "{days, plural, one {# jour de retard} other {# jours de retard}}",
+      "sequenceStepBadge": "étape {current}/{total}",
       "searchPlaceholder": "Rechercher une tâche...",
       "signalPrefix": "Signal : {signal}",
       "assigneeMe": "Moi",

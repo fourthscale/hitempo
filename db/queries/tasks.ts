@@ -35,6 +35,15 @@ export async function getTasksByOrg(
           email: true, preferredLanguage: true,
         },
       },
+      sequenceEnrolment: {
+        columns: { id: true, currentStepOrder: true },
+        with: {
+          sequence: {
+            columns: { id: true, name: true },
+            with: { steps: { columns: { id: true } } },
+          },
+        },
+      },
     },
     orderBy: status === "completed"
       ? [desc(tasks.completedAt)]
@@ -331,6 +340,15 @@ export async function getTaskDetail(orgId: string, taskId: string) {
       },
       contact: {
         columns: { id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true, preferredLanguage: true },
+      },
+      sequenceEnrolment: {
+        columns: { id: true, currentStepOrder: true },
+        with: {
+          sequence: {
+            columns: { id: true, name: true },
+            with: { steps: { columns: { id: true } } },
+          },
+        },
       },
     },
   });
