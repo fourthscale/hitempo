@@ -58,6 +58,11 @@ export function SequenceStepDetailPanel({
   canDelete: boolean;
 }) {
   const t = useTranslations("pages.sequences");
+  // The update_contact step's <select>s read from the top-level enums (same as
+  // the contact form), not from `pages.sequences.*` — those keys don't live
+  // there. Resolve the right namespace once at the top.
+  const tContactStatus = useTranslations("contactStatus");
+  const tContactRole = useTranslations("contactRole");
   const [confirmBranch, setConfirmBranch] = useState<number | null>(null);
 
   const patchConfig = (patch: Record<string, unknown>) =>
@@ -199,7 +204,7 @@ export function SequenceStepDetailPanel({
                 <option value="">—</option>
                 {CONTACT_STATUSES.map((v) => (
                   <option key={v} value={v}>
-                    {t(`contactStatus.${v}`)}
+                    {tContactStatus(v as Parameters<typeof tContactStatus>[0])}
                   </option>
                 ))}
               </select>
@@ -214,7 +219,7 @@ export function SequenceStepDetailPanel({
                 <option value="">—</option>
                 {CONTACT_ROLES.map((v) => (
                   <option key={v} value={v}>
-                    {t(`contactRole.${v}`)}
+                    {tContactRole(v as Parameters<typeof tContactRole>[0])}
                   </option>
                 ))}
               </select>

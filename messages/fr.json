@@ -1056,11 +1056,12 @@
         "nextDue": "Prochaine étape le {date}",
         "noNextDue": "Aucune prochaine étape planifiée",
         "endReason": {
-          "completed_exhausted": "Fin de la séquence atteinte",
-          "completed_success": "Marqué comme gagné",
-          "completed_cascaded": "Transféré vers une autre séquence",
-          "stopped_opted_out": "Contact désinscrit",
-          "stopped_manual": "Arrêté manuellement"
+          "exhausted": "Fin de la séquence atteinte",
+          "success": "Marqué comme gagné",
+          "cascaded": "Transféré vers une autre séquence",
+          "opted_out": "Contact désinscrit",
+          "manual": "Arrêté manuellement",
+          "safety_loop_cap_reached": "Arrêté : plafond de boucle de sécurité atteint"
         },
         "timeline": {
           "title": "Historique des étapes",

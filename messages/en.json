@@ -1056,11 +1056,12 @@
         "nextDue": "Next due {date}",
         "noNextDue": "No next step scheduled",
         "endReason": {
-          "completed_exhausted": "Reached the end of the sequence",
-          "completed_success": "Marked as won",
-          "completed_cascaded": "Moved to another sequence",
-          "stopped_opted_out": "Contact opted out",
-          "stopped_manual": "Stopped manually"
+          "exhausted": "Reached the end of the sequence",
+          "success": "Marked as won",
+          "cascaded": "Moved to another sequence",
+          "opted_out": "Contact opted out",
+          "manual": "Stopped manually",
+          "safety_loop_cap_reached": "Stopped : safety loop cap reached"
         },
         "timeline": {
           "title": "Execution history",
