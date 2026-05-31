@@ -5,11 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
+import { COMMON_TIMEZONES } from "@/lib/i18n/timezones";
 
 const RELATIONSHIP_TYPES = ["prospect", "client", "former_client", "prescriber", "partner"] as const;
 const COMPANY_STATUSES = ["to_qualify", "to_contact", "to_follow_up", "qualified", "not_interested"] as const;
 const COMPANY_LOCALES = ["fr", "en"] as const;
 const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"] as const;
+// `""` is "inherit from org" — the cascade resolver picks the next non-null TZ.
+const TZ_INHERIT = "";
 
 type CompanyInitial = {
   id?: string;
@@ -22,6 +25,7 @@ type CompanyInitial = {
   sizeEstimate?: string | null;
   standing?: number | null;
   primaryLocale?: string | null;
+  timezone?: string | null;
   status?: string | null;
   signalType?: string | null;
   signalSource?: string | null;
@@ -176,6 +180,25 @@ export async function CompanyForm({
                 {tLang(v)}
               </option>
             ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="timezone">{t("timezone")}</Label>
+          <select
+            id="timezone"
+            name="timezone"
+            defaultValue={initial?.timezone ?? TZ_INHERIT}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value={TZ_INHERIT}>{t("timezoneInherit")}</option>
+            {COMMON_TIMEZONES.map((tz) => (
+              <option key={tz} value={tz}>{tz}</option>
+            ))}
+            {/* Preserve an exotic TZ that's not in the curated list. */}
+            {initial?.timezone && !COMMON_TIMEZONES.includes(initial.timezone) ? (
+              <option value={initial.timezone}>{initial.timezone}</option>
+            ) : null}
           </select>
         </div>
 

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, isNull, lt, lte, gte, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, lt, lte, gte, or, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
 import { companies, contacts, tasks } from "@/db/schema";
 
@@ -47,7 +47,10 @@ export async function getTasksByOrg(
     },
     orderBy: status === "completed"
       ? [desc(tasks.completedAt)]
-      : [asc(tasks.dueAt), desc(tasks.priority)],
+      // Sort by the effective date (scheduled_for falls back to due_at) so
+      // engine-scheduled tasks land in the right position. NULLS LAST keeps
+      // dateless tasks at the bottom of the active list.
+      : [sql`coalesce(${tasks.scheduledFor}, ${tasks.dueAt}) asc nulls last`, desc(tasks.priority)],
     limit: 200,
   });
 }
@@ -355,6 +358,26 @@ export async function getTaskDetail(orgId: string, taskId: string) {
 }
 
 export type TaskDetail = NonNullable<Awaited<ReturnType<typeof getTaskDetail>>>;
+
+/**
+ * Batch lookup used by the enrolment detail page to label each execution row
+ * with its underlying task. Returns only the fields needed to render a link.
+ */
+export async function getTasksByIds(orgId: string, taskIds: string[]) {
+  if (taskIds.length === 0) return [];
+  return getDb()
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      type: tasks.type,
+      status: tasks.status,
+      scheduledFor: tasks.scheduledFor,
+      dueAt: tasks.dueAt,
+      dueAtAllDay: tasks.dueAtAllDay,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.organizationId, orgId), inArray(tasks.id, taskIds)));
+}
 
 export async function updateTask(
   orgId: string,

@@ -134,6 +134,10 @@ const taskSchedulingSchema = z
   })
   .optional();
 
+// Days, capped at ~6 months so a typo can't park an enrolment forever
+// (defeating the safety-net purpose). Omit to wait indefinitely.
+const awaitTaskTimeoutDaysSchema = z.number().int().positive().max(180).optional();
+
 const sendMessageConfigSchema = z.object({
   mode: z.enum(["ai", "defined"]),
   channel: z.enum(MESSAGE_CHANNELS),
@@ -145,6 +149,7 @@ const sendMessageConfigSchema = z.object({
   includeSignal: z.boolean().optional(),
   assignment: taskAssignmentSchema,
   scheduling: taskSchedulingSchema,
+  awaitTaskTimeoutDays: awaitTaskTimeoutDaysSchema,
 });
 
 const phoneCallConfigSchema = z.object({
@@ -152,6 +157,7 @@ const phoneCallConfigSchema = z.object({
   description: localizedStringSchema.optional(),
   assignment: taskAssignmentSchema,
   scheduling: taskSchedulingSchema,
+  awaitTaskTimeoutDays: awaitTaskTimeoutDaysSchema,
 });
 
 const waitDelayConfigSchema = z.object({

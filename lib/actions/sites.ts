@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { and, count, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db/client";
@@ -21,6 +22,8 @@ const siteSchemaBase = {
   city: z.string().max(100).optional().or(z.literal("")),
   region: z.string().max(100).optional().or(z.literal("")),
   country: z.string().length(2).default("FR"),
+  // IANA TZ string ; empty = inherit from company → org via the cascade resolver.
+  timezone: z.string().max(64).optional().or(z.literal("")),
   isPrimary: z.preprocess((v) => v === "on" || v === true || v === "true", z.boolean()).optional(),
   standing: z.preprocess(
     (v) => (v === "" || v === null || v === undefined ? null : Number(v)),
@@ -79,6 +82,7 @@ async function _createSiteAction(formData: FormData) {
     city: (data.city as string | null) ?? null,
     region: (data.region as string | null) ?? null,
     country: ((data.country as string) || "FR").toUpperCase(),
+    timezone: (data.timezone as string | null) ?? null,
     isPrimary: willBePrimary,
     standing: (data.standing as number | null) ?? null,
     notes: (data.notes as string | null) ?? null,
@@ -120,6 +124,7 @@ async function _updateSiteAction(formData: FormData) {
       city: (data.city as string | null) ?? null,
       region: (data.region as string | null) ?? null,
       country: ((data.country as string) || "FR").toUpperCase(),
+      timezone: (data.timezone as string | null) ?? null,
       isPrimary: wantsPrimary,
       standing: (data.standing as number | null) ?? null,
       notes: (data.notes as string | null) ?? null,
@@ -130,6 +135,8 @@ async function _updateSiteAction(formData: FormData) {
     );
 
   revalidatePath(`/companies/${parsed.data.companyId}`);
+  revalidatePath(`/sites/${parsed.data.id}`);
+  redirect(`/sites/${parsed.data.id}`);
 }
 
 /**

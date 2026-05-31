@@ -136,7 +136,9 @@
     "sequence_draft_invalid": "Le brouillon de la séquence comporte un problème et ne peut pas être publié. Vérifiez le flux et réessayez.",
     "sequence_no_draft": "Aucun brouillon en attente à publier.",
     "enrolment_not_found": "Cette inscription est introuvable.",
-    "contact_not_eligible": "Ce contact ne peut pas être inscrit (désinscrit, déjà dans une séquence, ou en période de pause)."
+    "contact_not_eligible": "Ce contact ne peut pas être inscrit (désinscrit, déjà dans une séquence, ou en période de pause).",
+    "invalid_timezone": "Fuseau horaire inconnu. Choisis-en un dans la liste avant d'enregistrer.",
+    "invalid_work_pattern": "Une de tes plages horaires est invalide. Vérifie que les heures sont au format HH:MM et que la fin est bien après le début."
   },
   "common": {
     "appName": "hitempo",
@@ -431,6 +433,10 @@
         "size": "Taille",
         "legalName": "Raison sociale",
         "primaryLocale": "Langue principale",
+        "timezone": "Fuseau horaire",
+        "timezoneInheritedFrom": {
+          "organization": "hérité de l'organisation"
+        },
         "addedAt": "Ajoutée le",
         "relationship": "Relation",
         "industry": "Secteur",
@@ -487,6 +493,8 @@
         "standing": "Standing (1-5 étoiles)",
         "relationshipType": "Relation",
         "primaryLocale": "Langue principale",
+        "timezone": "Fuseau horaire",
+        "timezoneInherit": "Hériter de l'organisation",
         "status": "Statut",
         "signalType": "Type de signal",
         "signalSource": "Source du signal",
@@ -530,6 +538,8 @@
           "postalCode": "Code postal",
           "city": "Ville",
           "country": "Pays (ISO2)",
+          "timezone": "Fuseau horaire",
+          "timezoneInherit": "Hériter de l'entreprise",
           "isPrimary": "Site principal"
         }
       }
@@ -575,13 +585,20 @@
         "phone": "Téléphone",
         "linkedin": "LinkedIn",
         "preferredLanguage": "Langue préférée",
+        "timezone": "Fuseau horaire",
+        "timezoneInherit": "Hériter du site / de l'entreprise",
         "preferredChannel": "Canal préféré",
         "relevance": "Pertinence",
         "status": "Statut",
         "notes": "Notes",
         "owner": "Propriétaire",
         "ownerInherit": "Hériter de l'entreprise",
-        "ownerInheritedHint": "hérité du compte"
+        "ownerInheritedHint": "hérité du compte",
+        "timezoneInheritedFrom": {
+          "site": "hérité du site",
+          "company": "hérité de l'entreprise",
+          "organization": "hérité de l'organisation"
+        }
       }
     },
     "tasks": {
@@ -737,10 +754,36 @@
         "newPassword": "Nouveau mot de passe",
         "confirmPassword": "Confirmer le mot de passe",
         "savePassword": "Changer le mot de passe",
+        "scheduleTitle": "Horaires de travail",
+        "scheduleDescription": "Utilisé par les automatisations de séquences pour choisir les créneaux de tâches. Le fuseau revient à celui de l'organisation s'il est laissé tel quel.",
+        "timezone": "Fuseau horaire",
+        "timezoneHint": "Fuseau IANA de votre lieu de travail habituel.",
+        "maxEmailsPerDay": "Max emails par jour",
+        "maxEmailsPerDayHint": "Les automatisations de séquences s'arrêtent de générer une tâche email une fois cette limite atteinte dans la journée.",
+        "maxCallsPerDay": "Max appels par jour",
+        "maxCallsPerDayHint": "Même logique pour les tâches d'appel. Mettre 0 pour désactiver.",
+        "workPattern": {
+          "title": "Plages disponibles par jour",
+          "hint": "Les tâches de séquences sont placées dans ces plages dans votre fuseau. Décochez un jour pour l'exclure. Défaut : Lun–Ven 9h00–12h00 + 14h00–17h00.",
+          "addSlot": "Ajouter une plage d'après-midi",
+          "removeSlot": "Supprimer la plage",
+          "off": "Jour off",
+          "day": {
+            "mon": "Lun",
+            "tue": "Mar",
+            "wed": "Mer",
+            "thu": "Jeu",
+            "fri": "Ven",
+            "sat": "Sam",
+            "sun": "Dim"
+          }
+        },
+        "saveSchedule": "Enregistrer",
         "saved": {
           "profile": "Profil mis à jour.",
           "locale": "Langue mise à jour.",
-          "password": "Mot de passe mis à jour."
+          "password": "Mot de passe mis à jour.",
+          "schedule": "Horaires mis à jour."
         },
         "errors": {
           "invalid_input": "Données invalides.",
@@ -935,8 +978,17 @@
       "siteInfo": "Infos site",
       "type": "Type",
       "standing": "Standing",
+      "timezone": "Fuseau horaire",
+      "timezoneInheritedFrom": {
+        "company": "hérité de l'entreprise",
+        "organization": "hérité de l'organisation"
+      },
       "primaryContact": "Contact principal",
-      "notes": "Notes"
+      "notes": "Notes",
+      "edit": "Modifier",
+      "editTitle": "Modifier le site",
+      "updateSubmit": "Enregistrer",
+      "cancel": "Annuler"
     },
     "sequences": {
       "title": "Séquences",
@@ -994,6 +1046,50 @@
         "completed_cascaded": "Transféré",
         "stopped_opted_out": "Désinscrit",
         "stopped_manual": "Arrêté"
+      },
+      "enrolment": {
+        "title": "Enrôlement",
+        "backToSequence": "Retour à la séquence",
+        "stepPosition": "Étape {current} sur {total}",
+        "startedOn": "Démarré le {date}",
+        "endedOn": "Terminé le {date}",
+        "nextDue": "Prochaine étape le {date}",
+        "noNextDue": "Aucune prochaine étape planifiée",
+        "endReason": {
+          "completed_exhausted": "Fin de la séquence atteinte",
+          "completed_success": "Marqué comme gagné",
+          "completed_cascaded": "Transféré vers une autre séquence",
+          "stopped_opted_out": "Contact désinscrit",
+          "stopped_manual": "Arrêté manuellement"
+        },
+        "timeline": {
+          "title": "Historique des étapes",
+          "empty": "Aucune étape n'a encore été exécutée.",
+          "outcome": {
+            "executed": "Exécutée",
+            "skipped_filter": "Sautée (filtre)",
+            "skipped_condition": "Sautée (condition)",
+            "current": "En cours",
+            "awaiting_task": "Tâche en attente"
+          },
+          "viewTask": "Voir la tâche",
+          "stepLabel": "Étape {order}",
+          "waitFor": "Attente {value} {unit}",
+          "unit": {
+            "minutes": "{n, plural, one {minute} other {minutes}}",
+            "hours": "{n, plural, one {heure} other {heures}}",
+            "days": "{n, plural, one {jour} other {jours}}"
+          },
+          "resumeAt": "Reprise le {date}",
+          "resumeIn": "dans"
+        },
+        "countdown": {
+          "elapsed": "maintenant",
+          "days": "{n}j",
+          "hours": "{n}h",
+          "minutes": "{n}m",
+          "seconds": "{n}s"
+        }
       },
       "editor": {
         "back": "Retour",
@@ -1144,7 +1240,11 @@
           "scheduledOffsetHint": "0 = aujourd'hui (ou prochain jour ouvré) à l'heure préférée.",
           "setDueAt": "Définir une échéance ferme",
           "dueOffset": "Décalage de l'échéance depuis l'exécution (jours ouvrés)",
-          "dueAtAllDay": "Échéance journée entière (sans heure précise)"
+          "dueAtAllDay": "Échéance journée entière (sans heure précise)",
+          "awaitTimeoutEnabled": "Définir un délai d'attente",
+          "awaitTimeoutDays": "Reprendre après (jours)",
+          "awaitTimeoutHint": "Si le sale ne ferme jamais la tâche, la séquence reprend au bout de ce nombre de jours.",
+          "awaitTimeoutDisabledHint": "La séquence attend indéfiniment que la tâche soit marquée faite."
         }
       },
       "contactSection": {

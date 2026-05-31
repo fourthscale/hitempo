@@ -31,6 +31,7 @@ import {
   getDetectedSignalProp,
 } from "@/lib/messages/task-defaults";
 import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
+import { resolveContactTimezone } from "@/lib/i18n/timezones";
 import { cn } from "@/lib/utils";
 
 const INTERACTION_TYPES = [
@@ -101,6 +102,16 @@ export default async function ContactDetailPage({
   const tMessages = await getTranslations("pages.messages");
 
   const contactDisplayName = resolveContactDisplayName(contact);
+
+  // Cascade : contact.timezone → site.timezone → company.timezone → org.timezone.
+  // Same resolver the sequence engine uses to place tasks, so the UI tells
+  // the truth about what the automation will pick.
+  const resolvedTimezone = resolveContactTimezone({
+    contactTz: contact.timezone,
+    siteTz: contact.site?.timezone ?? null,
+    companyTz: contact.company?.timezone ?? null,
+    orgTz: activeOrganization.timezone,
+  });
 
   const interactionTypeOptions = INTERACTION_TYPES.map((v) => ({
     value: v,
@@ -219,6 +230,18 @@ export default async function ContactDetailPage({
           <div className="text-sm">{contact.preferredLanguage}</div>
         </Card>
         <Card className="p-5">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{t("fields.timezone")}</div>
+          <div className="text-sm">
+            {resolvedTimezone.tz}
+            {resolvedTimezone.source !== "contact" && (
+              <span className="text-muted-foreground">
+                {" · "}
+                {t(`fields.timezoneInheritedFrom.${resolvedTimezone.source}`)}
+              </span>
+            )}
+          </div>
+        </Card>
+        <Card className="p-5">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{t("fields.owner")}</div>
           <div className="text-sm">
             {ownerName ?? "—"}
@@ -289,6 +312,7 @@ export default async function ContactDetailPage({
           companyId={contact.company.id}
           enrolments={contactEnrolments.map((e) => ({
             id: e.id,
+            sequenceId: e.sequenceId,
             sequenceName: e.sequenceName,
             status: e.status,
             currentStepOrder: e.currentStepOrder,

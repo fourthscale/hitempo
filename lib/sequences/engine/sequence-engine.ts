@@ -193,10 +193,24 @@ export class SequenceEngine {
       return { status: "ended", reason: "exhausted" };
     }
 
+    // Human-action steps (send_email / send_linkedin / phone_call) set
+    // `awaitTaskCompletion = true` — the engine pauses the cursor by setting
+    // `next_due_at = null` (indefinite wait, ignored by the cron sweep). The
+    // `sequences/task.completed` event re-fires `handleAdvance` when the rep
+    // closes the task, supplying the wake-up. If the step config sets
+    // `awaitTaskTimeoutMs`, the engine schedules a fallback resume at that
+    // horizon — useful for "give up after 2 weeks if the rep ignored the
+    // task" patterns. Default (no timeout) is wait-forever.
+    const nextDueAt = result.awaitTaskCompletion
+      ? result.awaitTaskTimeoutMs != null
+        ? new Date(this.now().getTime() + result.awaitTaskTimeoutMs)
+        : null
+      : new Date(this.now().getTime() + (result.delayMs ?? 0));
+
     await advanceEnrolment(this.db, enrolment.id, {
       currentStepId: nextStep.id,
       currentStepOrder: nextStep.stepOrder,
-      nextDueAt: new Date(this.now().getTime() + (result.delayMs ?? 0)),
+      nextDueAt,
       lastExecutionCounter: nextCounter,
     });
 

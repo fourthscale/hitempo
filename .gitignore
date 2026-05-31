@@ -48,3 +48,4 @@ supabase/.temp/
 
 # Drizzle generated output (not source of truth)
 db/.drizzle-out/
+supabase/snippets/

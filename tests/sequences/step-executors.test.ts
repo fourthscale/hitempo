@@ -137,7 +137,7 @@ describe("SendMessageStepExecutor", () => {
     const arg = (services.createTask as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(arg.description).toContain("Hello there");
     expect(services.generateDraftForTask).not.toHaveBeenCalled();
-    expect(result).toEqual({ taskId: "task-1", navigateTo: "default" });
+    expect(result).toEqual({ taskId: "task-1", navigateTo: "default", awaitTaskCompletion: true });
   });
 
   it("send_email ai mode requests a draft", async () => {

@@ -10,6 +10,8 @@ import { getCurrentOrg, getCurrentUser } from "@/lib/auth/context";
 import { getDb } from "@/db/client";
 import { organizationMembers } from "@/db/schema";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
+import { isValidTimezone } from "@/lib/i18n/timezones";
+import type { WorkPattern } from "@/lib/sequences/work-pattern";
 
 const LOCALE_VALUES = ["fr", "en"] as const;
 
@@ -109,6 +111,121 @@ export async function updatePasswordInAppAction(formData: FormData) {
   }
 
   redirect("/settings/profile?saved=password");
+}
+
+// ---------------------------------------------------------------------------
+// Update working schedule — timezone + per-day task quotas. Sequence engine
+// uses these at task-creation time to pick a slot that respects the sale's
+// IANA timezone and per-channel daily limits. Stored on
+// `organization_members` (per-org : a sale can carry different quotas in
+// different tenants), separate from the auth user metadata.
+// Permissions : MVP allows the sale to edit their own row only. Cross-user
+// editing by org admin / platform admin is intentionally deferred to a
+// follow-up.
+// ---------------------------------------------------------------------------
+
+// "HH:MM" 24h. The slot finder reads these literally — invalid formats would
+// silently produce broken windows, so we validate strictly here.
+const timeOfDayRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+const timeWindowSchema = z
+  .object({
+    start: z.string().regex(timeOfDayRegex),
+    end: z.string().regex(timeOfDayRegex),
+  })
+  .refine((w) => w.start < w.end, { message: "end must be after start" });
+
+const dayKeySchema = z.enum([
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+]);
+
+// `z.partialRecord` (Zod v4) — Zod 4's `z.record(enum, v)` is exhaustive by
+// design (requires every enum key in the input), which breaks any pattern that
+// drops weekends. `partialRecord` is the v3-style optional-keys variant.
+const workPatternSchema = z.partialRecord(dayKeySchema, z.array(timeWindowSchema).min(1));
+
+const updateWorkScheduleSchema = z.object({
+  timezone: z.string().trim().min(1).max(64),
+  maxEmailsPerDay: z.coerce.number().int().min(0).max(1000),
+  maxCallsPerDay: z.coerce.number().int().min(0).max(1000),
+});
+
+/** Parse the JSON-serialized work pattern from the hidden input. Returns
+ *  `null` when the field is absent or every day is disabled — caller treats
+ *  that as "use the default pattern". Throws-shape returned as discriminated
+ *  union so the action can branch without a try/catch. */
+function parseWorkPattern(raw: FormDataEntryValue | null):
+  | { ok: true; value: WorkPattern | null }
+  | { ok: false } {
+  if (typeof raw !== "string" || raw.length === 0) return { ok: true, value: null };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false };
+  }
+  const validated = workPatternSchema.safeParse(parsed);
+  if (!validated.success) return { ok: false };
+  const cleaned = validated.data as WorkPattern;
+  // Empty object → treat as null so the engine falls back to defaults.
+  return { ok: true, value: Object.keys(cleaned).length === 0 ? null : cleaned };
+}
+
+/**
+ * Discriminated result of `updateWorkScheduleAction`.
+ *
+ * Returned instead of thrown so the client form can decide what to do on
+ * failure WITHOUT a full-page redirect — the global error modal is opened
+ * via a soft `router.replace(?action_error=…)` from the form, preserving
+ * the user's in-progress edits (TZ choice, work-pattern slots).
+ */
+export type WorkScheduleActionResult =
+  | { ok: true }
+  | { ok: false; code: "invalid_input" | "invalid_timezone" | "invalid_work_pattern" };
+
+export async function updateWorkScheduleAction(
+  formData: FormData,
+): Promise<WorkScheduleActionResult> {
+  const parsed = updateWorkScheduleSchema.safeParse({
+    timezone: formData.get("timezone"),
+    maxEmailsPerDay: formData.get("maxEmailsPerDay"),
+    maxCallsPerDay: formData.get("maxCallsPerDay"),
+  });
+  if (!parsed.success) return { ok: false, code: "invalid_input" };
+
+  if (!isValidTimezone(parsed.data.timezone)) {
+    return { ok: false, code: "invalid_timezone" };
+  }
+
+  const pattern = parseWorkPattern(formData.get("workPattern"));
+  if (!pattern.ok) return { ok: false, code: "invalid_work_pattern" };
+
+  const { user, membership } = await getCurrentOrg();
+
+  await getDb()
+    .update(organizationMembers)
+    .set({
+      timezone: parsed.data.timezone,
+      maxEmailsPerDay: parsed.data.maxEmailsPerDay,
+      maxCallsPerDay: parsed.data.maxCallsPerDay,
+      workPattern: pattern.value,
+    })
+    .where(
+      and(
+        eq(organizationMembers.userId, user.id),
+        eq(organizationMembers.organizationId, membership.organizationId),
+      ),
+    );
+
+  // Silent save. revalidatePath rerenders server data ; the form keeps its
+  // own state since the client component never unmounts.
+  revalidatePath("/settings/profile");
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------

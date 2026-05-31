@@ -136,7 +136,9 @@
     "sequence_draft_invalid": "The sequence draft has a problem and can't be published. Review the flow and try again.",
     "sequence_no_draft": "There's no pending draft to publish.",
     "enrolment_not_found": "This enrolment couldn't be found.",
-    "contact_not_eligible": "This contact can't be enrolled (opted out, already in a sequence, or in cooldown)."
+    "contact_not_eligible": "This contact can't be enrolled (opted out, already in a sequence, or in cooldown).",
+    "invalid_timezone": "Unknown timezone. Pick one from the list before saving.",
+    "invalid_work_pattern": "One of your day windows is invalid. Check that times are HH:MM and that each end is after its start."
   },
   "common": {
     "appName": "hitempo",
@@ -431,6 +433,10 @@
         "size": "Size",
         "legalName": "Legal name",
         "primaryLocale": "Primary locale",
+        "timezone": "Timezone",
+        "timezoneInheritedFrom": {
+          "organization": "inherited from organization"
+        },
         "addedAt": "Added on",
         "relationship": "Relationship",
         "industry": "Industry",
@@ -487,6 +493,8 @@
         "standing": "Standing (1-5 stars)",
         "relationshipType": "Relationship",
         "primaryLocale": "Primary language",
+        "timezone": "Timezone",
+        "timezoneInherit": "Inherit from organization",
         "status": "Status",
         "signalType": "Signal type",
         "signalSource": "Signal source",
@@ -530,6 +538,8 @@
           "postalCode": "Postal code",
           "city": "City",
           "country": "Country (ISO2)",
+          "timezone": "Timezone",
+          "timezoneInherit": "Inherit from company",
           "isPrimary": "Primary site"
         }
       }
@@ -575,13 +585,20 @@
         "phone": "Phone",
         "linkedin": "LinkedIn",
         "preferredLanguage": "Preferred language",
+        "timezone": "Timezone",
+        "timezoneInherit": "Inherit from site / company",
         "preferredChannel": "Preferred channel",
         "relevance": "Relevance",
         "status": "Status",
         "notes": "Notes",
         "owner": "Owner",
         "ownerInherit": "Inherit from company",
-        "ownerInheritedHint": "inherited from account"
+        "ownerInheritedHint": "inherited from account",
+        "timezoneInheritedFrom": {
+          "site": "inherited from site",
+          "company": "inherited from company",
+          "organization": "inherited from organization"
+        }
       }
     },
     "tasks": {
@@ -737,10 +754,36 @@
         "newPassword": "New password",
         "confirmPassword": "Confirm password",
         "savePassword": "Change password",
+        "scheduleTitle": "Working schedule",
+        "scheduleDescription": "Used by sequence automations to pick task slots. Timezone falls back to the organization default if left at it.",
+        "timezone": "Timezone",
+        "timezoneHint": "IANA timezone of your usual working location.",
+        "maxEmailsPerDay": "Max emails per day",
+        "maxEmailsPerDayHint": "Sequence automations skip generating an email task once you hit this for the day.",
+        "maxCallsPerDay": "Max calls per day",
+        "maxCallsPerDayHint": "Same logic for call tasks. Set to 0 to disable.",
+        "workPattern": {
+          "title": "Available windows by day",
+          "hint": "Sequence tasks land inside these windows in your timezone. Toggle a day off to skip it entirely. Default: Mon–Fri 9:00–12:00 + 14:00–17:00.",
+          "addSlot": "Add afternoon slot",
+          "removeSlot": "Remove slot",
+          "off": "Day off",
+          "day": {
+            "mon": "Mon",
+            "tue": "Tue",
+            "wed": "Wed",
+            "thu": "Thu",
+            "fri": "Fri",
+            "sat": "Sat",
+            "sun": "Sun"
+          }
+        },
+        "saveSchedule": "Save",
         "saved": {
           "profile": "Profile updated.",
           "locale": "Language updated.",
-          "password": "Password updated."
+          "password": "Password updated.",
+          "schedule": "Working schedule updated."
         },
         "errors": {
           "invalid_input": "Invalid data.",
@@ -935,8 +978,17 @@
       "siteInfo": "Site info",
       "type": "Type",
       "standing": "Standing",
+      "timezone": "Timezone",
+      "timezoneInheritedFrom": {
+        "company": "inherited from company",
+        "organization": "inherited from organization"
+      },
       "primaryContact": "Primary contact",
-      "notes": "Notes"
+      "notes": "Notes",
+      "edit": "Edit",
+      "editTitle": "Edit site",
+      "updateSubmit": "Save changes",
+      "cancel": "Cancel"
     },
     "sequences": {
       "title": "Sequences",
@@ -994,6 +1046,50 @@
         "completed_cascaded": "Moved on",
         "stopped_opted_out": "Opted out",
         "stopped_manual": "Stopped"
+      },
+      "enrolment": {
+        "title": "Enrolment",
+        "backToSequence": "Back to sequence",
+        "stepPosition": "Step {current} of {total}",
+        "startedOn": "Started {date}",
+        "endedOn": "Ended {date}",
+        "nextDue": "Next due {date}",
+        "noNextDue": "No next step scheduled",
+        "endReason": {
+          "completed_exhausted": "Reached the end of the sequence",
+          "completed_success": "Marked as won",
+          "completed_cascaded": "Moved to another sequence",
+          "stopped_opted_out": "Contact opted out",
+          "stopped_manual": "Stopped manually"
+        },
+        "timeline": {
+          "title": "Execution history",
+          "empty": "No steps have run yet.",
+          "outcome": {
+            "executed": "Executed",
+            "skipped_filter": "Skipped (filter)",
+            "skipped_condition": "Skipped (condition)",
+            "current": "In progress",
+            "awaiting_task": "Awaiting task"
+          },
+          "viewTask": "View task",
+          "stepLabel": "Step {order}",
+          "waitFor": "Wait {value} {unit}",
+          "unit": {
+            "minutes": "{n, plural, one {minute} other {minutes}}",
+            "hours": "{n, plural, one {hour} other {hours}}",
+            "days": "{n, plural, one {day} other {days}}"
+          },
+          "resumeAt": "Resumes {date}",
+          "resumeIn": "in"
+        },
+        "countdown": {
+          "elapsed": "now",
+          "days": "{n}d",
+          "hours": "{n}h",
+          "minutes": "{n}m",
+          "seconds": "{n}s"
+        }
       },
       "editor": {
         "back": "Back",
@@ -1144,7 +1240,11 @@
           "scheduledOffsetHint": "0 = today (or next business day) at preferred hour.",
           "setDueAt": "Set a hard deadline",
           "dueOffset": "Deadline offset from scheduled (business days)",
-          "dueAtAllDay": "Whole-day deadline (no specific hour)"
+          "dueAtAllDay": "Whole-day deadline (no specific hour)",
+          "awaitTimeoutEnabled": "Set a wait timeout",
+          "awaitTimeoutDays": "Resume after (days)",
+          "awaitTimeoutHint": "If the rep never closes the task, the sequence moves on after this many days.",
+          "awaitTimeoutDisabledHint": "The sequence waits indefinitely until the task is marked done."
         }
       },
       "contactSection": {

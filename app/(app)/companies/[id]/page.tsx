@@ -12,6 +12,7 @@ import {
   Building2,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
+import { resolveCompanyTimezone } from "@/lib/i18n/timezones";
 import { getCompanyWithDetails, getGroupStats } from "@/db/queries/companies";
 import { getOrgMembersWithNames } from "@/db/queries/members";
 import { getInteractionsByCompany, countInteractionsByCompany } from "@/db/queries/interactions";
@@ -370,6 +371,24 @@ export default async function CompanyDetailPage({
                 <InfoRow label={t("info.size")} value={company.sizeEstimate} />
                 <InfoRow label={t("info.legalName")} value={company.legalName} />
                 <InfoRow label={t("info.primaryLocale")} value={company.primaryLocale.toUpperCase()} />
+                {(() => {
+                  // Same cascade the sequence engine uses (company → org), so
+                  // the UI tells the truth about what automation will pick.
+                  const tz = resolveCompanyTimezone({
+                    companyTz: company.timezone,
+                    orgTz: activeOrganization.timezone,
+                  });
+                  const suffix =
+                    tz.source === "company"
+                      ? null
+                      : ` · ${t(`info.timezoneInheritedFrom.${tz.source}`)}`;
+                  return (
+                    <InfoRow
+                      label={t("info.timezone")}
+                      value={suffix ? `${tz.tz}${suffix}` : tz.tz}
+                    />
+                  );
+                })()}
                 <InfoRow
                   label={t("info.addedAt")}
                   value={new Date(company.createdAt).toLocaleDateString()}

@@ -15,6 +15,9 @@ import {
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { GmailIcon } from "@/components/app/gmail-icon";
 import { CheckCircle2, AlertCircle, Mail } from "lucide-react";
+import { COMMON_TIMEZONES } from "@/lib/i18n/timezones";
+import { WorkScheduleForm } from "@/components/app/work-schedule-form";
+import type { WorkPattern } from "@/lib/sequences/work-pattern";
 
 const LOCALE_OPTIONS = ["fr", "en"] as const;
 
@@ -23,7 +26,7 @@ export default async function ProfilePage({
 }: {
   searchParams: Promise<{ saved?: string; error?: string; gmail?: string }>;
 }) {
-  const { user, membership } = await getCurrentOrg();
+  const { user, membership, organization } = await getCurrentOrg();
   const { saved, error, gmail } = await searchParams;
   const gmailCreds = await GmailCredentialsServiceFactory.getInstance().getForUser(user.id);
 
@@ -34,6 +37,13 @@ export default async function ProfilePage({
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const firstName = typeof meta.firstName === "string" ? meta.firstName : "";
   const lastName = typeof meta.lastName === "string" ? meta.lastName : "";
+
+  const memberTimezone = membership.timezone ?? organization.timezone;
+  // Include the member's current TZ in the dropdown even if it's outside the
+  // curated COMMON_TIMEZONES list — covers users who manually set an exotic
+  // IANA value via the API or who have an inherited org TZ outside the
+  // shortlist. Dedupe + sort so the rendered <option> set is stable.
+  const tzChoices = Array.from(new Set([memberTimezone, ...COMMON_TIMEZONES])).sort();
 
   return (
     <div className="max-w-[700px] mx-auto">
@@ -119,6 +129,21 @@ export default async function ProfilePage({
             <SubmitButton size="sm">{t("saveLocale")}</SubmitButton>
           </div>
         </form>
+      </Card>
+
+      {/* Working schedule — TZ + per-day task quotas + work pattern */}
+      <Card className="p-6 mb-6">
+        <h2 className="font-serif text-base font-bold mb-1">{t("scheduleTitle")}</h2>
+        <p className="text-sm text-muted-foreground mb-4">{t("scheduleDescription")}</p>
+        <WorkScheduleForm
+          defaults={{
+            timezone: memberTimezone,
+            maxEmailsPerDay: membership.maxEmailsPerDay ?? 25,
+            maxCallsPerDay: membership.maxCallsPerDay ?? 10,
+            workPattern: membership.workPattern as WorkPattern | null,
+          }}
+          tzChoices={tzChoices}
+        />
       </Card>
 
       {/* Email d'envoi — Gmail OAuth */}

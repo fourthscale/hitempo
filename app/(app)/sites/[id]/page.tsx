@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { MapPin, Building2 } from "lucide-react";
+import { MapPin, Building2, Pencil } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { getSiteWithDetails } from "@/db/queries/sites";
 import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
+import { resolveSiteTimezone } from "@/lib/i18n/timezones";
 import { setSitePrimaryContactAction } from "@/lib/actions/sites";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
@@ -39,6 +40,12 @@ export default async function SiteDetailPage({
     ? site.contacts.find((c) => c.id === site.primaryContactId) ?? null
     : null;
 
+  const resolvedTimezone = resolveSiteTimezone({
+    siteTz: site.timezone,
+    companyTz: site.company.timezone,
+    orgTz: activeOrganization.timezone,
+  });
+
   return (
     <div className="max-w-[1200px] mx-auto">
       <nav className="text-xs text-muted-foreground mb-4">
@@ -66,6 +73,14 @@ export default async function SiteDetailPage({
               {site.company.name}
             </Link>
           </span>
+        }
+        right={
+          <Link href={`/sites/${site.id}/edit`}>
+            <Button variant="outline" size="sm">
+              <Pencil className="h-3.5 w-3.5 mr-1.5" />
+              {t("edit")}
+            </Button>
+          </Link>
         }
       />
 
@@ -164,6 +179,18 @@ export default async function SiteDetailPage({
                   <dd>{"★".repeat(site.standing)}</dd>
                 </div>
               )}
+              <div>
+                <dt className="text-xs uppercase tracking-wider text-muted-foreground">{t("timezone")}</dt>
+                <dd>
+                  {resolvedTimezone.tz}
+                  {resolvedTimezone.source !== "site" && (
+                    <span className="text-muted-foreground">
+                      {" · "}
+                      {t(`timezoneInheritedFrom.${resolvedTimezone.source}`)}
+                    </span>
+                  )}
+                </dd>
+              </div>
               {currentPrimary && (
                 <div>
                   <dt className="text-xs uppercase tracking-wider text-muted-foreground">{t("primaryContact")}</dt>

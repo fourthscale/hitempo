@@ -36,6 +36,8 @@ const sharedContactFields = {
   phone: z.string().max(50).optional().or(z.literal("")),
   linkedinUrl: z.string().url().optional().or(z.literal("")),
   preferredLanguage: z.string().max(10).default("fr"),
+  // IANA TZ string ; empty = inherit from site → company → org via the cascade resolver.
+  timezone: z.string().max(64).optional().or(z.literal("")),
   preferredChannel: z
     .enum(["email", "phone", "linkedin", "in_person"])
     .optional()

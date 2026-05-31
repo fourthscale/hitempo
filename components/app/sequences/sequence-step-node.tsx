@@ -20,12 +20,25 @@ const ICONS: Record<SequenceStepActionType, typeof Mail> = {
   merge: GitMerge,
 };
 
+/**
+ * Per-enrolment runtime state used by the enrolment detail view to colour
+ * the diagram :
+ *   - "executed" : engine ran the step AND any task it created is done
+ *   - "awaiting" : engine ran the step (created a task) BUT the rep hasn't
+ *                  closed the task yet → the sequence is logically blocked
+ *                  here, even though the engine cursor has already advanced
+ *   - "current"  : engine cursor parked on the step, waiting to run next
+ * Steps with no entry are pending (default neutral style).
+ */
+export type SequenceStepRunState = "executed" | "awaiting" | "current";
+
 export type SequenceStepNodeData = {
   actionType: SequenceStepActionType;
   typeLabel: string;
   summary: string;
   conditionBadge?: string | null;
   isEntry: boolean;
+  runState?: SequenceStepRunState;
 };
 
 /**
@@ -65,7 +78,19 @@ export function SequenceStepNode({ id, data }: NodeProps) {
       title={draggable ? ctx.dragHint : undefined}
       className={cn(
         "w-[260px] rounded-lg border bg-card px-3 py-2.5 shadow-sm transition-colors",
-        selected ? "border-brand-teal ring-1 ring-brand-teal/30" : "border-border",
+        // `runState` takes precedence over the editor `selected` state because
+        // it's only set in the enrolment detail view (where there is no
+        // selection). Executed = green, awaiting (task not done) = violet,
+        // current (cursor parked here) = red, pending = default.
+        d.runState === "executed"
+          ? "border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500/30"
+          : d.runState === "awaiting"
+            ? "border-violet-500 bg-violet-50/40 ring-1 ring-violet-500/30"
+            : d.runState === "current"
+              ? "border-rose-500 bg-rose-50/40 ring-1 ring-rose-500/30"
+              : selected
+                ? "border-brand-teal ring-1 ring-brand-teal/30"
+                : "border-border",
         draggable && "nodrag nopan cursor-grab active:cursor-grabbing",
       )}
     >

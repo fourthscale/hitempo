@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Zap, Pause, Play, Square } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -17,6 +18,7 @@ import {
 
 export type ContactEnrolmentRow = {
   id: string;
+  sequenceId: string;
   sequenceName: string;
   status: string;
   currentStepOrder: number;
@@ -85,12 +87,17 @@ export function ContactSequencesSection({
         <Card className="divide-y divide-border">
           {enrolments.map((e) => (
             <div key={e.id} className="flex items-center justify-between gap-3 p-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">{e.sequenceName}</p>
+              <Link
+                href={`/sequences/${e.sequenceId}/enrolments/${e.id}`}
+                className="min-w-0 group"
+              >
+                <p className="text-sm font-medium text-foreground truncate group-hover:text-brand-teal transition-colors">
+                  {e.sequenceName}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {t("contactSection.step", { n: e.currentStepOrder + 1 })}
                 </p>
-              </div>
+              </Link>
               <div className="flex items-center gap-2">
                 <span
                   className={cn(

@@ -58,15 +58,26 @@ export const SequenceFlowContext = createContext<SequenceFlowCtx>({
 
 export function TriggerNode({ data }: NodeProps) {
   const ctx = useContext(SequenceFlowContext);
-  const d = data as unknown as { label: string; summary: string };
+  const d = data as unknown as { label: string; summary: string; runState?: "executed" };
+  const executed = d.runState === "executed";
   return (
     <button
       type="button"
       onClick={ctx.onSelectTrigger}
-      className="w-[260px] rounded-lg border border-foreground/20 bg-foreground/[0.03] px-3 py-2.5 text-left shadow-sm hover:border-brand-teal/40"
+      className={cn(
+        "w-[260px] rounded-lg border px-3 py-2.5 text-left shadow-sm",
+        executed
+          ? "border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500/30 hover:border-emerald-500"
+          : "border-foreground/20 bg-foreground/[0.03] hover:border-brand-teal/40",
+      )}
     >
       <div className="flex items-center gap-2.5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background">
+        <div
+          className={cn(
+            "flex h-7 w-7 items-center justify-center rounded-full",
+            executed ? "bg-emerald-600 text-white" : "bg-foreground text-background",
+          )}
+        >
           <Zap className="h-3.5 w-3.5" />
         </div>
         <div className="min-w-0">
@@ -183,6 +194,9 @@ type InsertEdgeData = {
   /** Absolute X of this branch's descent lane (from the layout). */
   laneX?: number;
   branchCount?: number;
+  /** Set by the enrolment detail view to colour the edge green when this
+   *  branch has actually been traversed by the cursor. */
+  runState?: "traversed";
 };
 
 export function SequenceInsertEdge(props: EdgeProps) {
@@ -274,9 +288,14 @@ export function SequenceInsertEdge(props: EdgeProps) {
     transform: `translate(-50%, -50%) translate(${x}px, ${y}px)`,
   });
 
+  const traversed = d?.runState === "traversed";
+  const edgeStyle = traversed
+    ? { stroke: "#10b981", strokeWidth: 2 }
+    : undefined;
+
   return (
     <>
-      <BaseEdge id={id} path={edgePath} />
+      <BaseEdge id={id} path={edgePath} style={edgeStyle} />
       <EdgeLabelRenderer>
         {label && labelY != null && (
           <span

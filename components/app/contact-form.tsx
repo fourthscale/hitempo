@@ -7,6 +7,9 @@ import { FormFooter } from "@/components/app/form-footer";
 import { Card } from "@/components/ui/card";
 import { CompanySiteSelects } from "./company-site-selects";
 import { ContactKindFields } from "./contact-kind-fields";
+import { COMMON_TIMEZONES } from "@/lib/i18n/timezones";
+
+const TZ_INHERIT = "";
 
 const CONTACT_ROLES = ["decision_maker", "influencer", "user", "prescriber", "assistant", "other"] as const;
 const CONTACT_CHANNELS = ["email", "phone", "linkedin", "in_person"] as const;
@@ -26,6 +29,7 @@ type ContactInitial = {
   phone?: string | null;
   linkedinUrl?: string | null;
   preferredLanguage?: string | null;
+  timezone?: string | null;
   preferredChannel?: string | null;
   relevance?: number | null;
   status?: string | null;
@@ -138,6 +142,24 @@ export async function ContactForm({
                 {tLang(v)}
               </option>
             ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="timezone">{t("timezone")}</Label>
+          <select
+            id="timezone"
+            name="timezone"
+            defaultValue={initial?.timezone ?? TZ_INHERIT}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value={TZ_INHERIT}>{t("timezoneInherit")}</option>
+            {COMMON_TIMEZONES.map((tz) => (
+              <option key={tz} value={tz}>{tz}</option>
+            ))}
+            {initial?.timezone && !COMMON_TIMEZONES.includes(initial.timezone) ? (
+              <option value={initial.timezone}>{initial.timezone}</option>
+            ) : null}
           </select>
         </div>
 

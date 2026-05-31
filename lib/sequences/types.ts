@@ -142,6 +142,12 @@ export type SendMessageActionConfig = {
   assignment?: TaskAssignment;
   /** TZ-contact heures, anti-conflit & quotas. Voir lib/sequences/scheduling.ts. */
   scheduling?: TaskScheduling;
+  /**
+   * Safety horizon (in days) before the engine moves on if the rep never
+   * closes the created task. Omit (default) to wait forever — the engine
+   * will only resume on the `sequences/task.completed` event.
+   */
+  awaitTaskTimeoutDays?: number;
 };
 
 /** phone_call — a manual call task, no message. */
@@ -151,6 +157,8 @@ export type PhoneCallActionConfig = {
   assignment?: TaskAssignment;
   /** TZ-contact heures, anti-conflit & quotas. Voir lib/sequences/scheduling.ts. */
   scheduling?: TaskScheduling;
+  /** See SendMessageActionConfig.awaitTaskTimeoutDays. */
+  awaitTaskTimeoutDays?: number;
 };
 
 export type WaitDelayActionConfig = {

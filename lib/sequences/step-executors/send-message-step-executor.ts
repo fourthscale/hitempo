@@ -64,6 +64,20 @@ export class SendMessageStepExecutor implements SequenceStepExecutor {
       });
     }
 
-    return { taskId, navigateTo: "default" };
+    // Block the sequence on the rep actually sending the email — the
+    // `sequences/task.completed` event resumes advancement when they close
+    // the task. Without this the cron tick would push past the unfinished
+    // outreach and stack a second/third email on the contact. Optional
+    // `awaitTaskTimeoutDays` on the step config caps the wait if the rep
+    // forgets the task entirely (omit = wait forever, the default).
+    return {
+      taskId,
+      navigateTo: "default",
+      awaitTaskCompletion: true,
+      awaitTaskTimeoutMs:
+        config.awaitTaskTimeoutDays != null
+          ? config.awaitTaskTimeoutDays * 24 * 60 * 60 * 1000
+          : undefined,
+    };
   }
 }

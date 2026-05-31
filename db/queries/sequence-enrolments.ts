@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, lte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, lte, ne, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { sequenceEnrolments, sequences, contacts, companies } from "@/db/schema";
 import type { SequenceEndReason } from "@/lib/sequences/types";
@@ -26,6 +26,50 @@ export async function getEnrolmentById(db: DbOrTx, orgId: string, id: string) {
 }
 
 /**
+ * Rich variant used by the enrolment detail page : enrolment + contact +
+ * company + sequence (name only — steps are loaded separately by the page so
+ * the published step set can be rendered through the same draft graph used by
+ * the editor).
+ */
+export async function getEnrolmentDetail(db: DbOrTx, orgId: string, id: string) {
+  return db
+    .select({
+      id: sequenceEnrolments.id,
+      sequenceId: sequenceEnrolments.sequenceId,
+      sequenceName: sequences.name,
+      contactId: sequenceEnrolments.contactId,
+      contactFirstName: contacts.firstName,
+      contactLastName: contacts.lastName,
+      contactKind: contacts.kind,
+      contactEmail: contacts.email,
+      companyId: sequenceEnrolments.companyId,
+      companyName: companies.name,
+      assigneeId: sequenceEnrolments.assigneeId,
+      status: sequenceEnrolments.status,
+      currentStepId: sequenceEnrolments.currentStepId,
+      currentStepOrder: sequenceEnrolments.currentStepOrder,
+      nextDueAt: sequenceEnrolments.nextDueAt,
+      lastExecutionCounter: sequenceEnrolments.lastExecutionCounter,
+      maxExecutionCount: sequenceEnrolments.maxExecutionCount,
+      startedAt: sequenceEnrolments.startedAt,
+      endedAt: sequenceEnrolments.endedAt,
+      endReason: sequenceEnrolments.endReason,
+    })
+    .from(sequenceEnrolments)
+    .innerJoin(sequences, eq(sequences.id, sequenceEnrolments.sequenceId))
+    .innerJoin(contacts, eq(contacts.id, sequenceEnrolments.contactId))
+    .innerJoin(companies, eq(companies.id, sequenceEnrolments.companyId))
+    .where(
+      and(
+        eq(sequenceEnrolments.organizationId, orgId),
+        eq(sequenceEnrolments.id, id),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows[0]);
+}
+
+/**
  * Engine sweep : every active enrolment whose `next_due_at` has passed, oldest
  * first. Cross-org by design (trusted cron). The engine claims each row inside
  * a transaction with its own status re-check, so a small over-fetch is safe.
@@ -49,6 +93,10 @@ export async function getDueEnrolments(db: DbOrTx, now: Date, limit = 100) {
     .where(
       and(
         eq(sequenceEnrolments.status, "active"),
+        // NULL = "indefinite wait" (set after a human-action step). The
+        // `IS NOT NULL` guard makes the planner skip them ; advancement comes
+        // from the `sequences/task.completed` event in that case.
+        isNotNull(sequenceEnrolments.nextDueAt),
         lte(sequenceEnrolments.nextDueAt, now),
       ),
     )
@@ -235,14 +283,19 @@ export async function insertEnrolment(db: DbOrTx, orgId: string, input: InsertEn
   return row;
 }
 
-/** Advance an enrolment to the next step + schedule, bumping the loop counter. */
+/**
+ * Advance an enrolment to the next step + schedule, bumping the loop counter.
+ * Pass `nextDueAt: null` to put the enrolment into the indefinite-wait state
+ * (used after a human-action step — the `sequences/task.completed` event
+ * supplies the wake-up).
+ */
 export async function advanceEnrolment(
   db: DbOrTx,
   enrolmentId: string,
   patch: {
     currentStepId: string;
     currentStepOrder: number;
-    nextDueAt: Date;
+    nextDueAt: Date | null;
     lastExecutionCounter: number;
   },
 ) {

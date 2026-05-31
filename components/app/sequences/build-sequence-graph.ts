@@ -2,7 +2,7 @@ import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import { resolveLocalizedString } from "@/lib/sequences/locale-resolver";
 import type { DraftDefinition, DraftStep } from "@/lib/sequences/draft-schema";
 import type { LocalizedString } from "@/lib/sequences/types";
-import type { SequenceStepNodeData } from "./sequence-step-node";
+import type { SequenceStepNodeData, SequenceStepRunState } from "./sequence-step-node";
 
 export const TRIGGER_ID = "__trigger";
 
@@ -21,9 +21,23 @@ type T = (key: string, values?: Record<string, string | number>) => string;
  */
 export function buildSequenceGraph(
   draft: DraftDefinition,
-  opts: { t: T; localeCtx: LocaleCtx; triggerSummary: string },
+  opts: {
+    t: T;
+    localeCtx: LocaleCtx;
+    triggerSummary: string;
+    /** Per-step runtime state (enrolment detail view only). */
+    stepStates?: Record<string, SequenceStepRunState>;
+    /**
+     * Edges that the engine actually traversed for this enrolment. Pair
+     * format `"${sourceId}->${targetId}"` (TRIGGER_ID is a valid source).
+     * Used to colour the traversed path green on the enrolment detail view.
+     */
+    traversedEdges?: ReadonlySet<string>;
+    /** True if the enrolment ever started — colours the trigger node green. */
+    triggerExecuted?: boolean;
+  },
 ): { nodes: Node[]; edges: Edge[]; endNodeIds: string[] } {
-  const { t, localeCtx, triggerSummary } = opts;
+  const { t, localeCtx, triggerSummary, stepStates, traversedEdges, triggerExecuted } = opts;
 
   const stepLabel = (step: DraftStep): string => {
     const cfg = step.actionConfig as {
@@ -60,25 +74,34 @@ export function buildSequenceGraph(
     slot: string,
     label?: string,
     branch?: { index: number; count: number },
-  ): Edge => ({
-    id: `${source}:${slot}->${target}`,
-    source,
-    target,
-    type: "insertable",
-    label,
-    data: {
-      sourceId: source,
-      slot,
-      // Open branch end → offer a join handle on this edge.
-      targetIsEnd: target.startsWith("__end:"),
-      // Target is a merge (convergence) → fan near the source, not the merge col.
-      targetIsMerge: mergeStepIds.has(target),
-      // Position among the source's sibling branches (for fan-out lanes).
-      branchIndex: branch?.index,
-      branchCount: branch?.count,
-    },
-    markerEnd: { type: MarkerType.ArrowClosed },
-  });
+  ): Edge => {
+    const traversed = traversedEdges?.has(`${source}->${target}`);
+    return {
+      id: `${source}:${slot}->${target}`,
+      source,
+      target,
+      type: "insertable",
+      label,
+      data: {
+        sourceId: source,
+        slot,
+        // Open branch end → offer a join handle on this edge.
+        targetIsEnd: target.startsWith("__end:"),
+        // Target is a merge (convergence) → fan near the source, not the merge col.
+        targetIsMerge: mergeStepIds.has(target),
+        // Position among the source's sibling branches (for fan-out lanes).
+        branchIndex: branch?.index,
+        branchCount: branch?.count,
+        runState: traversed ? "traversed" : undefined,
+      },
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        // Match the traversed stroke colour so the arrow head doesn't stay
+        // black on top of a green line.
+        ...(traversed ? { color: "#10b981" } : {}),
+      },
+    };
+  };
   const resolve = (source: string, slot: string, target: string | undefined) =>
     target && byId.has(target) ? target : endFor(source, slot);
 
@@ -123,6 +146,7 @@ export function buildSequenceGraph(
       summary: stepLabel(step),
       conditionBadge: step.condition ? t(`editor.conditions.${step.condition.type}`) : null,
       isEntry: step.id === draft.entryStepId,
+      runState: stepStates?.[step.id],
     };
     return {
       id: step.id,
@@ -143,7 +167,11 @@ export function buildSequenceGraph(
       id: TRIGGER_ID,
       type: "trigger",
       position: { x: 0, y: 0 },
-      data: { label: t("editor.trigger.title"), summary: triggerSummary } as Record<string, unknown>,
+      data: {
+        label: t("editor.trigger.title"),
+        summary: triggerSummary,
+        runState: triggerExecuted ? "executed" : undefined,
+      } as Record<string, unknown>,
     },
     ...stepNodes,
     ...endNodes,

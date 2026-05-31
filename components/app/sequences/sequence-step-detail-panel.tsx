@@ -390,10 +390,16 @@ export function SequenceStepDetailPanel({
 
       {/* ----- Scheduling (task-creating steps only) ----- */}
       {(isMessage || step.actionType === "phone_call") && (
-        <SchedulingField
-          scheduling={(step.actionConfig as { scheduling?: TaskScheduling }).scheduling}
-          onChange={(s) => patchConfig({ scheduling: s })}
-        />
+        <>
+          <SchedulingField
+            scheduling={(step.actionConfig as { scheduling?: TaskScheduling }).scheduling}
+            onChange={(s) => patchConfig({ scheduling: s })}
+          />
+          <AwaitTimeoutField
+            value={(step.actionConfig as { awaitTaskTimeoutDays?: number }).awaitTaskTimeoutDays}
+            onChange={(v) => patchConfig({ awaitTaskTimeoutDays: v })}
+          />
+        </>
       )}
 
       {/* ----- Gating condition (action steps only) ----- */}
@@ -655,5 +661,54 @@ function SchedulingField({
         )}
       </div>
     </details>
+  );
+}
+
+/**
+ * Optional safety horizon (in days) before the sequence engine moves on if the
+ * rep never closes the task this step creates. Default is "wait forever" —
+ * advancement happens on the `sequences/task.completed` event. Setting a
+ * timeout is useful for "give up after 2 weeks" patterns.
+ */
+function AwaitTimeoutField({
+  value,
+  onChange,
+}: {
+  value: number | undefined;
+  onChange: (v: number | undefined) => void;
+}) {
+  const t = useTranslations("pages.sequences");
+  const enabled = value != null;
+  return (
+    <div className="space-y-1.5 rounded-md border border-border bg-secondary/20 p-2">
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onChange(e.target.checked ? 14 : undefined)}
+        />
+        {t("editor.scheduling.awaitTimeoutEnabled")}
+      </label>
+      {enabled && (
+        <div className="space-y-1.5">
+          <Label>{t("editor.scheduling.awaitTimeoutDays")}</Label>
+          <Input
+            type="number"
+            min={1}
+            max={180}
+            value={value}
+            onChange={(e) => onChange(Number(e.target.value) || 1)}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            {t("editor.scheduling.awaitTimeoutHint")}
+          </p>
+        </div>
+      )}
+      {!enabled && (
+        <p className="text-[11px] text-muted-foreground">
+          {t("editor.scheduling.awaitTimeoutDisabledHint")}
+        </p>
+      )}
+    </div>
   );
 }

@@ -24,6 +24,17 @@ export class PhoneCallStepExecutor implements SequenceStepExecutor {
       description: config.description ? resolveLocalizedString(config.description, lc) : null,
       scheduling: config.scheduling,
     });
-    return { taskId, navigateTo: "default" };
+    // Block on the rep actually placing the call — same rationale as
+    // SendMessageStepExecutor. The `sequences/task.completed` event resumes
+    // advancement when the call is logged.
+    return {
+      taskId,
+      navigateTo: "default",
+      awaitTaskCompletion: true,
+      awaitTaskTimeoutMs:
+        config.awaitTaskTimeoutDays != null
+          ? config.awaitTaskTimeoutDays * 24 * 60 * 60 * 1000
+          : undefined,
+    };
   }
 }

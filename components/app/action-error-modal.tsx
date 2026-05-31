@@ -39,6 +39,8 @@ const KNOWN_CODES = [
   "message_not_found",
   "interaction_insert_failed",
   "not_found",
+  "invalid_timezone",
+  "invalid_work_pattern",
 ] as const;
 type KnownCode = (typeof KNOWN_CODES)[number];
 

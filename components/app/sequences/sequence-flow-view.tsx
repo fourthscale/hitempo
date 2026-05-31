@@ -16,6 +16,7 @@ import {
 } from "./sequence-flow-bits";
 import { useSequenceLayout } from "./use-sequence-layout";
 import { buildSequenceGraph } from "./build-sequence-graph";
+import type { SequenceStepRunState } from "./sequence-step-node";
 
 const nodeTypes = {
   sequenceStep: SequenceStepNode,
@@ -35,10 +36,20 @@ export function SequenceFlowView({
   draft,
   orgLocale,
   triggerSummary,
+  stepStates,
+  traversedEdges,
+  triggerExecuted,
 }: {
   draft: DraftDefinition;
   orgLocale: string;
   triggerSummary: string;
+  /** Per-step runtime status (enrolment detail view). Omit on the sequence
+   *  detail view — all steps render in the default neutral style. */
+  stepStates?: Record<string, SequenceStepRunState>;
+  /** Edges actually traversed by the cursor (`"sourceId->targetId"`). */
+  traversedEdges?: ReadonlySet<string>;
+  /** True if the enrolment ever started — colours the trigger node green. */
+  triggerExecuted?: boolean;
 }) {
   const t = useTranslations("pages.sequences");
   const localeCtx = useMemo(
@@ -50,8 +61,16 @@ export function SequenceFlowView({
     [orgLocale],
   );
   const { nodes: baseNodes, edges: baseEdges } = useMemo(
-    () => buildSequenceGraph(draft, { t: t as never, localeCtx, triggerSummary }),
-    [draft, t, localeCtx, triggerSummary],
+    () =>
+      buildSequenceGraph(draft, {
+        t: t as never,
+        localeCtx,
+        triggerSummary,
+        stepStates,
+        traversedEdges,
+        triggerExecuted,
+      }),
+    [draft, t, localeCtx, triggerSummary, stepStates, traversedEdges, triggerExecuted],
   );
   const { nodes, edgePoints, edgeLaneX } = useSequenceLayout(baseNodes, baseEdges);
   const edges = useMemo(

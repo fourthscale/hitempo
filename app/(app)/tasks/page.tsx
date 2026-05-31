@@ -60,6 +60,17 @@ function endOfWeek(d: Date) {
 
 type TaskGroup = "overdue" | "today" | "tomorrow" | "week" | "later" | "no_date";
 
+/**
+ * `scheduled_for` is the engine-picked "do it then" slot (sequence
+ * automations populate this). `due_at` is the optional hard deadline. We
+ * surface the soonest of the two as the user-facing date for grouping +
+ * display ; overdue logic still keys off `due_at` only since that's the
+ * deadline semantic, not the suggested slot.
+ */
+function effectiveDate(task: { scheduledFor: Date | null; dueAt: Date | null }): Date | null {
+  return task.scheduledFor ?? task.dueAt;
+}
+
 function getTaskGroup(dueAt: Date | null, now: Date): TaskGroup {
   if (!dueAt) return "no_date";
   const due = startOfDay(dueAt);
@@ -150,9 +161,10 @@ export default async function TasksPage({
 
   const now = new Date();
 
-  // Filter by period tab
+  // Filter by period tab — drive grouping off the effective date so engine-
+  // scheduled tasks (scheduledFor only, no dueAt) land in the right bucket.
   const filteredTasks = allTasks.filter((task) => {
-    const group = getTaskGroup(task.dueAt, now);
+    const group = getTaskGroup(effectiveDate(task), now);
     if (period === "today") return group === "today" || group === "overdue";
     if (period === "week") return group === "tomorrow" || group === "week";
     if (period === "later") return group === "later" || group === "no_date";
@@ -169,7 +181,7 @@ export default async function TasksPage({
     no_date: [],
   };
   for (const task of filteredTasks) {
-    groups[getTaskGroup(task.dueAt, now)].push(task);
+    groups[getTaskGroup(effectiveDate(task), now)].push(task);
   }
 
   const orderedGroups: TaskGroup[] =
@@ -532,9 +544,9 @@ async function TaskRow({
               ✓ {new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(task.completedAt)}
             </span>
           )}
-          {!isOverdue && !isCompleted && task.dueAt && (
+          {!isOverdue && !isCompleted && effectiveDate(task) && (
             <span className="text-xs text-muted-foreground">
-              · {new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(task.dueAt)}
+              · {new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(effectiveDate(task)!)}
             </span>
           )}
         </div>

@@ -938,7 +938,11 @@ export const sequenceEnrolments = pgTable(
     // FK would block the publish swap and contradict that model.
     currentStepId:    uuid("current_step_id").notNull(),
     currentStepOrder: integer("current_step_order").notNull(),
-    nextDueAt:        timestamp("next_due_at", { withTimezone: true }).notNull(),
+    // NULL means "indefinite wait" — set after a human-action step
+    // (send_email / phone_call) so the cron sweep does not advance the
+    // enrolment before the rep closes the task. The `sequences/task.completed`
+    // event re-fires the engine when that happens, bypassing the cron entirely.
+    nextDueAt:        timestamp("next_due_at", { withTimezone: true }),
 
     // Loop-safety + idempotence (see migration / brief).
     lastExecutionCounter: integer("last_execution_counter").notNull().default(0),

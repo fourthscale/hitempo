@@ -110,6 +110,25 @@ export type StepExecutionResult = {
   navigateTo?: string;
   /** Schedule the resulting next step this far in the future (wait_delay). */
   delayMs?: number;
+  /**
+   * Block on the rep marking the just-created task done before moving on.
+   * The engine sets `next_due_at = null` (indefinite wait, ignored by the
+   * cron sweep) ; the `sequences/task.completed` event resumes the
+   * enrolment when the rep closes the task. Used by send_email /
+   * send_linkedin / phone_call — human actions that drive the sequence's
+   * actual cadence.
+   *
+   * Mutually exclusive with `delayMs` (delay-based steps don't wait on a
+   * task — they wait on wall-clock time).
+   */
+  awaitTaskCompletion?: boolean;
+  /**
+   * Optional safety horizon when `awaitTaskCompletion` is set : if the rep
+   * never closes the task, the engine still resumes after this many ms.
+   * Omit to wait forever (default). Configured per-step via the step's
+   * action config, not by the executor itself.
+   */
+  awaitTaskTimeoutMs?: number;
   /** End the enrolment instead of advancing. */
   markEnded?: SequenceEndReason;
   notes?: string;
