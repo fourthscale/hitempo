@@ -568,6 +568,26 @@
         "relevance": "Relevance",
         "status": "Status"
       },
+      "bulk": {
+        "filterCompany": "Company",
+        "filterStatus": "Status",
+        "allCompanies": "All companies",
+        "allStatuses": "All statuses",
+        "selectedCount": "{count, plural, =0 {No selection} one {1 selected} other {# selected}}",
+        "totalCount": "/ {count} shown",
+        "selectAll": "Select all",
+        "selectNone": "Deselect all",
+        "invertSelection": "Invert selection",
+        "applyFilters": "Filter",
+        "selectRow": "Select this contact",
+        "enrollInSequence": "Enrol in a sequence",
+        "flash": "{enrolled, plural, =0 {No contact enrolled} one {1 contact enrolled} other {# contacts enrolled}}{skipped, plural, =0 {} one { · 1 skipped (already enrolled or ineligible)} other { · # skipped (already enrolled or ineligible)}}",
+        "dialogTitle": "Enrol in a sequence",
+        "dialogSubtitle": "{count, plural, one {1 contact selected.} other {# contacts selected.}} Pick a sequence to enrol them in.",
+        "sequenceLabel": "Sequence",
+        "cancel": "Cancel",
+        "submit": "Enrol selection"
+      },
       "fields": {
         "company": "Company",
         "site": "Site",

@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { getActiveOrg } from "@/lib/auth/context";
 import { getDb } from "@/db/client";
+import { contacts } from "@/db/schema";
 import { withActionError, wrapActionError } from "./wrap-action-error";
 import {
   InvalidInputError,
@@ -282,6 +284,82 @@ async function _enrollContactAction(formData: FormData) {
   return { enrolmentId: result.enrolmentId };
 }
 export const enrollContactAction = withActionError(_enrollContactAction);
+
+// ---------------------------------------------------------------------------
+// Bulk enroll : called from the contacts list page with a list of selected
+// contact ids. Loads each contact's companyId (we don't trust the client to
+// supply it), runs `enrollContact` per row in parallel, and aggregates the
+// outcome into URL params so the contacts page can flash a banner. Per-row
+// failures (already enrolled, opted out, cooldown, etc.) don't fail the
+// whole call — they're counted in `skipped`. RLS + multi-tenant filtering
+// makes the loaded-contacts set safe : a contactId outside the active org
+// would never come back.
+// ---------------------------------------------------------------------------
+
+const bulkEnrollSchema = z.object({
+  sequenceId: z.string().uuid(),
+  // contactIds arrive as a JSON-stringified array in a hidden input. We cap
+  // at 500 to match the page-size limit on `listContactsByOrg`.
+  contactIds: z.array(z.string().uuid()).min(1).max(500),
+});
+
+async function _bulkEnrollContactsAction(formData: FormData) {
+  const rawIds = formData.get("contactIds");
+  let parsedIds: unknown = [];
+  if (typeof rawIds === "string" && rawIds.length > 0) {
+    try {
+      parsedIds = JSON.parse(rawIds);
+    } catch {
+      throw new InvalidInputError();
+    }
+  }
+
+  const parsed = bulkEnrollSchema.safeParse({
+    sequenceId: formData.get("sequenceId"),
+    contactIds: parsedIds,
+  });
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
+
+  const { activeOrganization, user } = await getActiveOrg();
+
+  // Load the trusted (orgId, contactId, companyId) tuples — drops any ids
+  // not in this org or already soft-deleted before we hit the service.
+  const rows = await getDb()
+    .select({ id: contacts.id, companyId: contacts.companyId })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.organizationId, activeOrganization.id),
+        inArray(contacts.id, parsed.data.contactIds),
+        isNull(contacts.deletedAt),
+      ),
+    );
+
+  const service = new SequenceEnrolmentService({ db: getDb() });
+  const settled = await Promise.allSettled(
+    rows.map((c) =>
+      service.enrollContact(activeOrganization.id, {
+        sequenceId: parsed.data.sequenceId,
+        contactId: c.id,
+        companyId: c.companyId,
+        assigneeId: user.id,
+      }),
+    ),
+  );
+
+  let enrolled = 0;
+  let skipped = 0;
+  for (const r of settled) {
+    if (r.status === "fulfilled" && r.value.ok) enrolled++;
+    else skipped++;
+  }
+
+  revalidatePath("/contacts");
+  revalidateSequence(parsed.data.sequenceId);
+  redirect(`/contacts?bulk_enrolled=${enrolled}&bulk_skipped=${skipped}`);
+}
+
+export const bulkEnrollContactsAction = withActionError(_bulkEnrollContactsAction);
 
 const enrolmentIdSchema = z.object({
   enrolmentId: z.string().uuid(),

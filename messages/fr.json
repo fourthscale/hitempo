@@ -568,6 +568,26 @@
         "relevance": "Pertinence",
         "status": "Statut"
       },
+      "bulk": {
+        "filterCompany": "Entreprise",
+        "filterStatus": "Statut",
+        "allCompanies": "Toutes les entreprises",
+        "allStatuses": "Tous les statuts",
+        "selectedCount": "{count, plural, =0 {Aucune sélection} one {1 sélectionné} other {# sélectionnés}}",
+        "totalCount": "/ {count} affichés",
+        "selectAll": "Tout sélectionner",
+        "selectNone": "Tout désélectionner",
+        "invertSelection": "Inverser la sélection",
+        "applyFilters": "Filtrer",
+        "selectRow": "Sélectionner ce contact",
+        "enrollInSequence": "Inscrire à une séquence",
+        "flash": "{enrolled, plural, =0 {Aucun contact inscrit} one {1 contact inscrit} other {# contacts inscrits}}{skipped, plural, =0 {} one { · 1 ignoré (déjà inscrit ou inéligible)} other { · # ignorés (déjà inscrits ou inéligibles)}}",
+        "dialogTitle": "Inscrire à une séquence",
+        "dialogSubtitle": "{count, plural, one {1 contact sélectionné.} other {# contacts sélectionnés.}} Choisis une séquence pour les y inscrire.",
+        "sequenceLabel": "Séquence",
+        "cancel": "Annuler",
+        "submit": "Inscrire la sélection"
+      },
       "fields": {
         "company": "Entreprise",
         "site": "Site",

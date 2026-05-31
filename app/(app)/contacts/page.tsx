@@ -2,20 +2,78 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Plus, Upload, User } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
-import { listContactsByOrg } from "@/db/queries/contacts";
-import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
+import {
+  listContactsByOrg,
+  listCompaniesWithContactsForOrg,
+} from "@/db/queries/contacts";
+import { getActiveSequencesForTargeting } from "@/db/queries/sequences";
+import { getDb } from "@/db/client";
 import { PageHeader } from "@/components/app/page-header";
 import { EmptyState } from "@/components/app/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ContactsBulkBoard } from "@/components/app/contacts/contacts-bulk-board";
 
-export default async function ContactsPage() {
+const VALID_STATUSES = new Set([
+  "to_contact",
+  "to_follow_up",
+  "qualified",
+  "not_interested",
+]);
+
+function clampStatus(raw: string | undefined): string | null {
+  return raw && VALID_STATUSES.has(raw) ? raw : null;
+}
+
+function clampUuid(raw: string | undefined): string | null {
+  if (!raw) return null;
+  // Loose UUID check — DB validates strictly. Goal here is just to drop
+  // obvious garbage URL params before the query.
+  return /^[0-9a-f-]{36}$/i.test(raw) ? raw : null;
+}
+
+function clampInt(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+export default async function ContactsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    companyId?: string;
+    status?: string;
+    bulk_enrolled?: string;
+    bulk_skipped?: string;
+  }>;
+}) {
+  const params = await searchParams;
+  const selectedCompanyId = clampUuid(params.companyId);
+  const selectedStatus = clampStatus(params.status);
+  const flashEnrolled = clampInt(params.bulk_enrolled);
+  const flashSkipped = clampInt(params.bulk_skipped);
+
   const { activeOrganization } = await getActiveOrg();
-  const rows = await listContactsByOrg(activeOrganization.id);
+  const orgId = activeOrganization.id;
+
+  const [rows, companies, sequences] = await Promise.all([
+    listContactsByOrg(orgId, {
+      companyId: selectedCompanyId ?? undefined,
+      status: selectedStatus ?? undefined,
+    }),
+    listCompaniesWithContactsForOrg(orgId),
+    getActiveSequencesForTargeting(getDb(), orgId),
+  ]);
+
   const t = await getTranslations("pages.contacts");
   const tNav = await getTranslations("nav");
-  const tRole = await getTranslations("contactRole");
-  const tStatus = await getTranslations("contactStatus");
+
+  const hasFilter = selectedCompanyId != null || selectedStatus != null;
+  const flash =
+    flashEnrolled != null || flashSkipped != null
+      ? { enrolled: flashEnrolled ?? 0, skipped: flashSkipped ?? 0 }
+      : null;
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -40,107 +98,38 @@ export default async function ContactsPage() {
         }
       />
 
-      <Card className="p-0 overflow-hidden">
-        {rows.length === 0 ? (
+      {rows.length === 0 && !hasFilter ? (
+        <Card className="p-0 overflow-hidden">
           <EmptyState
             icon={User}
             title={t("empty")}
             action={{ label: t("emptyAction"), href: "/contacts/new" }}
           />
-        ) : (
-          <>
-          {/* Mobile / tablet portrait : cards */}
-          <ul className="lg:hidden divide-y divide-border">
-            {rows.map(({ contact, companyName, companyId }) => (
-              <li key={contact.id} className="px-4 py-3 hover:bg-secondary/30">
-                <div className="flex items-start justify-between gap-3 mb-1.5">
-                  <div className="min-w-0">
-                    <Link
-                      href={`/contacts/${contact.id}`}
-                      className="font-medium text-foreground hover:text-brand-teal"
-                    >
-                      {resolveContactDisplayName(contact)}
-                    </Link>
-                    {contact.jobTitle && (
-                      <div className="text-xs text-muted-foreground">{contact.jobTitle}</div>
-                    )}
-                    <Link
-                      href={`/companies/${companyId}`}
-                      className="block text-xs text-muted-foreground hover:text-brand-teal mt-0.5 truncate"
-                    >
-                      {companyName}
-                    </Link>
-                  </div>
-                  {contact.relevance != null && (
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {"★".repeat(contact.relevance)}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                  {contact.role && (
-                    <span className="px-1.5 py-0.5 rounded bg-secondary text-foreground">
-                      {tRole(contact.role as Parameters<typeof tRole>[0])}
-                    </span>
-                  )}
-                  <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-                    {tStatus(contact.status as Parameters<typeof tStatus>[0])}
-                  </span>
-                  {contact.email && (
-                    <span className="text-muted-foreground truncate">· {contact.email}</span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          {/* Desktop : table */}
-          <div className="hidden lg:block overflow-x-auto"><table className="w-full text-sm">
-            <thead className="bg-secondary/40 text-muted-foreground">
-              <tr className="text-left">
-                <th className="px-4 py-3 font-medium">{t("columns.name")}</th>
-                <th className="px-4 py-3 font-medium">{t("columns.company")}</th>
-                <th className="px-4 py-3 font-medium">{t("columns.role")}</th>
-                <th className="px-4 py-3 font-medium">{t("columns.email")}</th>
-                <th className="px-4 py-3 font-medium">{t("columns.relevance")}</th>
-                <th className="px-4 py-3 font-medium">{t("columns.status")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {rows.map(({ contact, companyName, companyId }) => (
-                <tr key={contact.id} className="hover:bg-secondary/30">
-                  <td className="px-4 py-3">
-                    <Link href={`/contacts/${contact.id}`} className="font-medium hover:text-brand-teal">
-                      {resolveContactDisplayName(contact)}
-                    </Link>
-                    {contact.jobTitle && (
-                      <div className="text-xs text-muted-foreground">{contact.jobTitle}</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/companies/${companyId}`} className="text-muted-foreground hover:text-brand-teal">
-                      {companyName}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {contact.role
-                      ? tRole(contact.role as Parameters<typeof tRole>[0])
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground break-all">{contact.email ?? "—"}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {contact.relevance ? "★".repeat(contact.relevance) : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {tStatus(contact.status as Parameters<typeof tStatus>[0])}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-          </>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <ContactsBulkBoard
+          rows={rows.map(({ contact, companyName, companyId }) => ({
+            contact: {
+              id: contact.id,
+              kind: contact.kind,
+              firstName: contact.firstName,
+              lastName: contact.lastName,
+              jobTitle: contact.jobTitle,
+              role: contact.role,
+              email: contact.email,
+              relevance: contact.relevance,
+              status: contact.status,
+            },
+            companyId,
+            companyName,
+          }))}
+          companies={companies}
+          sequences={sequences.map((s) => ({ id: s.id, name: s.name }))}
+          selectedCompanyId={selectedCompanyId}
+          selectedStatus={selectedStatus}
+          flash={flash}
+        />
+      )}
     </div>
   );
 }
