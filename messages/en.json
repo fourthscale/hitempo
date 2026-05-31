@@ -578,7 +578,6 @@
         "selectAll": "Select all",
         "selectNone": "Deselect all",
         "invertSelection": "Invert selection",
-        "applyFilters": "Filter",
         "selectRow": "Select this contact",
         "enrollInSequence": "Enrol in a sequence",
         "flash": "{enrolled, plural, =0 {No contact enrolled} one {1 contact enrolled} other {# contacts enrolled}}{skipped, plural, =0 {} one { · 1 skipped (already enrolled or ineligible)} other { · # skipped (already enrolled or ineligible)}}",

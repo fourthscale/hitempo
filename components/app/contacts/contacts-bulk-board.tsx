@@ -92,17 +92,15 @@ export function ContactsBulkBoard({
     });
   }
 
-  function applyFilters(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const next = new URLSearchParams();
-    const company = String(fd.get("companyId") ?? "");
-    const status = String(fd.get("status") ?? "");
-    if (company) next.set("companyId", company);
-    if (status) next.set("status", status);
+  function updateFilter(key: "companyId" | "status", value: string) {
+    const next = new URLSearchParams(search.toString());
+    if (value) next.set(key, value);
+    else next.delete(key);
     // Filters change the row set, so the in-memory selection becomes stale.
     // Drop it on filter change rather than retain a confusing ghost selection.
     setSelected(new Set());
+    next.delete("bulk_enrolled");
+    next.delete("bulk_skipped");
     router.push(next.toString() ? `${pathname}?${next.toString()}` : pathname);
   }
 
@@ -129,13 +127,14 @@ export function ContactsBulkBoard({
       )}
 
       {/* Filters — chip-style selects matching the visual pattern used on the
-          companies page (label-as-placeholder, no separate label tag). Submit
-          is explicit ("Filtrer") so the user can compose a combination
-          without surprise navigations. */}
-      <form onSubmit={applyFilters} className="flex flex-wrap items-center gap-2 mb-6">
+          /companies page (label-as-placeholder, no separate label tag). Each
+          change navigates immediately ; `value` (not `defaultValue`) so the
+          chip mirrors the URL state after navigation. */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         <select
           name="companyId"
-          defaultValue={selectedCompanyId ?? ""}
+          value={selectedCompanyId ?? ""}
+          onChange={(e) => updateFilter("companyId", e.target.value)}
           aria-label={t("bulk.filterCompany")}
           className={chipSelectClass(selectedCompanyId != null)}
         >
@@ -146,7 +145,8 @@ export function ContactsBulkBoard({
         </select>
         <select
           name="status"
-          defaultValue={selectedStatus ?? ""}
+          value={selectedStatus ?? ""}
+          onChange={(e) => updateFilter("status", e.target.value)}
           aria-label={t("bulk.filterStatus")}
           className={chipSelectClass(selectedStatus != null)}
         >
@@ -155,10 +155,7 @@ export function ContactsBulkBoard({
             <option key={s} value={s}>{tStatus(s)}</option>
           ))}
         </select>
-        <Button type="submit" size="sm" variant="outline">
-          {t("bulk.applyFilters")}
-        </Button>
-      </form>
+      </div>
 
       {/* Selection toolbar — sticky to the top of the list so it stays in
           reach while the user scrolls a long contact list. */}
