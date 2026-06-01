@@ -269,4 +269,14 @@ export type SequenceInteractionCtx = {
   outcome: string | null;
   status: string | null; // interactionStatus — 'sent' | 'responded' | ...
   occurredAt: Date;
+  /**
+   * Slice E — when set, this interaction is linked (via its outbound
+   * `messageId`) to a `messages` row that belongs to a specific
+   * `sequence_enrolments` row. `null` = the interaction has no message
+   * link or its message was not sent by any sequence (e.g. manual mail).
+   *
+   * Used by the per-leaf `scope: "this_sequence"` filter so a reply only
+   * counts for the enrolment that actually sent the mail being replied to.
+   */
+  sequenceEnrolmentId: string | null;
 };

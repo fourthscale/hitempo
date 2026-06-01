@@ -7,6 +7,7 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { getSenderName } from "@/lib/auth/sender-name";
 import { logInteraction } from "@/db/queries/interactions";
 import { completeTask } from "@/db/queries/tasks";
+import { promoteContactStatus } from "@/lib/contacts/contact-status-promoter";
 import { emitSequenceTaskCompleted } from "@/lib/sequences/engine/emit-task-completed";
 import { getContactById } from "@/db/queries/contacts";
 import { insertMessage } from "@/db/queries/messages";
@@ -323,6 +324,11 @@ async function persistSentMessage(args: {
     await emitSequenceTaskCompleted(orgId, taskId);
     taskCompleted = true;
   }
+
+  // 6. Auto-promote contact.status (to_contact → contacted) since we just
+  //    recorded an outbound `sent` event. Fire-and-forget : a failure
+  //    here mustn't roll back the send.
+  void promoteContactStatus(orgId, data.contactId, { kind: "outbound_sent" });
 
   return { messageId: inserted.id, interactionId: interaction.id, taskCompleted };
 }

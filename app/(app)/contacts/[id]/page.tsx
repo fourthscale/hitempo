@@ -316,6 +316,8 @@ export default async function ContactDetailPage({
             sequenceName: e.sequenceName,
             status: e.status,
             currentStepOrder: e.currentStepOrder,
+            nextDueAt: e.nextDueAt ? e.nextDueAt.toISOString() : null,
+            lastExecution: e.lastExecution,
           }))}
           availableSequences={activeSequences
             .filter((s) => !contactEnrolments.some((e) => e.sequenceId === s.id && (e.status === "active" || e.status === "paused")))

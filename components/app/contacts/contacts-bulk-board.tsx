@@ -12,7 +12,7 @@ import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { bulkEnrollContactsAction } from "@/lib/actions/sequences";
 import { cn } from "@/lib/utils";
 
-const CONTACT_STATUSES = ["to_contact", "to_follow_up", "qualified", "not_interested"] as const;
+import { CONTACT_STATUSES } from "@/lib/contacts/contact-status";
 
 export type ContactsBulkRow = {
   contact: {

@@ -5,6 +5,9 @@ import type { Db } from "@/db/client";
 import { interactions, messages } from "@/db/schema";
 import { logInteraction } from "@/db/queries/interactions";
 import { completeTask } from "@/db/queries/tasks";
+import { promoteContactStatus } from "@/lib/contacts/contact-status-promoter";
+import { inngest } from "@/lib/inngest/client";
+import { EVENT_CLASSIFY_INTERACTION } from "@/lib/ai/classification/events";
 import { cleanReplySnippet } from "@/lib/messages/clean-reply-snippet";
 import type { GmailCredentialsService } from "./gmail-credentials-service";
 import { getGoogleOAuthConfig, refreshAccessToken } from "./google-oauth";
@@ -205,7 +208,7 @@ export class GmailReplyPoller {
     // outcome stays null — the user qualifies it (positive / negative /
     // rdv / etc) after reading the reply. No status on the reply : it's
     // an event, not a lifecycle.
-    await logInteraction(
+    const inboundRow = await logInteraction(
       messageRow.organizationId,
       messageRow.userId,
       {
@@ -243,6 +246,39 @@ export class GmailReplyPoller {
 
     if (messageRow.taskId) {
       await completeTask(messageRow.organizationId, messageRow.taskId, messageRow.userId, this.db);
+    }
+
+    // Auto-promote contact.status on the inbound reply we just logged.
+    // Fire-and-forget : swallowed errors inside the promoter ; failing here
+    // mustn't break the poller's main loop.
+    if (messageRow.contactId) {
+      void promoteContactStatus(messageRow.organizationId, messageRow.contactId, {
+        kind: "inbound_received",
+      });
+    }
+
+    // Sprint 11.5 / Slice B : kick off LLM intent classification on the
+    // inbound row. Async event so we don't block the polling loop on an
+    // LLM round-trip ; the Inngest handler is idempotent on
+    // (organizationId, interactionId) via `ai_processed_at`.
+    if (inboundRow?.id) {
+      try {
+        await inngest.send({
+          name: EVENT_CLASSIFY_INTERACTION,
+          data: {
+            organizationId: messageRow.organizationId,
+            interactionId: inboundRow.id,
+          },
+        });
+      } catch (err) {
+        // Don't fail the poller on event-bus hiccups — the row is already
+        // written, classification will eventually fire (manual retry or
+        // a future backfill cron pass).
+        console.error("[gmail-reply-poller] failed to emit classify event", {
+          interactionId: inboundRow.id,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 

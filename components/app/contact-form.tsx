@@ -13,7 +13,7 @@ const TZ_INHERIT = "";
 
 const CONTACT_ROLES = ["decision_maker", "influencer", "user", "prescriber", "assistant", "other"] as const;
 const CONTACT_CHANNELS = ["email", "phone", "linkedin", "in_person"] as const;
-const CONTACT_STATUSES = ["to_contact", "to_follow_up", "qualified", "not_interested"] as const;
+import { CONTACT_STATUSES } from "@/lib/contacts/contact-status";
 const CONTACT_LOCALES = ["fr", "en"] as const;
 
 type ContactInitial = {

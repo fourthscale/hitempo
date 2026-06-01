@@ -9,6 +9,7 @@ import { LogOut, ArrowLeftRight, ShieldCheck } from "lucide-react";
 import { countCompaniesByOrg } from "@/db/queries/companies";
 import { countContactsByOrg } from "@/db/queries/contacts";
 import { countPendingTasksByOrg } from "@/db/queries/tasks";
+import { countPendingReviewByOrg } from "@/db/queries/interactions";
 
 type Organization = {
   id: string;
@@ -54,19 +55,28 @@ export async function Sidebar({
   const tRoles = await getTranslations("admin.orgs.detail.roles");
 
   // Real counters when we have an active org; skip otherwise (pure platform admin).
-  const [companiesCount, contactsCount, tasksCount] = organization
+  const [companiesCount, contactsCount, tasksCount, pendingReviewCount] = organization
     ? await Promise.all([
         countCompaniesByOrg(organization.id),
         countContactsByOrg(organization.id),
         countPendingTasksByOrg(organization.id, user.id),
+        countPendingReviewByOrg(organization.id),
       ])
-    : [0, 0, 0];
+    : [0, 0, 0, 0];
 
   const items: NavItem[] = [
     { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
     { href: "/companies", label: t("companies"), icon: "companies", count: companiesCount },
     { href: "/contacts", label: t("contacts"), icon: "contacts", count: contactsCount },
     { href: "/tasks", label: t("tasks"), icon: "tasks", count: tasksCount },
+    {
+      href: "/inbox/pending-review",
+      label: t("inboxPendingReview"),
+      icon: "inbox",
+      // Hide the badge when zero — keeps the sidebar quiet until there's
+      // actually a reply waiting for the sale's call.
+      ...(pendingReviewCount > 0 ? { count: pendingReviewCount } : {}),
+    },
     { href: "/sequences", label: t("sequences"), icon: "sequences" },
     { href: "/field", label: t("field"), icon: "field" },
     { href: "/messages", label: t("messagesNav"), icon: "messages" },

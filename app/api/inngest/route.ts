@@ -1,6 +1,7 @@
 import { serve } from "inngest/next";
 
 import { inngest } from "@/lib/inngest/client";
+import { classifyInteractionFunctions } from "@/inngest/functions/classify-interaction";
 import { pollGmailRepliesFunctions } from "@/inngest/functions/poll-gmail-replies";
 import { sequenceEngineFunctions } from "@/inngest/functions/sequence-engine";
 
@@ -19,6 +20,7 @@ export const { GET, POST, PUT } = serve({
   functions: [
     ...pollGmailRepliesFunctions,
     ...sequenceEngineFunctions,
+    ...classifyInteractionFunctions,
   ],
   // signingKey is auto-discovered from the INNGEST_SIGNING_KEY env var.
 });

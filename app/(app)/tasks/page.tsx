@@ -591,7 +591,13 @@ async function TaskRow({
               {task.sequenceEnrolment.sequence.name}
               {task.sequenceEnrolment.sequence.steps.length > 0 &&
                 ` · ${t("sequenceStepBadge", {
-                  current: task.sequenceEnrolment.currentStepOrder + 1,
+                  // Display the step that CREATED this task — not the
+                  // enrolment cursor (engine has already advanced when
+                  // the task is hanging open). Falls back to the cursor
+                  // when the source step lookup didn't find one
+                  // (defensive : shouldn't happen for sequence-driven tasks).
+                  current:
+                    (task.sourceStepOrder ?? task.sequenceEnrolment.currentStepOrder) + 1,
                   total: task.sequenceEnrolment.sequence.steps.length,
                 })}`}
             </span>

@@ -12,6 +12,7 @@ import {
   MessageSquare,
   BarChart3,
   Settings,
+  Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +25,8 @@ type IconKey =
   | "field"
   | "messages"
   | "reporting"
-  | "settings";
+  | "settings"
+  | "inbox";
 
 const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutDashboard,
@@ -36,6 +38,7 @@ const ICONS: Record<IconKey, React.ComponentType<{ className?: string }>> = {
   messages: MessageSquare,
   reporting: BarChart3,
   settings: Settings,
+  inbox: Inbox,
 };
 
 export type NavItem = {

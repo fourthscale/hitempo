@@ -103,19 +103,39 @@ export function InteractionsTimeline({
       </div>
 
       {mode === "list" ? (
-        <ul className="divide-y divide-border">
-          {sortByOccurredDesc(interactions).map((interaction) => (
-            <li key={interaction.id} className="py-3">
-              <InteractionRow
-                interaction={interaction}
-                labels={labels}
-                formatter={formatter}
-                hideOutcomeMenu={false}
-                primary
-              />
-            </li>
-          ))}
-        </ul>
+        (() => {
+          // Pre-compute the set of outbound message ids that already
+          // received a reply. In both modes, the outbound row should not
+          // expose an outcome menu when its reply will carry the
+          // qualification — same UX rule, factored out of the grouped
+          // branch so "list" mode honors it too.
+          const messageIdsWithReply = new Set<string>();
+          for (const i of interactions) {
+            if (i.type === "email_received" && i.messageId) {
+              messageIdsWithReply.add(i.messageId);
+            }
+          }
+          const isReplyQualifiedOutbound = (i: TimelineInteraction) =>
+            i.type !== "email_received" &&
+            i.messageId != null &&
+            messageIdsWithReply.has(i.messageId);
+
+          return (
+            <ul className="divide-y divide-border">
+              {sortByOccurredDesc(interactions).map((interaction) => (
+                <li key={interaction.id} className="py-3">
+                  <InteractionRow
+                    interaction={interaction}
+                    labels={labels}
+                    formatter={formatter}
+                    hideOutcomeMenu={isReplyQualifiedOutbound(interaction)}
+                    primary
+                  />
+                </li>
+              ))}
+            </ul>
+          );
+        })()
       ) : (
         <ul className="divide-y divide-border">
           {groupAndSort(interactions).map((group) => (

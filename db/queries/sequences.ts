@@ -27,6 +27,13 @@ export type SequenceStepRow = {
   nextStepIds: NextStepIds;
   condition: SequencePredicate;
   filter: SequencePredicate;
+  /**
+   * Slice D — per-step override of the sequence's `unknownOutcomeStrategy`.
+   * `null` = inherit the sequence-level value. Plain text (not enum) so the
+   * runtime defends with `resolveUnknownOutcomeStrategy()` against any
+   * unexpected value rather than crashing.
+   */
+  unknownOutcomeStrategy: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -119,6 +126,7 @@ export async function getStepsForSequence(db: DbOrTx, sequenceId: string): Promi
       nextStepIds: sequenceSteps.nextStepIds,
       condition: sequenceSteps.condition,
       filter: sequenceSteps.filter,
+      unknownOutcomeStrategy: sequenceSteps.unknownOutcomeStrategy,
     })
     .from(sequenceSteps)
     .where(eq(sequenceSteps.sequenceId, sequenceId))
@@ -146,6 +154,7 @@ export async function getStepById(db: DbOrTx, stepId: string): Promise<SequenceS
       nextStepIds: sequenceSteps.nextStepIds,
       condition: sequenceSteps.condition,
       filter: sequenceSteps.filter,
+      unknownOutcomeStrategy: sequenceSteps.unknownOutcomeStrategy,
     })
     .from(sequenceSteps)
     .where(eq(sequenceSteps.id, stepId))
@@ -176,6 +185,8 @@ export type InsertSequenceInput = {
   excludeIfCompanyHasActiveSequence?: boolean;
   excludeIfCompanyRelationshipIn?: string[];
   cooldownAfterCompletedDays?: number | null;
+  /** Slice D — defaults to 'park' on insert when omitted. */
+  unknownOutcomeStrategy?: string;
   draftDefinition?: unknown;
 };
 

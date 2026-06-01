@@ -53,6 +53,43 @@ export async function listCompaniesWithContactsForOrg(orgId: string) {
     .orderBy(asc(companies.name));
 }
 
+/**
+ * Read just the contact's current status — used by the auto-promoter to feed
+ * `evaluateNextContactStatus`. Returns `null` when the contact is missing
+ * (deleted, wrong org) so the caller can no-op.
+ */
+export async function getContactStatus(
+  orgId: string,
+  contactId: string,
+): Promise<string | null> {
+  const [row] = await getDb()
+    .select({ status: contacts.status })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.organizationId, orgId),
+        eq(contacts.id, contactId),
+        isNull(contacts.deletedAt),
+      ),
+    )
+    .limit(1);
+  return row?.status ?? null;
+}
+
+/** Update the contact's status (auto-promoter target). */
+export async function setContactStatus(
+  orgId: string,
+  contactId: string,
+  status: string,
+): Promise<void> {
+  await getDb()
+    .update(contacts)
+    .set({ status, updatedAt: new Date() })
+    .where(
+      and(eq(contacts.organizationId, orgId), eq(contacts.id, contactId)),
+    );
+}
+
 export async function countContactsByOrg(orgId: string): Promise<number> {
   const [row] = await getDb()
     .select({ c: count() })

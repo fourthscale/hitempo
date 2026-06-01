@@ -83,6 +83,8 @@
   "contactStatus": {
     "to_contact": "À contacter",
     "to_follow_up": "À relancer",
+    "contacted": "Contacté",
+    "replied": "A répondu",
     "qualified": "Qualifié",
     "not_interested": "Pas intéressé"
   },
@@ -107,6 +109,15 @@
     "wrong_contact": "Mauvais contact",
     "rdv_scheduled": "RDV planifié",
     "opted_out": "Désabonné"
+  },
+  "intentLabel": {
+    "positive": "Intéressé",
+    "negative": "Pas intéressé",
+    "out_of_office": "Absent",
+    "wrong_person": "Mauvaise personne",
+    "unsubscribe": "Désabonné",
+    "neutral": "Neutre",
+    "unknown": "Indéterminé"
   },
   "errors": {
     "appBoundary": {
@@ -183,6 +194,7 @@
     "companies": "Entreprises",
     "contacts": "Contacts",
     "tasks": "Tâches",
+    "inboxPendingReview": "Inbox",
     "sequences": "Séquences",
     "field": "Terrain",
     "messagesNav": "Messages",
@@ -331,6 +343,19 @@
     "newCompany": "Nouvelle entreprise"
   },
   "pages": {
+    "inboxPendingReview": {
+      "title": "Inbox · à valider",
+      "subtitle": "Réponses classées par l'IA mais sans confiance suffisante pour valider seule. Confirme sa suggestion ou choisis un autre résultat.",
+      "emptyTitle": "Tout est traité",
+      "emptyDescription": "Aucune réponse en attente de validation. Les nouvelles réponses à confiance faible apparaîtront ici.",
+      "aiSuggestion": "Suggestion IA",
+      "confidence": "Confiance",
+      "confirm": "Confirmer",
+      "orOverride": "ou corriger :",
+      "setOutcome": "Corriger",
+      "clearOutcome": "Effacer",
+      "unknownContact": "Contact inconnu"
+    },
     "dashboard": {
       "greeting": "Bonjour {name}",
       "subtitle": "{date} · <em>{actions, plural, one {# action vous attend} other {# actions vous attendent}}</em>",
@@ -1029,7 +1054,22 @@
       "sections": {
         "steps": "Étapes",
         "enrolments": "Contacts inscrits",
-        "targeting": "Ciblage"
+        "targeting": "Ciblage",
+        "advancedSettings": "Réglages avancés"
+      },
+      "unknownOutcomeStrategy": {
+        "title": "Réponse non qualifiée",
+        "description": "Que fait le moteur quand un contact répond mais que l'IA n'a pas pu qualifier la réponse automatiquement, et que la prochaine étape attend un positif/négatif.",
+        "options": {
+          "park": {
+            "label": "Parker",
+            "detail": "Met l'enrôlement en pause jusqu'à ce que la réponse soit qualifiée (par l'IA en auto-apply ou par un sale dans l'inbox). Recommandé."
+          },
+          "continue_default": {
+            "label": "Continuer (branche par défaut)",
+            "detail": "Bascule sur la branche par défaut tout de suite. Plus rapide, mais peut louper une réponse positive non encore classée."
+          }
+        }
       },
       "noSteps": "Cette séquence n'a pas encore d'étapes publiées.",
       "noEnrolments": "Aucun contact inscrit pour l'instant.",
@@ -1283,6 +1323,11 @@
         "addCondition": "Ajouter une condition",
         "addGroup": "Ajouter un groupe",
         "valuePlaceholder": "valeur",
+        "scopeLabel": "Périmètre",
+        "scope": {
+          "any": "Tout email",
+          "this_sequence": "Cette séquence uniquement"
+        },
         "cat": {
           "contact": "Contact",
           "company": "Entreprise",

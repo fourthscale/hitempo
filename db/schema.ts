@@ -462,6 +462,22 @@ export const interactions = pgTable(
 
     metadata: jsonb("metadata").default({}),
 
+    /**
+     * Sprint 11.5 / Slice B : LLM intent classification of inbound replies.
+     * Populated by the `interactions/classify` Inngest handler. Kept as raw
+     * `text` (not an enum) so the classifier can return forward-compatible
+     * labels without a schema migration ; the application layer validates
+     * against `INTENT_LABELS` before applying any side-effect (outcome auto
+     * promotion). `null` = not yet classified.
+     *
+     * confidence is in [0, 1] (numeric(4, 3) — 1.000 max).
+     * processedAt non-null marks the row as already attempted (idempotency).
+     */
+    aiIntentLabel: text("ai_intent_label"),
+    aiIntentConfidence: numeric("ai_intent_confidence", { precision: 4, scale: 3 }),
+    aiIntentReasoning: text("ai_intent_reasoning"),
+    aiProcessedAt: timestamp("ai_processed_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -872,6 +888,23 @@ export const sequences = pgTable(
     editingLockedBy: uuid("editing_locked_by"),
     editingLockedAt: timestamp("editing_locked_at", { withTimezone: true }),
 
+    /**
+     * Sprint 11.5 / Slice D — strategy when the engine reaches a branch
+     * that needs a qualified reply outcome but the latest inbound reply
+     * is still un-qualified (LLM confidence too low, sale not yet
+     * confirmed). Plain text (not enum) so adding strategies later is a
+     * pure code change. Validated in code against
+     * `SEQUENCE_UNKNOWN_OUTCOME_STRATEGIES`.
+     *
+     *   - "park"             : default. Park the enrolment with next_due_at = NULL
+     *                          until the outcome is set (manually or via classifier
+     *                          auto-apply), at which point the
+     *                          `sequences/outcome.qualified` event resumes the run.
+     *   - "continue_default" : fall through to the default branch immediately,
+     *                          treating "no outcome yet" as "no positive signal".
+     */
+    unknownOutcomeStrategy: text("unknown_outcome_strategy").notNull().default("park"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -902,6 +935,14 @@ export const sequenceSteps = pgTable(
     // Polymorphic predicates : { type, config? } or null (= always).
     condition: jsonb("condition"),
     filter:    jsonb("filter"),
+
+    /**
+     * Optional per-step override of the sequence-level
+     * `unknown_outcome_strategy`. NULL = inherit. Only meaningful on
+     * conditional_split / conditional_switch steps whose decision depends
+     * on reply outcomes.
+     */
+    unknownOutcomeStrategy: text("unknown_outcome_strategy"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

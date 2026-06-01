@@ -184,6 +184,8 @@ const conditionLeafSchema = z.object({
   dimension: z.string().min(1),
   operator: z.string().min(1),
   value: z.string().optional(),
+  /** Slice E — only meaningful on behavior.* dimensions. */
+  scope: z.enum(["any", "this_sequence"]).optional(),
 });
 
 type ConditionGroupShape = {

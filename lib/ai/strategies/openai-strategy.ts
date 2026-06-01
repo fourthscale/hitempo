@@ -39,8 +39,10 @@ export class OpenAiStrategy implements LlmStrategy {
 
     let response;
     try {
-      // We only forward `temperature` when the caller explicitly set it ;
-      // reasoning models reject any non-default value.
+      // We only forward `temperature` when the caller explicitly set it
+      // AND the model supports it. Reasoning models (gpt-5 family) reject
+      // any non-default value with a 400 — silently drop the param in
+      // that case rather than asking every caller to remember the rule.
       const request: ChatCompletionCreateParamsNonStreaming = {
         model: this.model,
         messages: [
@@ -49,7 +51,7 @@ export class OpenAiStrategy implements LlmStrategy {
         ],
         max_completion_tokens: input.maxTokens ?? (isReasoningModel ? 4000 : 1000),
       };
-      if (input.temperature !== undefined) {
+      if (input.temperature !== undefined && !isReasoningModel) {
         request.temperature = input.temperature;
       }
       if (isReasoningModel) {

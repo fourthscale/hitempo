@@ -1,7 +1,8 @@
 import "server-only";
-import { and, asc, count, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
-import { contacts, interactions } from "@/db/schema";
+import { contacts, interactions, messages } from "@/db/schema";
+import { AUTO_APPLY_THRESHOLD } from "@/lib/ai/classification/thresholds";
 
 export type InteractionRow = Awaited<ReturnType<typeof getInteractionsByContact>>[number];
 
@@ -58,10 +59,34 @@ export async function getRecentInteractionsForPrompt(
 }
 
 export async function getInteractionsByTask(orgId: string, taskId: string) {
-  return getDb().query.interactions.findMany({
+  // Two link paths converge into this view :
+  //   1. `interactions.taskId = X`        → manual logs against the task,
+  //                                         outbound emails sent via the task
+  //                                         (the action layer sets taskId).
+  //   2. `interactions.messageId IN (...)` → inbound Gmail replies. The poller
+  //                                          attaches the reply to the original
+  //                                          outbound's messageId, but the
+  //                                          interaction itself has no taskId.
+  //
+  // We resolve (2) by fetching the message ids owned by this task, then OR-ing
+  // both conditions on the interactions filter. Two cheap queries beats a
+  // brittle 3-way join.
+  const db = getDb();
+  const taskMessages = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(and(eq(messages.organizationId, orgId), eq(messages.taskId, taskId)));
+  const messageIds = taskMessages.map((m) => m.id);
+
+  return db.query.interactions.findMany({
     where: and(
       eq(interactions.organizationId, orgId),
-      eq(interactions.taskId, taskId),
+      messageIds.length > 0
+        ? or(
+            eq(interactions.taskId, taskId),
+            inArray(interactions.messageId, messageIds),
+          )
+        : eq(interactions.taskId, taskId),
     ),
     with: {
       company: { columns: { id: true, name: true } },
@@ -345,4 +370,125 @@ export async function getWeeklyInteractionStats(
   const responseRate = total > 0 ? Math.round((positives / total) * 100) : 0;
 
   return { doneThisWeek, responseRate };
+}
+
+/**
+ * Sprint 11.5 / Slice C — "Pending review" inbox.
+ *
+ * The LLM classifier ran (`ai_processed_at` set) but with a confidence
+ * below the auto-apply tier, so it stored a label/reasoning WITHOUT
+ * touching the outcome. These rows are now waiting for a sale to confirm
+ * or override the AI's guess. We also exclude `label = 'unknown'` rows :
+ * the classifier itself said it couldn't decide, so they're routed via
+ * the existing "Réponses à classer" KPI flow instead.
+ */
+export async function getPendingReviewInteractions(orgId: string, limit = 50) {
+  return getDb().query.interactions.findMany({
+    where: and(
+      eq(interactions.organizationId, orgId),
+      eq(interactions.type, "email_received"),
+      isNull(interactions.outcome),
+      isNotNull(interactions.aiProcessedAt),
+      isNotNull(interactions.aiIntentLabel),
+      ne(interactions.aiIntentLabel, "unknown"),
+      lt(interactions.aiIntentConfidence, AUTO_APPLY_THRESHOLD.toString()),
+    ),
+    with: {
+      company: { columns: { id: true, name: true } },
+      contact: { columns: { id: true, firstName: true, lastName: true, email: true } },
+    },
+    orderBy: [desc(interactions.occurredAt)],
+    limit,
+  });
+}
+
+export async function countPendingReviewByOrg(orgId: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ c: count() })
+    .from(interactions)
+    .where(
+      and(
+        eq(interactions.organizationId, orgId),
+        eq(interactions.type, "email_received"),
+        isNull(interactions.outcome),
+        isNotNull(interactions.aiProcessedAt),
+        isNotNull(interactions.aiIntentLabel),
+        ne(interactions.aiIntentLabel, "unknown"),
+        lt(interactions.aiIntentConfidence, AUTO_APPLY_THRESHOLD.toString()),
+      ),
+    );
+  return row?.c ?? 0;
+}
+
+/**
+ * Lean fetch for the Slice B classifier : just enough to build the prompt
+ * (snippet + locale hint) and gate idempotency (aiProcessedAt).
+ *
+ * Falls back to the contact's preferredLanguage when the interaction itself
+ * has no locale (it doesn't — locale is a contact-level attribute). The
+ * caller defaults to "en" if both are missing.
+ */
+export async function getInteractionForClassification(
+  orgId: string,
+  interactionId: string,
+) {
+  const row = await getDb().query.interactions.findFirst({
+    where: and(
+      eq(interactions.id, interactionId),
+      eq(interactions.organizationId, orgId),
+    ),
+    columns: {
+      id: true,
+      organizationId: true,
+      contactId: true,
+      type: true,
+      summary: true,
+      subject: true,
+      userId: true,
+      aiProcessedAt: true,
+    },
+    with: {
+      contact: { columns: { preferredLanguage: true } },
+    },
+  });
+  return row ?? null;
+}
+
+/**
+ * Persists a classification result on an interaction row. Always sets
+ * `ai_processed_at = now()` (idempotency marker, even on failure paths
+ * where label="unknown" and confidence=0). Optionally bumps `outcome`
+ * if the caller decided the confidence tier was high enough.
+ */
+export async function applyInteractionClassification(
+  orgId: string,
+  interactionId: string,
+  patch: {
+    label: string;
+    confidence: number;
+    reasoning: string;
+    /** When set, overwrites `interaction.outcome`. */
+    outcome?: typeof interactions.$inferInsert["outcome"] | null;
+  },
+  db: Db = getDb(),
+): Promise<void> {
+  const update: Partial<typeof interactions.$inferInsert> = {
+    aiIntentLabel: patch.label,
+    aiIntentConfidence: patch.confidence.toFixed(3),
+    aiIntentReasoning: patch.reasoning,
+    aiProcessedAt: new Date(),
+    updatedAt: new Date(),
+  };
+  if (patch.outcome !== undefined) {
+    update.outcome = patch.outcome;
+  }
+  await db
+    .update(interactions)
+    .set(update)
+    .where(
+      and(
+        eq(interactions.id, interactionId),
+        eq(interactions.organizationId, orgId),
+      ),
+    );
 }

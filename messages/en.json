@@ -83,6 +83,8 @@
   "contactStatus": {
     "to_contact": "To contact",
     "to_follow_up": "To follow up",
+    "contacted": "Contacted",
+    "replied": "Replied",
     "qualified": "Qualified",
     "not_interested": "Not interested"
   },
@@ -107,6 +109,15 @@
     "wrong_contact": "Wrong contact",
     "rdv_scheduled": "Meeting scheduled",
     "opted_out": "Opted out"
+  },
+  "intentLabel": {
+    "positive": "Interested",
+    "negative": "Not interested",
+    "out_of_office": "Out of office",
+    "wrong_person": "Wrong person",
+    "unsubscribe": "Unsubscribed",
+    "neutral": "Neutral",
+    "unknown": "Unclear"
   },
   "errors": {
     "appBoundary": {
@@ -183,6 +194,7 @@
     "companies": "Companies",
     "contacts": "Contacts",
     "tasks": "Tasks",
+    "inboxPendingReview": "Inbox",
     "sequences": "Sequences",
     "field": "Field",
     "messagesNav": "Messages",
@@ -331,6 +343,19 @@
     "newCompany": "New company"
   },
   "pages": {
+    "inboxPendingReview": {
+      "title": "Inbox · pending review",
+      "subtitle": "Replies the AI classified but couldn't auto-qualify. Confirm its suggestion or pick a different outcome.",
+      "emptyTitle": "Inbox is up to date",
+      "emptyDescription": "No reply is waiting for human review. New replies with low confidence will land here.",
+      "aiSuggestion": "AI suggestion",
+      "confidence": "Confidence",
+      "confirm": "Confirm",
+      "orOverride": "or override:",
+      "setOutcome": "Override",
+      "clearOutcome": "Clear",
+      "unknownContact": "Unknown contact"
+    },
     "dashboard": {
       "greeting": "Hello {name}",
       "subtitle": "{date} · <em>{actions, plural, one {# action waiting} other {# actions waiting}}</em>",
@@ -1029,7 +1054,22 @@
       "sections": {
         "steps": "Steps",
         "enrolments": "Enrolled contacts",
-        "targeting": "Targeting"
+        "targeting": "Targeting",
+        "advancedSettings": "Advanced settings"
+      },
+      "unknownOutcomeStrategy": {
+        "title": "Reply outcome unknown",
+        "description": "What the engine does when a contact replies but the AI couldn't auto-qualify the response and the next branch needs a positive/negative classification.",
+        "options": {
+          "park": {
+            "label": "Park",
+            "detail": "Pause the enrolment until the outcome is set (by the AI auto-apply or a sale in the inbox). Recommended."
+          },
+          "continue_default": {
+            "label": "Continue (default branch)",
+            "detail": "Fall through to the default branch immediately. Faster, but may skip positive replies the AI hasn't yet labeled."
+          }
+        }
       },
       "noSteps": "This sequence has no published steps yet.",
       "noEnrolments": "No contacts enrolled yet.",
@@ -1283,6 +1323,11 @@
         "addCondition": "Add condition",
         "addGroup": "Add group",
         "valuePlaceholder": "value",
+        "scopeLabel": "Scope",
+        "scope": {
+          "any": "Any email",
+          "this_sequence": "This sequence only"
+        },
         "cat": {
           "contact": "Contact",
           "company": "Company",

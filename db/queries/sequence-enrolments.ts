@@ -1,7 +1,14 @@
 import "server-only";
-import { and, desc, eq, isNotNull, lte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, lte, ne, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
-import { sequenceEnrolments, sequences, contacts, companies } from "@/db/schema";
+import {
+  sequenceEnrolments,
+  sequences,
+  contacts,
+  companies,
+  sequenceStepExecutions,
+  tasks,
+} from "@/db/schema";
 import type { SequenceEndReason } from "@/lib/sequences/types";
 
 /**
@@ -106,7 +113,7 @@ export async function getDueEnrolments(db: DbOrTx, now: Date, limit = 100) {
 
 /** Enrolments (active + historical) for a contact, newest first. */
 export async function listEnrolmentsForContact(db: DbOrTx, orgId: string, contactId: string) {
-  return db
+  const rows = await db
     .select({
       id: sequenceEnrolments.id,
       sequenceId: sequenceEnrolments.sequenceId,
@@ -127,6 +134,64 @@ export async function listEnrolmentsForContact(db: DbOrTx, orgId: string, contac
       ),
     )
     .orderBy(desc(sequenceEnrolments.startedAt));
+
+  // Enrich each enrolment with its last "executed" step + task completion
+  // status. Needed by `resolveDisplayStepOrder` so every surface (contact
+  // section, tasks list, enrolment detail) shows the same step number for
+  // the same row — instead of repeating the logic everywhere.
+  const enrolmentIds = rows.map((r) => r.id);
+  const lastExecByEnrolment = await loadLastExecutionForEnrolments(db, enrolmentIds);
+
+  return rows.map((r) => ({
+    ...r,
+    lastExecution: lastExecByEnrolment.get(r.id) ?? null,
+  }));
+}
+
+/**
+ * Internal helper : for each enrolment id, return its most recent executed
+ * step (highest `executionCounter` with `outcome = 'executed'`) plus the
+ * completion status of the task it spawned, if any. Null when no execution
+ * yet (enrolment just created).
+ */
+async function loadLastExecutionForEnrolments(
+  db: DbOrTx,
+  enrolmentIds: string[],
+): Promise<Map<string, { stepOrder: number; actionType: string; taskCompleted: boolean }>> {
+  const map = new Map<string, { stepOrder: number; actionType: string; taskCompleted: boolean }>();
+  if (enrolmentIds.length === 0) return map;
+
+  // Fetch all executed executions for these enrolments in one query, then
+  // pick the last per enrolment in JS (simpler than DISTINCT ON across
+  // dialects ; the number of executions per enrolment stays small).
+  const rows = await db
+    .select({
+      enrolmentId: sequenceStepExecutions.enrolmentId,
+      executionCounter: sequenceStepExecutions.executionCounter,
+      stepOrder: sequenceStepExecutions.stepOrder,
+      actionType: sequenceStepExecutions.actionType,
+      taskId: sequenceStepExecutions.taskId,
+      taskStatus: tasks.status,
+    })
+    .from(sequenceStepExecutions)
+    .leftJoin(tasks, eq(tasks.id, sequenceStepExecutions.taskId))
+    .where(
+      and(
+        eq(sequenceStepExecutions.outcome, "executed"),
+        inArray(sequenceStepExecutions.enrolmentId, enrolmentIds),
+      ),
+    )
+    .orderBy(asc(sequenceStepExecutions.executionCounter));
+
+  for (const r of rows) {
+    // Last wins because rows are sorted ascending by executionCounter.
+    map.set(r.enrolmentId, {
+      stepOrder: r.stepOrder,
+      actionType: r.actionType,
+      taskCompleted: r.taskId == null || r.taskStatus === "completed",
+    });
+  }
+  return map;
 }
 
 /** Active enrolments for a company (any contact), with contact + sequence names. */
@@ -307,6 +372,54 @@ export async function advanceEnrolment(
       nextDueAt: patch.nextDueAt,
       lastExecutionCounter: patch.lastExecutionCounter,
     })
+    .where(eq(sequenceEnrolments.id, enrolmentId));
+}
+
+/**
+ * Slice D — every active enrolment of the contact whose cursor is parked
+ * (next_due_at IS NULL). Used by the outcome-qualified wake-up handler to
+ * fan out advance events. Returns ids only (the engine fetches the row).
+ *
+ * Doesn't filter by "really awaiting outcome" vs "awaiting task completion"
+ * — both park with NULL ; the engine re-runs the gate on advance and
+ * re-parks if the task isn't done. Harmless extra wake-up, never wrong.
+ */
+export async function listParkedEnrolmentIdsForContact(
+  db: DbOrTx,
+  orgId: string,
+  contactId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: sequenceEnrolments.id })
+    .from(sequenceEnrolments)
+    .where(
+      and(
+        eq(sequenceEnrolments.organizationId, orgId),
+        eq(sequenceEnrolments.contactId, contactId),
+        eq(sequenceEnrolments.status, "active"),
+        sql`${sequenceEnrolments.nextDueAt} IS NULL`,
+      ),
+    );
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Slice D — park an enrolment indefinitely awaiting reply outcome qualification.
+ *
+ * Same shape as the existing `awaitTaskCompletion` indefinite wait
+ * (`next_due_at = NULL` so the cron sweep skips it), but the wake-up
+ * event differs : `sequences/outcome.qualified` fires when the inbound
+ * reply's `outcome` flips from null (auto-applied by the LLM classifier
+ * or manually set by the sale). Cursor stays on the SAME step so the
+ * condition re-evaluates with the now-qualified facts.
+ */
+export async function parkEnrolmentAwaitingOutcome(
+  db: DbOrTx,
+  enrolmentId: string,
+) {
+  await db
+    .update(sequenceEnrolments)
+    .set({ nextDueAt: null })
     .where(eq(sequenceEnrolments.id, enrolmentId));
 }
 

@@ -1,10 +1,13 @@
 import "server-only";
+import { eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
+import { sequences as sequencesTable } from "@/db/schema";
 import { getStepsForSequence, type SequenceStepRow } from "@/db/queries/sequences";
 import {
   getDueEnrolments,
   advanceEnrolment,
   endEnrolment,
+  parkEnrolmentAwaitingOutcome,
 } from "@/db/queries/sequence-enrolments";
 import {
   getEnrolmentForEngine,
@@ -17,6 +20,12 @@ import {
 } from "@/db/queries/sequence-executions";
 import { SequencePredicateEvaluatorFactory } from "../predicates/predicate-evaluator-factory";
 import { SequenceStepExecutorFactory } from "../step-executor-factory";
+import {
+  conditionDependsOnReplyOutcome,
+  hasUnqualifiedInboundReply,
+  resolveUnknownOutcomeStrategy,
+} from "../unknown-outcome-strategy";
+import type { ConditionGroup } from "../conditions";
 import type { SequenceExecutorServices, StepExecutionContext } from "../step-executor";
 import type {
   NextStepIds,
@@ -28,6 +37,7 @@ import type {
 export type AdvanceOutcome =
   | { status: "skipped"; reason: string }
   | { status: "executed"; taskId: string | null; navigatedTo: string | null }
+  | { status: "parked"; reason: "awaiting_outcome" }
   | { status: "ended"; reason: SequenceEndReason };
 
 /**
@@ -91,6 +101,14 @@ export class SequenceEngine {
       return { status: "ended", reason: "exhausted" };
     }
 
+    // Slice D — read sequence-level outcome strategy (with the step-level
+    // override resolved later). Single direct fetch on the admin pool : the
+    // engine is already trusted cross-org.
+    const sequenceRow = await this.db.query.sequences.findFirst({
+      where: eq(sequencesTable.id, enrolment.sequenceId),
+      columns: { unknownOutcomeStrategy: true },
+    });
+
     // Loop safety.
     const nextCounter = enrolment.lastExecutionCounter + 1;
     if (nextCounter > enrolment.maxExecutionCount) {
@@ -148,6 +166,32 @@ export class SequenceEngine {
     // Condition gate.
     if (!SequencePredicateEvaluatorFactory.evaluate(step.condition, predicateCtx)) {
       return this.logSkipAndAdvance(enrolmentCtx, step, nextCounter, "skipped_condition");
+    }
+
+    // Slice D — outcome-awaiting gate.
+    //
+    // If this step's logic depends on a qualified reply outcome (positive
+    // or negative branches in a conditional_split / conditional_switch)
+    // and the enrolment has seen an inbound reply that's not yet
+    // qualified, decide via the effective strategy whether to park or
+    // continue. "park" sets next_due_at = NULL ; the
+    // `sequences/outcome.qualified` event re-fires the engine when the
+    // outcome gets set (LLM auto-apply or manual confirm).
+    if (
+      conditionDependsOnReplyOutcome(extractStepConditionGroup(step)) &&
+      hasUnqualifiedInboundReply(interactions)
+    ) {
+      const strategy = resolveUnknownOutcomeStrategy({
+        sequence: sequenceRow?.unknownOutcomeStrategy ?? null,
+        step: step.unknownOutcomeStrategy,
+      });
+      if (strategy === "park") {
+        await parkEnrolmentAwaitingOutcome(this.db, enrolment.id);
+        return { status: "parked", reason: "awaiting_outcome" };
+      }
+      // strategy === "continue_default" → fall through ; the predicate
+      // evaluators will read `outcome != null` as false for positiveReply
+      // / negativeReply, so the executor branches to default.
     }
 
     // Execute.
@@ -257,6 +301,34 @@ export class SequenceEngine {
   private async end(enrolmentId: string, reason: SequenceEndReason): Promise<void> {
     await endEnrolment(this.db, enrolmentId, reason, this.now());
   }
+}
+
+/**
+ * Slice D — pull the composite ConditionGroup(s) carried by a step so the
+ * outcome-strategy gate can ask "does this branch read positive/negative
+ * reply?". Only conditional_split / conditional_switch carry one inline ;
+ * other action types route by their `step.condition` predicate, which the
+ * engine already evaluated above.
+ */
+function extractStepConditionGroup(step: SequenceStepRow): ConditionGroup | null {
+  if (step.actionType === "conditional_split") {
+    const cfg = step.actionConfig as { condition?: ConditionGroup };
+    return cfg?.condition ?? null;
+  }
+  if (step.actionType === "conditional_switch") {
+    const cfg = step.actionConfig as { branches?: { condition: ConditionGroup }[] };
+    const branches = cfg?.branches ?? [];
+    // Synthesize an OR group over every branch's condition so the
+    // "depends on outcome?" walker visits all of them in one pass.
+    return {
+      kind: "group",
+      op: "or",
+      conditions: branches
+        .map((b) => b.condition)
+        .filter((c): c is ConditionGroup => Boolean(c)),
+    };
+  }
+  return null;
 }
 
 /** Resolve the next step id for a navigation key. Phase A uses 'default'. */

@@ -1,6 +1,12 @@
 import { inngest } from "@/lib/inngest/client";
 import { SequenceEngineFactory } from "@/lib/sequences/engine/sequence-engine-factory";
-import { EVENT_ADVANCE, EVENT_TASK_COMPLETED } from "@/lib/sequences/engine/events";
+import {
+  EVENT_ADVANCE,
+  EVENT_TASK_COMPLETED,
+  EVENT_OUTCOME_QUALIFIED,
+} from "@/lib/sequences/engine/events";
+import { listParkedEnrolmentIdsForContact } from "@/db/queries/sequence-enrolments";
+import { getAdminDb } from "@/db/client";
 
 /**
  * Sequence engine Inngest wiring.
@@ -91,9 +97,55 @@ const advanceOnTaskCompleted = inngest.createFunction(
   handleAdvance,
 );
 
+/**
+ * Slice D — handler for `sequences/outcome.qualified`.
+ *
+ * Fires when an interaction's outcome flips from null (LLM auto-apply,
+ * sale confirms in the inbox, or the manual outcome menu). Fans out one
+ * `sequences/advance` per parked enrolment on that contact so the engine
+ * re-evaluates the outcome-dependent branch with the now-qualified facts.
+ *
+ * Idempotency : safe — extra advances on already-active or already-ended
+ * enrolments are no-ops (the engine's first guard rejects non-active).
+ */
+async function handleOutcomeQualified({
+  event,
+  step,
+}: {
+  event: { data: { organizationId: string; contactId: string } };
+  step: import("inngest").GetStepTools<typeof inngest>;
+}) {
+  const { organizationId, contactId } = event.data;
+
+  const enrolmentIds = await step.run("list-parked", async () => {
+    return listParkedEnrolmentIdsForContact(getAdminDb(), organizationId, contactId);
+  });
+
+  if (enrolmentIds.length === 0) return { woken: 0 };
+
+  await step.sendEvent(
+    "fan-out-advance-on-outcome",
+    enrolmentIds.map((enrolmentId) => ({
+      name: EVENT_ADVANCE,
+      data: { enrolmentId },
+    })),
+  );
+  return { woken: enrolmentIds.length };
+}
+
+const wakeOnOutcomeQualified = inngest.createFunction(
+  {
+    id: "sequences/wake-on-outcome-qualified",
+    name: "Sequence — wake parked enrolments on outcome qualified",
+    triggers: [{ event: EVENT_OUTCOME_QUALIFIED }],
+  },
+  handleOutcomeQualified,
+);
+
 export const sequenceEngineFunctions = [
   tickBusinessHours,
   tickOffHours,
   advanceEnrolment,
   advanceOnTaskCompleted,
+  wakeOnOutcomeQualified,
 ];

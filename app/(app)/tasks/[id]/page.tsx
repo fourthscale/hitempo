@@ -8,13 +8,14 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { getTaskDetail } from "@/db/queries/tasks";
 import { getInteractionsByTask } from "@/db/queries/interactions";
+import { getAttachmentsByMessageIds } from "@/db/queries/message-attachments";
 import { getOrgMembersWithNames } from "@/db/queries/members";
 import { getBrandBriefStatus } from "@/db/queries/brand";
 import { TaskDetailActions } from "@/components/app/task-detail-actions";
 import {
-  InteractionOutcomeMenu,
-  type InteractionOutcome,
-} from "@/components/app/interaction-outcome-menu";
+  InteractionsTimeline,
+  type InteractionsTimelineLabels,
+} from "@/components/app/interactions-timeline";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { scoreGrade, scoreBadgeClasses } from "@/lib/scoring/grade";
@@ -59,6 +60,18 @@ export default async function TaskDetailPage({
 
   if (!task) notFound();
 
+  // Bulk-fetch attachments for the messages referenced by these interactions
+  // — same pattern as the contact page so the timeline can render file
+  // links inline. Empty list = noop, getAttachmentsByMessageIds handles it.
+  const messageIdsInTimeline = Array.from(
+    new Set(
+      taskInteractions
+        .map((i) => i.messageId)
+        .filter((mid): mid is string => mid !== null),
+    ),
+  );
+  const attachmentsByMessageId = await getAttachmentsByMessageIds(orgId, messageIdsInTimeline);
+
   const t = await getTranslations("pages.tasks");
   const tTaskType = await getTranslations("taskType");
   const tPriority = await getTranslations("taskPriority");
@@ -66,6 +79,7 @@ export default async function TaskDetailPage({
   const tInteractionType = await getTranslations("interactionType");
   const tInteractionChannel = await getTranslations("interactionChannel");
   const tInteractionOutcome = await getTranslations("interactionOutcome");
+  const tInteractionStatus = await getTranslations("interactionStatus");
   const tMessages = await getTranslations("pages.messages");
 
   const memberMap = Object.fromEntries(members.map((m) => [m.userId, m.displayName]));
@@ -202,7 +216,10 @@ export default async function TaskDetailPage({
                 {task.sequenceEnrolment.sequence.name}
                 {task.sequenceEnrolment.sequence.steps.length > 0 &&
                   ` · ${t("sequenceStepBadge", {
-                    current: task.sequenceEnrolment.currentStepOrder + 1,
+                    // Show the step that created this task, not the
+                    // enrolment cursor (which has already advanced).
+                    current:
+                      (task.sourceStepOrder ?? task.sequenceEnrolment.currentStepOrder) + 1,
                     total: task.sequenceEnrolment.sequence.steps.length,
                   })}`}
               </Link>
@@ -227,7 +244,11 @@ export default async function TaskDetailPage({
             </Card>
           )}
 
-          {/* Interactions */}
+          {/* Interactions — same component as the contact page so the
+              "Envoi" + "Reply" pair groups under the same row with a
+              "↩ Répondu" badge on the outbound, attachments inline, and
+              the grouped/list mode toggle. Single source of truth for
+              the visual model. */}
           <Card className="p-5">
             <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-4">
               {t("detail.interactions")}
@@ -238,77 +259,69 @@ export default async function TaskDetailPage({
               )}
             </h2>
 
-            {taskInteractions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("detail.noInteractions")}</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {taskInteractions.map((interaction) => (
-                  <li key={interaction.id} className="py-3 first:pt-0 last:pb-0">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                          <span className="text-xs font-medium text-foreground">
-                            {tInteractionType(
-                              interaction.type as Parameters<typeof tInteractionType>[0],
-                            )}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            ·{" "}
-                            {tInteractionChannel(
-                              interaction.channel as Parameters<typeof tInteractionChannel>[0],
-                            )}
-                          </span>
-                          <InteractionOutcomeMenu
-                            interactionId={interaction.id}
-                            current={(interaction.outcome ?? null) as InteractionOutcome | null}
-                            labels={{
-                              outcomes: outcomeLabels,
-                              setOutcome: tInteractions("setOutcome"),
-                              clearOutcome: tInteractions("clearOutcome"),
-                            }}
-                          />
-                        </div>
-
-                        {/* Company / contact context (if present) */}
-                        {(interaction.company ?? interaction.contact) && (
-                          <p className="text-xs text-muted-foreground mb-0.5">
-                            {interaction.company && (
-                              <Link
-                                href={`/companies/${interaction.company.id}`}
-                                className="hover:text-brand-teal"
-                              >
-                                {interaction.company.name}
-                              </Link>
-                            )}
-                            {interaction.contact && (
-                              <>
-                                {interaction.company && " — "}
-                                <Link
-                                  href={`/contacts/${interaction.contact.id}`}
-                                  className="hover:text-brand-teal"
-                                >
-                                  {resolveContactDisplayName(interaction.contact)}
-                                </Link>
-                              </>
-                            )}
-                          </p>
-                        )}
-
-                        {interaction.summary && (
-                          <p className="text-sm text-foreground mt-0.5">{interaction.summary}</p>
-                        )}
-                      </div>
-
-                      <div className="text-xs text-muted-foreground shrink-0">
-                        {new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(
-                          new Date(interaction.occurredAt),
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <InteractionsTimeline
+              locale={locale}
+              interactions={taskInteractions.map((i) => ({
+                id: i.id,
+                type: i.type,
+                channel: i.channel,
+                outcome: i.outcome,
+                status: i.status,
+                summary: i.summary,
+                occurredAt: i.occurredAt,
+                messageId: i.messageId,
+                attachments: i.messageId
+                  ? (attachmentsByMessageId.get(i.messageId) ?? []).map((a) => ({
+                      id: a.id,
+                      filename: a.filename,
+                      sizeBytes: a.sizeBytes,
+                    }))
+                  : undefined,
+              }))}
+              labels={
+                {
+                  modeGrouped: tInteractions("modeGrouped"),
+                  modeList: tInteractions("modeList"),
+                  emptyState: t("detail.noInteractions"),
+                  statuses: {
+                    sent: tInteractionStatus("sent"),
+                    responded: tInteractionStatus("responded"),
+                    no_answer: tInteractionStatus("no_answer"),
+                    done: tInteractionStatus("done"),
+                  },
+                  outcomeMenu: {
+                    outcomes: outcomeLabels,
+                    setOutcome: tInteractions("setOutcome"),
+                    clearOutcome: tInteractions("clearOutcome"),
+                  },
+                  typeLabels: {
+                    first_contact: tInteractionType("first_contact"),
+                    follow_up: tInteractionType("follow_up"),
+                    call: tInteractionType("call"),
+                    visit: tInteractionType("visit"),
+                    linkedin: tInteractionType("linkedin"),
+                    meeting: tInteractionType("meeting"),
+                    demo: tInteractionType("demo"),
+                    proposal_sent: tInteractionType("proposal_sent"),
+                    note: tInteractionType("note"),
+                    email_received: tInteractionType("email_received"),
+                  },
+                  channelLabels: {
+                    email: tInteractionChannel("email"),
+                    linkedin: tInteractionChannel("linkedin"),
+                    phone: tInteractionChannel("phone"),
+                    in_person: tInteractionChannel("in_person"),
+                    video: tInteractionChannel("video"),
+                    other: tInteractionChannel("other"),
+                  },
+                  replyHeader: tInteractions("replyHeader"),
+                  attachments: {
+                    sectionLabel: tInteractions("attachments.sectionLabel"),
+                    downloadError: tInteractions("attachments.downloadError"),
+                  },
+                } satisfies InteractionsTimelineLabels
+              }
+            />
           </Card>
         </div>
 

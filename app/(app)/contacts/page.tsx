@@ -8,18 +8,14 @@ import {
 } from "@/db/queries/contacts";
 import { getActiveSequencesForTargeting } from "@/db/queries/sequences";
 import { getDb } from "@/db/client";
+import { CONTACT_STATUSES } from "@/lib/contacts/contact-status";
 import { PageHeader } from "@/components/app/page-header";
 import { EmptyState } from "@/components/app/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ContactsBulkBoard } from "@/components/app/contacts/contacts-bulk-board";
 
-const VALID_STATUSES = new Set([
-  "to_contact",
-  "to_follow_up",
-  "qualified",
-  "not_interested",
-]);
+const VALID_STATUSES = new Set<string>(CONTACT_STATUSES);
 
 function clampStatus(raw: string | undefined): string | null {
   return raw && VALID_STATUSES.has(raw) ? raw : null;

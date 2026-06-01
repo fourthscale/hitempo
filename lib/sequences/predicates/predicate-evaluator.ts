@@ -114,7 +114,25 @@ function mostRecentOutboundNoAnswer(interactions: SequenceInteractionCtx[]): boo
 
 /** Build the flat facts snapshot the composite condition evaluator reads. */
 export function buildConditionFacts(ctx: PredicateEvaluationContext): ConditionFacts {
-  const inbound = ctx.recentInteractions.filter(isInbound);
+  const inboundAll = ctx.recentInteractions.filter(isInbound);
+  // Slice E — interactions whose underlying outbound message belongs to
+  // the CURRENT enrolment. The Gmail poller sets `interaction.messageId`
+  // on every detected reply ; `messages.sequenceRunId` is the FK back to
+  // sequence_enrolments. A reply to a mail the sale sent manually has
+  // `sequenceEnrolmentId === null` and therefore drops out of the
+  // this-sequence bag.
+  const enrolmentId = ctx.enrolment.id;
+  const inboundInSequence = inboundAll.filter(
+    (i) => i.sequenceEnrolmentId != null && i.sequenceEnrolmentId === enrolmentId,
+  );
+
+  const behaviorFlagsFor = (inbound: typeof inboundAll, all: typeof ctx.recentInteractions) => ({
+    replied: inbound.length > 0,
+    positiveReply: inbound.some((i) => i.outcome != null && POSITIVE_OUTCOMES.has(i.outcome)),
+    negativeReply: inbound.some((i) => i.outcome != null && NEGATIVE_OUTCOMES.has(i.outcome)),
+    callNoAnswer: mostRecentOutboundNoAnswer(all),
+  });
+
   return {
     contact: {
       status: ctx.contact.status,
@@ -127,12 +145,13 @@ export function buildConditionFacts(ctx: PredicateEvaluationContext): ConditionF
       relationshipType: ctx.company.relationshipType,
       signalType: ctx.company.signalType,
     },
-    behavior: {
-      replied: inbound.length > 0,
-      positiveReply: inbound.some((i) => i.outcome != null && POSITIVE_OUTCOMES.has(i.outcome)),
-      negativeReply: inbound.some((i) => i.outcome != null && NEGATIVE_OUTCOMES.has(i.outcome)),
-      callNoAnswer: mostRecentOutboundNoAnswer(ctx.recentInteractions),
-    },
+    behavior: behaviorFlagsFor(inboundAll, ctx.recentInteractions),
+    behaviorInSequence: behaviorFlagsFor(
+      inboundInSequence,
+      ctx.recentInteractions.filter(
+        (i) => i.sequenceEnrolmentId != null && i.sequenceEnrolmentId === enrolmentId,
+      ),
+    ),
   };
 }
 

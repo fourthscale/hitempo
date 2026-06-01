@@ -179,11 +179,43 @@ function LeafEditor({
               />
             ))}
         </div>
+        {SCOPE_AWARE_DIMENSIONS.has(leaf.dimension) && (
+          <div className="pt-1 border-t border-border/60">
+            <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <span className="shrink-0">{t("scopeLabel")}</span>
+              <select
+                className={selectCls}
+                value={leaf.scope ?? "any"}
+                onChange={(e) =>
+                  onChange({
+                    ...leaf,
+                    scope:
+                      e.target.value === "this_sequence" ? "this_sequence" : "any",
+                  })
+                }
+              >
+                <option value="any">{t("scope.any")}</option>
+                <option value="this_sequence">{t("scope.this_sequence")}</option>
+              </select>
+            </label>
+          </div>
+        )}
       </div>
       <RemoveBtn onClick={onRemove} />
     </div>
   );
 }
+
+/**
+ * Dimensions where the "scope: this sequence only" toggle is meaningful.
+ * For other dimensions (contact.*, company.*, behavior.callNoAnswer), the
+ * concept doesn't apply and we hide the selector to keep the leaf compact.
+ */
+const SCOPE_AWARE_DIMENSIONS = new Set([
+  "behavior.replied",
+  "behavior.positiveReply",
+  "behavior.negativeReply",
+]);
 
 function RemoveBtn({ onClick }: { onClick: () => void }) {
   return (

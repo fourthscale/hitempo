@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNull, lt, lte, gte, or, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
-import { companies, contacts, tasks } from "@/db/schema";
+import { companies, contacts, tasks, sequenceStepExecutions } from "@/db/schema";
 
 export type TaskWithContext = Awaited<ReturnType<typeof getTasksByOrg>>[number];
 
@@ -16,7 +16,7 @@ export async function getTasksByOrg(
     status === "completed"   ? eq(tasks.status, "completed") :
     or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress"));
 
-  return getDb().query.tasks.findMany({
+  const rows = await getDb().query.tasks.findMany({
     where: and(
       eq(tasks.organizationId, orgId),
       statusFilter,
@@ -53,6 +53,41 @@ export async function getTasksByOrg(
       : [sql`coalesce(${tasks.scheduledFor}, ${tasks.dueAt}) asc nulls last`, desc(tasks.priority)],
     limit: 200,
   });
+
+  // Attach `sourceStepOrder` (the step that CREATED the task) for tasks
+  // that came from a sequence. The UI displays this — not the enrolment's
+  // current cursor — so a task still pending shows "Étape 1 sur 3" instead
+  // of "Étape 2 sur 3" (the engine has technically advanced).
+  const taskIds = rows.filter((r) => r.sequenceEnrolmentId).map((r) => r.id);
+  const stepOrderByTaskId = await loadSourceStepOrderForTasks(taskIds);
+  return rows.map((r) => ({
+    ...r,
+    sourceStepOrder: r.id ? stepOrderByTaskId.get(r.id) ?? null : null,
+  }));
+}
+
+/**
+ * Internal helper : given task ids, return a map of taskId → stepOrder of
+ * the `sequence_step_executions` row that produced each task. Empty map
+ * for an empty input. Engine-private (no org filter) — callers must
+ * already have scoped their `tasks` query.
+ */
+async function loadSourceStepOrderForTasks(
+  taskIds: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (taskIds.length === 0) return map;
+  const rows = await getDb()
+    .select({
+      taskId: sequenceStepExecutions.taskId,
+      stepOrder: sequenceStepExecutions.stepOrder,
+    })
+    .from(sequenceStepExecutions)
+    .where(inArray(sequenceStepExecutions.taskId, taskIds));
+  for (const r of rows) {
+    if (r.taskId) map.set(r.taskId, r.stepOrder);
+  }
+  return map;
 }
 
 export async function getTasksDashboard(orgId: string, assigneeId?: string | null) {
@@ -335,7 +370,7 @@ export async function getTaskById(orgId: string, taskId: string) {
 
 /** Richer variant used by the task detail page. */
 export async function getTaskDetail(orgId: string, taskId: string) {
-  return getDb().query.tasks.findFirst({
+  const row = await getDb().query.tasks.findFirst({
     where: and(eq(tasks.id, taskId), eq(tasks.organizationId, orgId)),
     with: {
       company: {
@@ -355,6 +390,13 @@ export async function getTaskDetail(orgId: string, taskId: string) {
       },
     },
   });
+  if (!row) return null;
+  // Same enrichment as getTasksByOrg : surface the step that created the
+  // task so the UI shows it instead of the engine's already-advanced cursor.
+  const stepOrderByTaskId = row.sequenceEnrolmentId
+    ? await loadSourceStepOrderForTasks([row.id])
+    : new Map<string, number>();
+  return { ...row, sourceStepOrder: stepOrderByTaskId.get(row.id) ?? null };
 }
 
 export type TaskDetail = NonNullable<Awaited<ReturnType<typeof getTaskDetail>>>;

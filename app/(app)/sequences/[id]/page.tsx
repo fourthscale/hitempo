@@ -11,6 +11,10 @@ import { publishedStepsToDraft } from "@/lib/sequences/draft-from-steps";
 import { PageHeader } from "@/components/app/page-header";
 import { EmptyState } from "@/components/app/empty-state";
 import { SequenceFlowView } from "@/components/app/sequences/sequence-flow-view";
+import {
+  UnknownOutcomeStrategySelector,
+  coerceStrategy,
+} from "@/components/app/sequences/unknown-outcome-strategy-selector";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -63,6 +67,18 @@ export default async function SequenceDetailPage({
             triggerSummary={triggerSummary}
           />
         )}
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-sm font-medium text-muted-foreground mb-3">
+          {t("sections.advancedSettings")}
+        </h2>
+        <Card className="p-4">
+          <UnknownOutcomeStrategySelector
+            sequenceId={id}
+            current={coerceStrategy(data.sequence.unknownOutcomeStrategy)}
+          />
+        </Card>
       </section>
 
       <section>

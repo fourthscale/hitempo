@@ -15,6 +15,7 @@ import {
   resumeEnrolmentAction,
   stopEnrolmentAction,
 } from "@/lib/actions/sequences";
+import { resolveDisplayStepOrder } from "@/lib/sequences/display-step-position";
 
 export type ContactEnrolmentRow = {
   id: string;
@@ -22,6 +23,13 @@ export type ContactEnrolmentRow = {
   sequenceName: string;
   status: string;
   currentStepOrder: number;
+  /** ISO date string, server-side serialised. */
+  nextDueAt: string | null;
+  lastExecution: {
+    stepOrder: number;
+    actionType: string;
+    taskCompleted: boolean;
+  } | null;
 };
 
 const selectCls =
@@ -95,7 +103,15 @@ export function ContactSequencesSection({
                   {e.sequenceName}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {t("contactSection.step", { n: e.currentStepOrder + 1 })}
+                  {t("contactSection.step", {
+                    n:
+                      resolveDisplayStepOrder({
+                        status: e.status,
+                        currentStepOrder: e.currentStepOrder,
+                        nextDueAt: e.nextDueAt ? new Date(e.nextDueAt) : null,
+                        lastExecution: e.lastExecution,
+                      }) + 1,
+                  })}
                 </p>
               </Link>
               <div className="flex items-center gap-2">

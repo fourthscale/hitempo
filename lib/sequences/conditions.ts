@@ -8,15 +8,36 @@
  * builds from the enrolment context — so it stays unit-testable without a DB.
  */
 
+import { CONTACT_STATUSES } from "@/lib/contacts/contact-status";
+
 // ---------------------------------------------------------------------------
 // Model
 // ---------------------------------------------------------------------------
+
+/**
+ * Slice E — scope of a behavior-based leaf.
+ *
+ *   - "any"           : reads ALL of the contact's interactions in the
+ *                       enrolment window. Catches replies to mails the
+ *                       sale sent manually, replies to other parallel
+ *                       sequences, etc. Backward-compatible default.
+ *   - "this_sequence" : restricts to interactions whose underlying
+ *                       outbound `messages.sequenceRunId` points at the
+ *                       current enrolment — i.e. only replies to mails
+ *                       this sequence sent.
+ *
+ * Only meaningful on `behavior.replied / positiveReply / negativeReply`.
+ * Other dimensions ignore the field.
+ */
+export type ConditionScope = "any" | "this_sequence";
 
 export type ConditionLeaf = {
   kind: "leaf";
   dimension: string;
   operator: string;
   value?: string;
+  /** Optional ; defaults to "any" when omitted. */
+  scope?: ConditionScope;
 };
 
 export type ConditionGroup = {
@@ -44,7 +65,6 @@ export type DimensionDef = {
   values?: readonly string[];
 };
 
-const CONTACT_STATUSES = ["to_contact", "to_follow_up", "qualified", "not_interested"] as const;
 const CONTACT_ROLES = ["decision_maker", "influencer", "user", "prescriber", "assistant", "other"] as const;
 const RELATIONSHIP_TYPES = ["prospect", "client", "former_client", "prescriber", "partner"] as const;
 const LOCALES = ["fr", "en"] as const;
@@ -88,6 +108,13 @@ export const VALUELESS_OPERATORS = new Set([
 // Facts + evaluation
 // ---------------------------------------------------------------------------
 
+export type BehaviorFlags = {
+  replied: boolean;
+  positiveReply: boolean;
+  negativeReply: boolean;
+  callNoAnswer: boolean;
+};
+
 export type ConditionFacts = {
   contact: {
     status: string | null;
@@ -100,25 +127,32 @@ export type ConditionFacts = {
     relationshipType: string | null;
     signalType: string | null;
   };
-  behavior: {
-    replied: boolean;
-    positiveReply: boolean;
-    negativeReply: boolean;
-    callNoAnswer: boolean;
-  };
+  /** Behavior signals computed over ALL of the contact's interactions. */
+  behavior: BehaviorFlags;
+  /**
+   * Slice E — behavior signals scoped to interactions linked to the
+   * current enrolment only (via outbound message → sequence_run_id).
+   * Used when a leaf sets `scope: "this_sequence"`. Same shape as
+   * `behavior` so the dispatch is a single conditional read.
+   */
+  behaviorInSequence: BehaviorFlags;
 };
 
-function resolve(facts: ConditionFacts, key: string): unknown {
+function resolve(facts: ConditionFacts, key: string, scope?: ConditionScope): unknown {
   const [group, field] = key.split(".");
   if (group == null || field == null) return undefined;
-  const bag = (facts as unknown as Record<string, Record<string, unknown>>)[group];
+  // Slice E — re-route behavior reads to the per-sequence flags when the
+  // leaf opts in. Any other group ignores `scope`.
+  const effectiveGroup =
+    group === "behavior" && scope === "this_sequence" ? "behaviorInSequence" : group;
+  const bag = (facts as unknown as Record<string, Record<string, unknown>>)[effectiveGroup];
   return bag ? bag[field] : undefined;
 }
 
 function evaluateLeaf(leaf: ConditionLeaf, facts: ConditionFacts): boolean {
   const def = DIMENSION_BY_KEY[leaf.dimension];
   if (!def) return false;
-  const raw = resolve(facts, leaf.dimension);
+  const raw = resolve(facts, leaf.dimension, leaf.scope);
 
   switch (def.type) {
     case "enum":

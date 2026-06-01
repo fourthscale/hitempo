@@ -126,6 +126,33 @@ async function _updateSequenceMetaAction(formData: FormData) {
 }
 export const updateSequenceMetaAction = withActionError(_updateSequenceMetaAction);
 
+/**
+ * Slice D — sequence-level "what to do when reply outcome is unknown".
+ * The literal union mirrors the DB CHECK constraint + the runtime SoT
+ * in `lib/sequences/unknown-outcome-strategy.ts`.
+ */
+const unknownOutcomeStrategySchema = z.object({
+  sequenceId: z.string().uuid(),
+  strategy: z.enum(["park", "continue_default"]),
+});
+
+async function _updateSequenceUnknownOutcomeStrategyAction(formData: FormData) {
+  const parsed = unknownOutcomeStrategySchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
+  const { activeOrganization } = await getActiveOrg();
+
+  const existing = await getSequenceById(getDb(), activeOrganization.id, parsed.data.sequenceId);
+  if (!existing) throw new SequenceNotFoundError(parsed.data.sequenceId);
+
+  await updateSequenceMeta(getDb(), activeOrganization.id, parsed.data.sequenceId, {
+    unknownOutcomeStrategy: parsed.data.strategy,
+  });
+  revalidateSequence(parsed.data.sequenceId);
+}
+export const updateSequenceUnknownOutcomeStrategyAction = withActionError(
+  _updateSequenceUnknownOutcomeStrategyAction,
+);
+
 const activeSchema = z.object({
   sequenceId: z.string().uuid(),
   isActive: z.preprocess((v) => v === "true" || v === true || v === "on" || v === "1", z.boolean()),
