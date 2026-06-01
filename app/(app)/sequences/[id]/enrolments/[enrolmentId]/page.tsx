@@ -302,7 +302,15 @@ export default async function EnrolmentDetailPage({
             <Workflow className="h-4 w-4" />
             <span>
               {t("enrolment.stepPosition", {
-                current: enrolment.currentStepOrder + 1,
+                // Display position = whatever is visually "the step in
+                // progress", not the engine cursor : when a task is hanging
+                // open (waitingForTask) or a wait is counting down
+                // (waitInProgress), the engine has technically advanced but
+                // the user still perceives the previous step as current.
+                current:
+                  (waitingForTask || waitInProgress
+                    ? lastExec!.stepOrder
+                    : enrolment.currentStepOrder) + 1,
                 total: totalSteps,
               })}
             </span>
