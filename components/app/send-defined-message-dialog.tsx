@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
   Loader2,
@@ -13,6 +14,7 @@ import {
   AlertTriangle,
   FileText,
   Variable,
+  Send,
 } from "lucide-react";
 import { GmailIcon } from "@/components/app/gmail-icon";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
@@ -43,9 +45,7 @@ import {
 export type SendDefinedMessageDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Task this send completes — the source step's template is rendered. */
   taskId: string;
-  /** Sender Gmail OAuth state — drives the "Send via Gmail" button. */
   gmail: { connected: boolean; address: string | null };
 };
 
@@ -57,23 +57,29 @@ type State =
       prefill: PrefillDefinedMessageResult;
       subject: string;
       body: string;
+      /** Storage paths the sale removed locally for this send only. The
+       *  step config in the sequence stays untouched. */
+      removedStepAttachmentPaths: Set<string>;
     };
 
 /**
  * Sprint 12 phase 3 — companion to `GenerateMessageDialog` for tasks
- * whose source step is in `defined` mode.
+ * whose source step is in `defined` mode. Visual language mirrors the
+ * AI dialog (dark slate header, Gmail-branded send button, same footer
+ * rhythm) so the sale gets one consistent compose surface.
  *
- * Differences with the AI dialog :
- *   - No generation step : opens, fetches the rendered template, shows it.
- *   - No intent/locale/orientation pickers (already fixed by the step).
- *   - No tokens / brief-missing UX.
- *   - "Insert variable" picker inserts the *resolved value* at the cursor.
+ * Diffs vs the AI dialog (intentional) :
+ *   - No "Generate" / "Regenerate" step — content arrives rendered.
+ *   - No intent/locale/orientation/signal pickers — fixed at the step.
+ *   - No tokens metadata, no brief check.
+ *   - Variable insertion picker inserts the *resolved value* at cursor.
+ *   - Step pre-attachments can be removed locally (per send), not the
+ *     step config itself.
  *
- * Shared with the AI dialog at the **server-action layer** :
- *   - `sendMessageViaGmailAction` (envoi + persist + log + complete + cleanup)
- *   - `logSentInteractionAction` (log + complete task without Gmail send)
- * Both auto-close the task, log an outbound interaction, archive
- * attachments to Storage, kick the engine forward — same as AI.
+ * Shared at the server-action layer : `sendMessageViaGmailAction` and
+ * `logSentInteractionAction` (envoi + persist + log + complete-task +
+ * Storage archive + reply polling kick) handle the side effects
+ * identically for both flows.
  */
 export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
   const t = useTranslations("pages.messages");
@@ -83,7 +89,6 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
   const router = useRouter();
 
   const [state, setState] = useState<State>({ kind: "loading" });
-  // Send/log/copy state — mirrors the AI dialog naming so it reads the same.
   const [gmailSent, setGmailSent] = useState(false);
   const [gmailSending, setGmailSending] = useState(false);
   const [gmailError, setGmailError] = useState<string | null>(null);
@@ -91,38 +96,19 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
   const [copied, setCopied] = useState(false);
   const [, startTransition] = useTransition();
 
-  // User-uploaded attachments (in addition to the step's pre-attached files).
+  // User-added attachments (in addition to non-removed step attachments).
   const [attachments, setAttachments] = useState<File[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
-  // Refs to compute cursor position for variable insertion.
   const subjectRef = useRef<HTMLInputElement | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
   const [variablePickerOpen, setVariablePickerOpen] = useState<
     "subject" | "body" | null
   >(null);
 
-  function resetDialog() {
-    setState({ kind: "loading" });
-    setGmailSent(false);
-    setGmailSending(false);
-    setGmailError(null);
-    setInteractionLogged(false);
-    setCopied(false);
-    setAttachments([]);
-    setAttachmentError(null);
-    setVariablePickerOpen(null);
-  }
-
-  // Load the prefill payload the moment the dialog opens. The action
-  // looks up step config, contact, company, sender, then resolves +
-  // renders the template — all server-side.
-  //
-  // We intentionally reset all the local commit-state flags here too
-  // (gmailSent / interactionLogged / etc.) so re-opening the dialog
-  // for the same task doesn't show stale "sent" badges. The lint rule
-  // forbids calling setState directly in an effect — disabled here
-  // because we genuinely want a fresh state per open transition.
+  // Reload prefill every time the dialog opens for a fresh task. Lint
+  // rule "set-state-in-effect" disabled on purpose — we genuinely want
+  // a clean slate per open transition.
   useEffect(() => {
     if (!p.open) return;
     let cancelled = false;
@@ -146,6 +132,7 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
           prefill,
           subject: prefill.subject,
           body: prefill.body,
+          removedStepAttachmentPaths: new Set(),
         });
       })
       .catch((err: unknown) => {
@@ -161,19 +148,26 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
   }, [p.open, p.taskId]);
 
   function handleOpenChange(next: boolean) {
-    if (!next) resetDialog();
     p.onOpenChange(next);
   }
 
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------
   // Attachments — same caps + same MIME allow-list as the AI dialog.
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------
   function addAttachments(files: FileList | File[] | null) {
     if (!files) return;
     setAttachmentError(null);
     const incoming = Array.from(files);
     if (incoming.length === 0) return;
-    if (attachments.length + incoming.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+
+    // Count the step attachments still active (= not user-removed) toward
+    // the per-message cap so the Gmail-side limit holds.
+    const activeStepCount =
+      state.kind === "ready"
+        ? state.prefill.stepAttachments.length - state.removedStepAttachmentPaths.size
+        : 0;
+
+    if (attachments.length + incoming.length + activeStepCount > MAX_ATTACHMENTS_PER_MESSAGE) {
       setAttachmentError(
         t("attachments.errors.tooMany", { max: MAX_ATTACHMENTS_PER_MESSAGE }),
       );
@@ -219,10 +213,18 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
     setAttachmentError(null);
   }
 
-  // -------------------------------------------------------------------------
+  function toggleStepAttachmentRemoved(storagePath: string) {
+    if (state.kind !== "ready") return;
+    const next = new Set(state.removedStepAttachmentPaths);
+    if (next.has(storagePath)) next.delete(storagePath);
+    else next.add(storagePath);
+    setState({ ...state, removedStepAttachmentPaths: next });
+  }
+
+  // ---------------------------------------------------------------------
   // Variable picker — inserts the *resolved value* at the cursor. No
-  // re-render at send : what the sale sees is what gets sent.
-  // -------------------------------------------------------------------------
+  // re-render at send : WYSIWYG strict.
+  // ---------------------------------------------------------------------
   function insertVariable(field: "subject" | "body", value: string) {
     if (state.kind !== "ready") return;
     if (field === "subject") {
@@ -239,17 +241,11 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
     setVariablePickerOpen(null);
   }
 
-  // -------------------------------------------------------------------------
-  // Commit — builds the same FormData shape the AI dialog posts. The
-  // server actions don't care whether the content came from an LLM or a
-  // rendered template ; they just persist + send.
-  //
-  // One nuance vs the AI dialog : the AI flow posts an `llmUsageId`
-  // because every LLM call logs in `llm_usage`. Defined-mode has no
-  // LLM call, so we send an empty `llmUsageId` and the action writes
-  // NULL to the `messages.llm_usage_id` column (nullable since
-  // Sprint 12 phase 3). No fake audit row pollutes the table.
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // Commit — same FormData shape as the AI dialog, with empty llmUsageId
+  // (the action writes NULL to messages.llm_usage_id, nullable since
+  // Sprint 12 phase 3).
+  // ---------------------------------------------------------------------
   function buildCommitFormData(): FormData | null {
     if (state.kind !== "ready") return null;
     const fullContent =
@@ -262,11 +258,10 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
     fd.append("taskId", p.taskId);
     fd.append(
       "channelIntent",
-      `${state.prefill.channel}-${state.prefill.intent}` as const,
+      `${state.prefill.channel}-${state.prefill.intent}`,
     );
     fd.append("locale", state.prefill.locale);
     fd.append("content", fullContent);
-    // Empty string → action writes NULL llm_usage_id (defined mode = no LLM).
     fd.append("llmUsageId", "");
     return fd;
   }
@@ -297,11 +292,11 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
     const fd = buildCommitFormData();
     if (!fd) return;
     for (const f of attachments) fd.append("attachments", f, f.name);
-    if (state.prefill.stepAttachments.length > 0) {
-      fd.append(
-        "stepAttachmentPaths",
-        JSON.stringify(state.prefill.stepAttachments),
-      );
+    const activeStepAttachments = state.prefill.stepAttachments.filter(
+      (a) => !state.removedStepAttachmentPaths.has(a.storagePath),
+    );
+    if (activeStepAttachments.length > 0) {
+      fd.append("stepAttachmentPaths", JSON.stringify(activeStepAttachments));
     }
     setGmailError(null);
     setGmailSending(true);
@@ -319,43 +314,54 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // Render
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------
+  // Render — mirrors GenerateMessageDialog (dark header, Gmail-branded
+  // send button, same footer rhythm).
+  // ---------------------------------------------------------------------
   return (
     <DialogPrimitive.Root open={p.open} onOpenChange={handleOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm" />
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/30 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 duration-100" />
         <DialogPrimitive.Popup
           className={cn(
-            "fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border border-border bg-card shadow-xl",
-            "sm:inset-x-auto sm:top-1/2 sm:left-1/2 sm:max-h-[90vh] sm:w-[min(720px,calc(100vw-2rem))]",
-            "sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl",
-            "max-h-[92vh] outline-none",
+            // Mobile : full-screen sheet. Desktop : centered floating.
+            "fixed inset-0 z-50 w-screen h-[100dvh] flex flex-col overflow-hidden bg-popover outline-none",
+            "lg:inset-auto lg:top-1/2 lg:left-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2",
+            "lg:w-[min(820px,calc(100vw-2rem))] lg:h-[min(720px,calc(100vh-2rem))]",
+            "lg:rounded-xl lg:ring-1 lg:ring-foreground/10",
+            "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
+            "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           )}
         >
-          {/* Header */}
-          <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
-            <div className="min-w-0">
-              <DialogPrimitive.Title className="text-base font-semibold">
-                {tDef("title")}
-              </DialogPrimitive.Title>
-              {state.kind === "ready" && (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {tDef("subtitle", {
-                    contact: state.prefill.contactDisplayName,
-                    company: state.prefill.companyDisplayName,
-                  })}
-                </p>
-              )}
+          {/* Header (dark, mirrors GenerateMessageDialog) */}
+          <div className="shrink-0 flex items-start justify-between gap-3 bg-slate-900 text-white px-5 py-4">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="h-9 w-9 rounded-md bg-sky-500/15 text-sky-300 flex items-center justify-center shrink-0">
+                <Send className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <DialogPrimitive.Title className="font-serif text-base font-bold">
+                  {tDef("title")}
+                </DialogPrimitive.Title>
+                {state.kind === "ready" && (
+                  <p className="text-xs text-slate-300 truncate">
+                    {state.prefill.companyDisplayName}{" "}
+                    {t("modalSubtitleArrow")}{" "}
+                    {state.prefill.contactDisplayName}
+                  </p>
+                )}
+              </div>
             </div>
-            <DialogPrimitive.Close className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground">
+            <DialogPrimitive.Close
+              aria-label={t("actions.close")}
+              className="text-slate-300 hover:text-white p-1 -m-1 cursor-pointer"
+            >
               <X className="h-4 w-4" />
             </DialogPrimitive.Close>
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-4">
             {state.kind === "loading" && (
               <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -370,8 +376,8 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
             )}
 
             {state.kind === "ready" && (
-              <div className="space-y-4">
-                {/* Missing-variable / unknown-variable warnings */}
+              <>
+                {/* Missing / unknown variable warnings */}
                 {(state.prefill.missingVariables.length > 0 ||
                   state.prefill.unknownVariables.length > 0) && (
                   <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -397,7 +403,7 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
                   </div>
                 )}
 
-                {/* Subject */}
+                {/* Subject (email only) */}
                 {state.prefill.channel === "email" && (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
@@ -409,7 +415,9 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
                         label={tDef("insertVariable")}
                         emptyTooltip={tDef("emptyVariableTooltip")}
                         open={variablePickerOpen === "subject"}
-                        onOpenChange={(o) => setVariablePickerOpen(o ? "subject" : null)}
+                        onOpenChange={(o) =>
+                          setVariablePickerOpen(o ? "subject" : null)
+                        }
                         onPick={(value) => insertVariable("subject", value)}
                         tVarLabel={tVarLabel}
                         tVarCategory={tVarCategory}
@@ -437,7 +445,9 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
                       label={tDef("insertVariable")}
                       emptyTooltip={tDef("emptyVariableTooltip")}
                       open={variablePickerOpen === "body"}
-                      onOpenChange={(o) => setVariablePickerOpen(o ? "body" : null)}
+                      onOpenChange={(o) =>
+                        setVariablePickerOpen(o ? "body" : null)
+                      }
                       onPick={(value) => insertVariable("body", value)}
                       tVarLabel={tVarLabel}
                       tVarCategory={tVarCategory}
@@ -453,7 +463,9 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
                   />
                 </div>
 
-                {/* Step attachments — locked, read-only chips */}
+                {/* Step attachments — removable (per-send only). Visually
+                    distinct chip (muted bg) so the sale knows they come
+                    from the sequence. */}
                 {state.prefill.channel === "email" &&
                   p.gmail.connected &&
                   state.prefill.stepAttachments.length > 0 && (
@@ -462,28 +474,58 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
                         {t("stepAttachments.label")}
                       </Label>
                       <ul className="space-y-1">
-                        {state.prefill.stepAttachments.map((a) => (
-                          <li
-                            key={a.storagePath}
-                            className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5 text-xs"
-                          >
-                            <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="min-w-0 flex-1 truncate" title={a.filename}>
-                              {a.filename}
-                            </span>
-                            <span className="shrink-0 text-muted-foreground">
-                              {formatBytes(a.sizeBytes)}
-                            </span>
-                          </li>
-                        ))}
+                        {state.prefill.stepAttachments.map((a) => {
+                          const removed = state.removedStepAttachmentPaths.has(
+                            a.storagePath,
+                          );
+                          return (
+                            <li
+                              key={a.storagePath}
+                              className={cn(
+                                "flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5 text-xs",
+                                removed && "opacity-50 line-through",
+                              )}
+                            >
+                              <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                              <span
+                                className="min-w-0 flex-1 truncate"
+                                title={a.filename}
+                              >
+                                {a.filename}
+                              </span>
+                              <span className="shrink-0 text-muted-foreground">
+                                {formatBytes(a.sizeBytes)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleStepAttachmentRemoved(a.storagePath)
+                                }
+                                disabled={gmailSent || gmailSending}
+                                aria-label={
+                                  removed
+                                    ? tDef("stepAttachments.restore")
+                                    : tDef("stepAttachments.remove")
+                                }
+                                className="shrink-0 text-muted-foreground hover:text-rose-600 disabled:opacity-50"
+                              >
+                                {removed ? (
+                                  <RestoreIcon className="h-3.5 w-3.5" />
+                                ) : (
+                                  <X className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </li>
+                          );
+                        })}
                       </ul>
                       <p className="text-[11px] text-muted-foreground">
-                        {t("stepAttachments.help")}
+                        {tDef("stepAttachments.removeHelp")}
                       </p>
                     </div>
                   )}
 
-                {/* User-added attachments picker */}
+                {/* User attachments — same UX as the AI dialog. */}
                 {state.prefill.channel === "email" && p.gmail.connected && (
                   <AttachmentsPicker
                     attachments={attachments}
@@ -494,73 +536,96 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
                     t={t}
                   />
                 )}
-              </div>
+              </>
             )}
           </div>
 
-          {/* Footer — actions */}
+          {/* Footer — mirrors GenerateMessageDialog's button rhythm */}
           {state.kind === "ready" && (
-            <div className="flex flex-col gap-2 border-t border-border bg-card px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopy}
-                  disabled={gmailSending}
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                  {copied ? t("actions.copied") : t("actions.copy")}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLogInteraction}
-                  disabled={interactionLogged || gmailSending}
-                >
-                  {interactionLogged ? (
-                    <Check className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <MessageSquarePlus className="h-4 w-4" />
-                  )}
-                  {interactionLogged
-                    ? t("actions.markTaskDoneDone")
-                    : t("actions.markTaskDone")}
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {gmailError && (
-                  <span className="text-[11px] text-rose-700">{gmailError}</span>
-                )}
-                {p.gmail.connected ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={handleSendViaGmail}
-                    disabled={gmailSent || gmailSending}
-                  >
-                    {gmailSending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : gmailSent ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
-                      <GmailIcon className="h-4 w-4" />
-                    )}
-                    {gmailSent ? t("actions.gmailSent") : t("actions.sendViaGmail")}
-                  </Button>
+            <div className="shrink-0 border-t border-border px-5 py-3 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCopy}
+                disabled={copied}
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 mr-1.5 text-emerald-600" />
                 ) : (
-                  <span className="text-[11px] text-muted-foreground">
-                    {t("actions.connectGmailHint")}
-                  </span>
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />
                 )}
-              </div>
+                {copied ? t("actions.copied") : t("actions.copy")}
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant={
+                  state.prefill.channel === "email" && p.gmail.connected
+                    ? "outline"
+                    : "default"
+                }
+                onClick={handleLogInteraction}
+                disabled={interactionLogged || gmailSending}
+                className="ml-auto sm:ml-0"
+              >
+                {interactionLogged ? (
+                  <Check className="h-3.5 w-3.5 mr-1.5" />
+                ) : (
+                  <MessageSquarePlus className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                {interactionLogged
+                  ? t("actions.markTaskDoneDone")
+                  : t("actions.markTaskDone")}
+              </Button>
+
+              {/* Gmail-branded send button — identical styling to the AI
+                  dialog (white bg, [#dadce0] border, official mark). */}
+              {state.prefill.channel === "email" && p.gmail.connected && (
+                <button
+                  type="button"
+                  onClick={handleSendViaGmail}
+                  disabled={gmailSent || gmailSending}
+                  title={p.gmail.address ?? undefined}
+                  className={cn(
+                    "ml-auto inline-flex items-center gap-2 h-9 pl-3 pr-3.5 rounded-md",
+                    "bg-white border border-[#dadce0] text-[#3c4043] text-sm font-medium",
+                    "hover:shadow-md hover:bg-[#f8faff] transition-all cursor-pointer",
+                    "disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:hover:bg-white",
+                  )}
+                >
+                  {gmailSending ? (
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  ) : gmailSent ? (
+                    <Check className="h-4 w-4 shrink-0 text-emerald-600" />
+                  ) : (
+                    <GmailIcon className="h-4 w-4 shrink-0" />
+                  )}
+                  <span>
+                    {gmailSending
+                      ? t("actions.gmailSending")
+                      : gmailSent
+                      ? t("actions.gmailSent")
+                      : t("actions.sendViaGmail")}
+                  </span>
+                </button>
+              )}
+
+              {state.prefill.channel === "email" && !p.gmail.connected && (
+                <p className="w-full text-[11px] text-muted-foreground">
+                  <Link
+                    href="/settings/profile"
+                    className="text-brand-teal hover:underline"
+                  >
+                    {t("actions.connectGmailHint")}
+                  </Link>
+                </p>
+              )}
+
+              {gmailError && (
+                <p className="w-full text-[11px] text-rose-700">{gmailError}</p>
+              )}
             </div>
           )}
         </DialogPrimitive.Popup>
@@ -585,9 +650,7 @@ function VariablePickerButton(props: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tVarCategory: any;
 }) {
-  // Build a quick lookup: key → resolved value
   const valueByKey = new Map(props.variables.map((v) => [v.key, v.value]));
-
   return (
     <div className="relative">
       <button
@@ -605,42 +668,42 @@ function VariablePickerButton(props: {
             onClick={() => props.onOpenChange(false)}
           />
           <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-md border border-border bg-popover p-2 text-xs shadow-md">
-            {(Object.keys(TEMPLATE_VARIABLES_BY_CATEGORY) as TemplateVariableCategory[]).map(
-              (cat) => (
-                <div key={cat} className="mb-1.5 last:mb-0">
-                  <div className="px-1 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {props.tVarCategory(cat)}
-                  </div>
-                  <ul>
-                    {TEMPLATE_VARIABLES_BY_CATEGORY[cat].map((v) => {
-                      const value = valueByKey.get(v.key) ?? "";
-                      const empty = value.trim().length === 0;
-                      return (
-                        <li key={v.key}>
-                          <button
-                            type="button"
-                            disabled={empty}
-                            onClick={() => !empty && props.onPick(value)}
-                            className={cn(
-                              "flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left",
-                              empty
-                                ? "cursor-not-allowed text-muted-foreground opacity-60"
-                                : "hover:bg-secondary",
-                            )}
-                            title={empty ? props.emptyTooltip : value}
-                          >
-                            <span>{props.tVarLabel(v.labelKey)}</span>
-                            <span className="truncate text-[10px] text-muted-foreground">
-                              {empty ? "—" : value}
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+            {(
+              Object.keys(TEMPLATE_VARIABLES_BY_CATEGORY) as TemplateVariableCategory[]
+            ).map((cat) => (
+              <div key={cat} className="mb-1.5 last:mb-0">
+                <div className="px-1 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {props.tVarCategory(cat)}
                 </div>
-              ),
-            )}
+                <ul>
+                  {TEMPLATE_VARIABLES_BY_CATEGORY[cat].map((v) => {
+                    const value = valueByKey.get(v.key) ?? "";
+                    const empty = value.trim().length === 0;
+                    return (
+                      <li key={v.key}>
+                        <button
+                          type="button"
+                          disabled={empty}
+                          onClick={() => !empty && props.onPick(value)}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left",
+                            empty
+                              ? "cursor-not-allowed text-muted-foreground opacity-60"
+                              : "hover:bg-secondary",
+                          )}
+                          title={empty ? props.emptyTooltip : value}
+                        >
+                          <span>{props.tVarLabel(v.labelKey)}</span>
+                          <span className="truncate text-[10px] text-muted-foreground">
+                            {empty ? "—" : value}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </div>
         </>
       )}
@@ -649,8 +712,7 @@ function VariablePickerButton(props: {
 }
 
 // ---------------------------------------------------------------------------
-// AttachmentsPicker — inline mini-version (same UX as the AI dialog but
-// owned here so we don't import from generate-message-dialog.tsx).
+// AttachmentsPicker — inline (same UX as the AI dialog)
 // ---------------------------------------------------------------------------
 
 function AttachmentsPicker(p: {
@@ -680,7 +742,8 @@ function AttachmentsPicker(p: {
         className={cn(
           "inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium",
           "border border-dashed border-border bg-secondary/40 hover:bg-secondary cursor-pointer",
-          (p.disabled || reachedMax) && "opacity-60 cursor-not-allowed hover:bg-secondary/40",
+          (p.disabled || reachedMax) &&
+            "opacity-60 cursor-not-allowed hover:bg-secondary/40",
         )}
       >
         <Paperclip className="h-3.5 w-3.5" />
@@ -729,17 +792,32 @@ function AttachmentsPicker(p: {
   );
 }
 
+// Tiny inline restore icon (counter-clockwise arrow) — kept inline to
+// avoid pulling another lucide import just for one button.
+function RestoreIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <polyline points="3 4 3 9 8 9" />
+    </svg>
+  );
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/**
- * Translation lookup that returns a default when the key is missing (next-intl
- * throws otherwise). Used for variable labels that may not all be present in
- * one specific i18n file revision.
- */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function safeT(t: any, key: string, fallback: string): string {
   try {

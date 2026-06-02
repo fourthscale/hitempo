@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   MoreHorizontal, Pencil, Trash2, Circle, Clock, CheckCircle2,
-  MessageSquarePlus, Sparkles,
+  MessageSquarePlus, Sparkles, Send,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -89,6 +89,7 @@ export function TaskRowActions({
     completed: string;
     logInteraction: string;
     generateMessage: string;
+    sendDefinedMessage: string;
     edit: string;
     delete: string;
   };
@@ -96,6 +97,10 @@ export function TaskRowActions({
   const router = useRouter();
   const [interactionOpen, setInteractionOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
+  // Sprint 12 phase 3 — when the task comes from a defined-mode step,
+  // the menu offers BOTH "Generate a message" (AI dialog) and "Send the
+  // defined message" (template dialog). Two open states, two dialogs.
+  const [sendDefinedOpen, setSendDefinedOpen] = useState(false);
 
   async function changeStatus(status: TaskStatus) {
     const fd = new FormData();
@@ -131,40 +136,43 @@ export function TaskRowActions({
         />
       )}
 
+      {/* AI generation dialog — always available when the task is
+          message-eligible, regardless of the source step's mode. */}
       {generate && companyId && contactId && (
-        generate.sourceStepMode === "defined" ? (
-          // Sprint 12 phase 3 — defined-mode step → render template +
-          // send, no LLM round-trip.
-          <SendDefinedMessageDialog
-            open={generateOpen}
-            onOpenChange={setGenerateOpen}
-            taskId={taskId}
-            gmail={generate.gmail}
-          />
-        ) : (
-          <GenerateMessageDialog
-            open={generateOpen}
-            onOpenChange={setGenerateOpen}
-            mode="task"
-            taskId={taskId}
-            contactId={contactId}
-            companyId={companyId}
-            contactDisplayName={generate.contactDisplayName}
-            companyDisplayName={generate.companyDisplayName}
-            annotationContact={{
-              firstName: generate.contactFirstName,
-              lastName: generate.contactLastName,
-              jobTitle: generate.contactJobTitle,
-            }}
-            defaultChannelIntent={generate.defaultChannelIntent}
-            defaultLocale={generate.defaultLocale}
-            preferredLocaleHint={generate.preferredLocaleHint}
-            detectedSignal={generate.detectedSignal}
-            brandBriefStatus={generate.brandBriefStatus}
-            gmail={generate.gmail}
-            sequenceContext={generate.sequenceContext}
-          />
-        )
+        <GenerateMessageDialog
+          open={generateOpen}
+          onOpenChange={setGenerateOpen}
+          mode="task"
+          taskId={taskId}
+          contactId={contactId}
+          companyId={companyId}
+          contactDisplayName={generate.contactDisplayName}
+          companyDisplayName={generate.companyDisplayName}
+          annotationContact={{
+            firstName: generate.contactFirstName,
+            lastName: generate.contactLastName,
+            jobTitle: generate.contactJobTitle,
+          }}
+          defaultChannelIntent={generate.defaultChannelIntent}
+          defaultLocale={generate.defaultLocale}
+          preferredLocaleHint={generate.preferredLocaleHint}
+          detectedSignal={generate.detectedSignal}
+          brandBriefStatus={generate.brandBriefStatus}
+          gmail={generate.gmail}
+          sequenceContext={generate.sequenceContext}
+        />
+      )}
+
+      {/* Defined-template send dialog — only mounted when the source
+          step is in `defined` mode, AND offered alongside (not instead
+          of) the AI dialog. The sale picks. */}
+      {generate && companyId && contactId && generate.sourceStepMode === "defined" && (
+        <SendDefinedMessageDialog
+          open={sendDefinedOpen}
+          onOpenChange={setSendDefinedOpen}
+          taskId={taskId}
+          gmail={generate.gmail}
+        />
       )}
 
       <DropdownMenu>
@@ -202,6 +210,16 @@ export function TaskRowActions({
             >
               <Sparkles className="h-3.5 w-3.5 text-amber-500" />
               {labels.generateMessage}
+            </DropdownMenuItem>
+          )}
+
+          {generate && generate.sourceStepMode === "defined" && (
+            <DropdownMenuItem
+              className="gap-2 cursor-pointer"
+              onClick={() => setSendDefinedOpen(true)}
+            >
+              <Send className="h-3.5 w-3.5 text-sky-500" />
+              {labels.sendDefinedMessage}
             </DropdownMenuItem>
           )}
 

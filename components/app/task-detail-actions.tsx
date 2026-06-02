@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Circle, Clock, CheckCircle2, MessageSquarePlus, Sparkles, Pencil, Trash2,
+  Circle, Clock, CheckCircle2, MessageSquarePlus, Sparkles, Pencil, Trash2, Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TaskInteractionDialog } from "@/components/app/task-interaction-dialog";
@@ -44,6 +44,7 @@ export function TaskDetailActions({
     completed: string;
     logInteraction: string;
     generateMessage: string;
+    sendDefinedMessage: string;
     edit: string;
     delete: string;
     deleteConfirm: string;
@@ -52,6 +53,7 @@ export function TaskDetailActions({
   const router = useRouter();
   const [interactionOpen, setInteractionOpen] = useState(false);
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [sendDefinedOpen, setSendDefinedOpen] = useState(false);
 
   async function changeStatus(status: TaskStatus) {
     const fd = new FormData();
@@ -89,37 +91,37 @@ export function TaskDetailActions({
       )}
 
       {generate && companyId && contactId && (
-        generate.sourceStepMode === "defined" ? (
-          <SendDefinedMessageDialog
-            open={generateOpen}
-            onOpenChange={setGenerateOpen}
-            taskId={taskId}
-            gmail={generate.gmail}
-          />
-        ) : (
-          <GenerateMessageDialog
-            open={generateOpen}
-            onOpenChange={setGenerateOpen}
-            mode="task"
-            taskId={taskId}
-            contactId={contactId}
-            companyId={companyId}
-            contactDisplayName={generate.contactDisplayName}
-            companyDisplayName={generate.companyDisplayName}
-            annotationContact={{
-              firstName: generate.contactFirstName,
-              lastName: generate.contactLastName,
-              jobTitle: generate.contactJobTitle,
-            }}
-            defaultChannelIntent={generate.defaultChannelIntent}
-            defaultLocale={generate.defaultLocale}
-            preferredLocaleHint={generate.preferredLocaleHint}
-            detectedSignal={generate.detectedSignal}
-            brandBriefStatus={generate.brandBriefStatus}
-            gmail={generate.gmail}
-            sequenceContext={generate.sequenceContext}
-          />
-        )
+        <GenerateMessageDialog
+          open={generateOpen}
+          onOpenChange={setGenerateOpen}
+          mode="task"
+          taskId={taskId}
+          contactId={contactId}
+          companyId={companyId}
+          contactDisplayName={generate.contactDisplayName}
+          companyDisplayName={generate.companyDisplayName}
+          annotationContact={{
+            firstName: generate.contactFirstName,
+            lastName: generate.contactLastName,
+            jobTitle: generate.contactJobTitle,
+          }}
+          defaultChannelIntent={generate.defaultChannelIntent}
+          defaultLocale={generate.defaultLocale}
+          preferredLocaleHint={generate.preferredLocaleHint}
+          detectedSignal={generate.detectedSignal}
+          brandBriefStatus={generate.brandBriefStatus}
+          gmail={generate.gmail}
+          sequenceContext={generate.sequenceContext}
+        />
+      )}
+
+      {generate && companyId && contactId && generate.sourceStepMode === "defined" && (
+        <SendDefinedMessageDialog
+          open={sendDefinedOpen}
+          onOpenChange={setSendDefinedOpen}
+          taskId={taskId}
+          gmail={generate.gmail}
+        />
       )}
 
       <div className="space-y-3">
@@ -162,6 +164,18 @@ export function TaskDetailActions({
             >
               <Sparkles className="h-4 w-4 text-amber-500" />
               {labels.generateMessage}
+            </Button>
+          )}
+
+          {generate && generate.sourceStepMode === "defined" && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={() => setSendDefinedOpen(true)}
+            >
+              <Send className="h-4 w-4 text-sky-500" />
+              {labels.sendDefinedMessage}
             </Button>
           )}
 

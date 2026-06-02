@@ -642,6 +642,7 @@ async function TaskRow({
           completed: t("actions.completed"),
           logInteraction: t("actions.logInteraction"),
           generateMessage: tMessages("actions.fromTask"),
+          sendDefinedMessage: tMessages("actions.sendDefinedMessage"),
           edit: t("actions.edit"),
           delete: t("actions.delete"),
         }}

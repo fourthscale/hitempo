@@ -1020,6 +1020,7 @@
         "close": "Fermer",
         "fromTask": "Générer un message",
         "fromContact": "Générer un message",
+        "sendDefinedMessage": "Envoyer le message défini",
         "sendViaGmail": "Envoyer via Gmail",
         "gmailSending": "Envoi…",
         "gmailSent": "Envoyé",
@@ -1054,6 +1055,11 @@
         },
         "errors": {
           "loadFailed": "Impossible de charger le message. Réessaie."
+        },
+        "stepAttachments": {
+          "remove": "Retirer pour cet envoi",
+          "restore": "Réinclure",
+          "removeHelp": "Tu peux retirer une pièce jointe pour cet envoi sans modifier la séquence."
         }
       },
       "emptyState": "Choisis tes paramètres et clique sur Générer.",

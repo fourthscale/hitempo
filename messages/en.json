@@ -1020,6 +1020,7 @@
         "close": "Close",
         "fromTask": "Generate message",
         "fromContact": "Generate message",
+        "sendDefinedMessage": "Send defined message",
         "sendViaGmail": "Send via Gmail",
         "gmailSending": "Sending…",
         "gmailSent": "Sent",
@@ -1054,6 +1055,11 @@
         },
         "errors": {
           "loadFailed": "Could not load the message. Please try again."
+        },
+        "stepAttachments": {
+          "remove": "Remove for this send",
+          "restore": "Restore",
+          "removeHelp": "You can drop an attachment for this send without changing the sequence."
         }
       },
       "emptyState": "Pick your parameters and click Generate.",
