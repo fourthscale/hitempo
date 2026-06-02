@@ -422,11 +422,11 @@
       },
       "thisWeek": {
         "title": "À traiter cette semaine",
-        "empty": "Rien de prévu sur les 7 prochains jours."
+        "empty": "Rien de prévu d'ici dimanche."
       },
       "nextWeek": {
         "title": "À traiter semaine prochaine",
-        "empty": "Rien de prévu sur la semaine prochaine."
+        "empty": "Rien de prévu la semaine prochaine."
       },
       "agent": {
         "title": "Agent",

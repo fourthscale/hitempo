@@ -422,11 +422,11 @@
       },
       "thisWeek": {
         "title": "To handle this week",
-        "empty": "Nothing scheduled for the next 7 days."
+        "empty": "Nothing scheduled before Sunday."
       },
       "nextWeek": {
         "title": "To handle next week",
-        "empty": "Nothing scheduled for next week."
+        "empty": "Nothing scheduled next week."
       },
       "agent": {
         "title": "Agent",
