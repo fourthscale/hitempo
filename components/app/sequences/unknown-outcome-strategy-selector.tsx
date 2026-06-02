@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import { updateSequenceUnknownOutcomeStrategyAction } from "@/lib/actions/sequences";
 import {
   SEQUENCE_UNKNOWN_OUTCOME_STRATEGIES,
-  isSequenceUnknownOutcomeStrategy,
   type SequenceUnknownOutcomeStrategy,
 } from "@/lib/sequences/unknown-outcome-strategy";
 import { cn } from "@/lib/utils";
@@ -66,7 +65,3 @@ export function UnknownOutcomeStrategySelector({
   );
 }
 
-/** Helper for server components that have a raw string from the DB. */
-export function coerceStrategy(raw: string | null | undefined): SequenceUnknownOutcomeStrategy {
-  return isSequenceUnknownOutcomeStrategy(raw) ? raw : "park";
-}

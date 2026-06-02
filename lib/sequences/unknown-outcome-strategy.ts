@@ -38,6 +38,19 @@ export function isSequenceUnknownOutcomeStrategy(
 }
 
 /**
+ * Helper for server components that read the raw `unknown_outcome_strategy`
+ * column (plain text) and need a typed value to pass into the selector.
+ * Lives in this pure module — NOT alongside the client selector — so a
+ * Server Component can import it without dragging the "use client"
+ * boundary across.
+ */
+export function coerceStrategy(
+  raw: string | null | undefined,
+): SequenceUnknownOutcomeStrategy {
+  return isSequenceUnknownOutcomeStrategy(raw) ? raw : "park";
+}
+
+/**
  * Resolve the effective strategy : step-level override wins, otherwise
  * sequence-level, otherwise hard-default `park`. Unknown / invalid values
  * fall through to `park` defensively — we never want a malformed config

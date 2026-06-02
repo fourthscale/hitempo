@@ -11,10 +11,8 @@ import { publishedStepsToDraft } from "@/lib/sequences/draft-from-steps";
 import { PageHeader } from "@/components/app/page-header";
 import { EmptyState } from "@/components/app/empty-state";
 import { SequenceFlowView } from "@/components/app/sequences/sequence-flow-view";
-import {
-  UnknownOutcomeStrategySelector,
-  coerceStrategy,
-} from "@/components/app/sequences/unknown-outcome-strategy-selector";
+import { UnknownOutcomeStrategySelector } from "@/components/app/sequences/unknown-outcome-strategy-selector";
+import { coerceStrategy } from "@/lib/sequences/unknown-outcome-strategy";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
