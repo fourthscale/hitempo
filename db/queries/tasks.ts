@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNull, lt, lte, gte, or, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
-import { companies, contacts, tasks, sequenceStepExecutions, sequenceSteps } from "@/db/schema";
+import { companies, contacts, tasks, sequenceStepExecutions, sequenceSteps, sites } from "@/db/schema";
 
 export type TaskWithContext = Awaited<ReturnType<typeof getTasksByOrg>>[number];
 
@@ -275,8 +275,22 @@ export async function createTask(
     description?: string | null;
     priority?: typeof tasks.$inferInsert["priority"];
     dueAt?: Date | null;
+    /** Sprint 12.5 — when true, the UI hides the hour part of dueAt
+     *  ("vendredi 14h30" → "vendredi"). The column is non-null in the
+     *  DB; we default to false on create. */
+    dueAtAllDay?: boolean;
+    /** When the sale should actually handle the task (distinct from
+     *  dueAt = the hard deadline). The engine uses this for agenda
+     *  placement + anti-conflit. */
+    scheduledFor?: Date | null;
+    /** Slot duration in minutes — used by the agenda anti-conflict
+     *  finder. Null = engine default for the task type. */
+    estimatedDurationMinutes?: number | null;
     companyId?: string | null;
     contactId?: string | null;
+    /** Optional site (when the company has several — useful for
+     *  field-visit tasks). */
+    siteId?: string | null;
   },
 ) {
   const [row] = await getDb()
@@ -289,8 +303,12 @@ export async function createTask(
       description: data.description ?? null,
       priority: data.priority ?? "medium",
       dueAt: data.dueAt ?? null,
+      dueAtAllDay: data.dueAtAllDay ?? false,
+      scheduledFor: data.scheduledFor ?? null,
+      estimatedDurationMinutes: data.estimatedDurationMinutes ?? null,
       companyId: data.companyId ?? null,
       contactId: data.contactId ?? null,
+      siteId: data.siteId ?? null,
       status: "pending",
     })
     .returning();
@@ -455,9 +473,13 @@ export async function updateTask(
     description?: string | null;
     priority?: typeof tasks.$inferInsert["priority"];
     dueAt?: Date | null;
+    dueAtAllDay?: boolean;
+    scheduledFor?: Date | null;
+    estimatedDurationMinutes?: number | null;
     assigneeId?: string | null;
     companyId?: string | null;
     contactId?: string | null;
+    siteId?: string | null;
   },
 ) {
   const [row] = await getDb()
@@ -468,9 +490,13 @@ export async function updateTask(
       description: data.description ?? null,
       priority: data.priority ?? "medium",
       dueAt: data.dueAt ?? null,
+      dueAtAllDay: data.dueAtAllDay ?? false,
+      scheduledFor: data.scheduledFor ?? null,
+      estimatedDurationMinutes: data.estimatedDurationMinutes ?? null,
       assigneeId: data.assigneeId ?? null,
       companyId: data.companyId ?? null,
       contactId: data.contactId ?? null,
+      siteId: data.siteId ?? null,
       updatedAt: new Date(),
     })
     .where(and(eq(tasks.id, taskId), eq(tasks.organizationId, orgId)))
@@ -497,6 +523,21 @@ export async function getContactsForTaskForm(orgId: string, companyId?: string |
     ),
     columns: { id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true },
     orderBy: [asc(contacts.lastName)],
+    limit: 100,
+  });
+}
+
+/**
+ * Sprint 12.5 — sites for a given company, used by the task form's
+ * site select. Primary site first, then alpha order. Empty when no
+ * company is selected (the field stays disabled UX-side).
+ */
+export async function getSitesForTaskForm(orgId: string, companyId?: string | null) {
+  if (!companyId) return [];
+  return getDb().query.sites.findMany({
+    where: and(eq(sites.organizationId, orgId), eq(sites.companyId, companyId)),
+    columns: { id: true, name: true, isPrimary: true },
+    orderBy: [desc(sites.isPrimary), asc(sites.name)],
     limit: 100,
   });
 }

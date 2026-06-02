@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { getActiveOrg } from "@/lib/auth/context";
-import { getCompaniesForTaskForm, getContactsForTaskForm } from "@/db/queries/tasks";
+import {
+  getCompaniesForTaskForm,
+  getContactsForTaskForm,
+  getSitesForTaskForm,
+} from "@/db/queries/tasks";
 import { getOrgMembersWithNames } from "@/db/queries/members";
 import { createTaskAction } from "@/lib/actions/tasks";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { CompanyContactSelect } from "@/components/app/company-contact-select";
+import { TaskDueAtField } from "@/components/app/task-due-at-field";
 import { FormFooter } from "@/components/app/form-footer";
 
 export default async function NewTaskPage({
@@ -22,10 +27,14 @@ export default async function NewTaskPage({
   const tTaskType = await getTranslations("taskType");
   const tPriority = await getTranslations("taskPriority");
 
-  const [companiesList, members, prefilledContacts] = await Promise.all([
+  // Pre-load the prefilled company's contacts AND sites in parallel so
+  // the form lands with both selects populated. Both empty when no
+  // company query-string was provided.
+  const [companiesList, members, prefilledContacts, prefilledSites] = await Promise.all([
     getCompaniesForTaskForm(orgId),
     getOrgMembersWithNames(orgId),
     prefilledCompanyId ? getContactsForTaskForm(orgId, prefilledCompanyId) : Promise.resolve([]),
+    prefilledCompanyId ? getSitesForTaskForm(orgId, prefilledCompanyId) : Promise.resolve([]),
   ]);
 
   const taskTypes = ["email", "linkedin", "phone", "visit", "follow_up", "research", "other"] as const;
@@ -90,7 +99,7 @@ export default async function NewTaskPage({
             />
           </div>
 
-          {/* Priority + Due date */}
+          {/* Priority + Due date with all-day toggle */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
@@ -108,14 +117,41 @@ export default async function NewTaskPage({
                 ))}
               </select>
             </div>
+            <TaskDueAtField
+              label={t("fields.dueAt")}
+              allDayLabel={t("fields.dueAtAllDay")}
+              defaultDueAt=""
+              defaultAllDay={false}
+            />
+          </div>
+
+          {/* Scheduled-for (when to do it) + estimated duration */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-                {t("fields.dueAt")}
+                {t("fields.scheduledFor")}
               </label>
               <input
                 type="datetime-local"
-                name="dueAt"
+                name="scheduledFor"
                 className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {t("fields.scheduledForHint")}
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+                {t("fields.estimatedDurationMinutes")}
+              </label>
+              <input
+                type="number"
+                name="estimatedDurationMinutes"
+                min={1}
+                max={480}
+                step={5}
+                className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm"
+                placeholder={t("fields.estimatedDurationPlaceholder")}
               />
             </div>
           </div>
@@ -143,11 +179,15 @@ export default async function NewTaskPage({
             defaultCompanyId={prefilledCompanyId}
             defaultContactId={prefilledContactId}
             initialContacts={prefilledContacts}
+            initialSites={prefilledSites}
             labelCompany={t("fields.company")}
             labelContact={t("fields.contact")}
+            labelSite={t("fields.site")}
             placeholderCompany={t("fields.noCompany")}
             placeholderContact={t("fields.noContact")}
+            placeholderSite={t("fields.noSite")}
             hintSelectCompany={t("fields.selectCompanyFirst")}
+            withSite
           />
 
           <FormFooter>

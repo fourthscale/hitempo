@@ -751,11 +751,18 @@
         "descriptionPlaceholder": "Contexte, notes, signal… (optionnel)",
         "priority": "Priorité",
         "dueAt": "Échéance",
+        "dueAtAllDay": "Journée entière (sans heure)",
+        "scheduledFor": "Date d'exécution",
+        "scheduledForHint": "Quand traiter la tâche (l'engine l'utilise pour placer dans l'agenda).",
+        "estimatedDurationMinutes": "Durée estimée (min)",
+        "estimatedDurationPlaceholder": "Ex : 30",
         "company": "Entreprise",
         "contact": "Contact",
+        "site": "Site",
         "assignee": "Assigné à",
         "noCompany": "— Aucune entreprise",
         "noContact": "— Aucun contact",
+        "noSite": "— Aucun site",
         "selectCompanyFirst": "Sélectionne d'abord une entreprise."
       },
       "create": {
@@ -1371,7 +1378,6 @@
           "sales": "Commercial",
           "agent": "Agent",
           "agentHint": "L'agent enverra l'email automatiquement via la messagerie connectée du commercial assigné, à l'heure planifiée. En cas d'échec (messagerie non connectée, etc.) la tâche revient en manuel.",
-          "agentEmailOnly": "L'agent ne peut auto-traiter que des emails.",
           "owner": "Propriétaire du compte / contact",
           "specific": "Commercial spécifique"
         },

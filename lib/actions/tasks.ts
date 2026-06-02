@@ -16,16 +16,38 @@ import { withActionError } from "./wrap-action-error";
 const taskTypeEnum = z.enum(["email", "linkedin", "phone", "visit", "follow_up", "research", "other"]);
 const taskPriorityEnum = z.enum(["low", "medium", "high", "urgent"]);
 
-const createSchema = z.object({
+// Shared by create + update — the 4 Sprint 12.5 fields, plus a coercer for
+// the optional integer (estimatedDurationMinutes). Kept as a fragment so
+// add/edit stay structurally identical and any future tweak lands in one
+// place.
+const sharedTaskFields = {
   type: taskTypeEnum,
   title: z.string().min(1).max(300),
   description: z.string().max(2000).optional().or(z.literal("")),
   priority: taskPriorityEnum.optional().default("medium"),
+  // Hard deadline (`datetime-local` from the UI ; parsed to Date below).
   dueAt: z.string().optional().or(z.literal("")),
+  // Sprint 12.5 — when true the UI hides the hour part of dueAt.
+  // `<input type="checkbox">` posts "on" when checked and nothing when
+  // not, so we coerce conservatively.
+  dueAtAllDay: z.preprocess(
+    (v) => v === "on" || v === "true" || v === true,
+    z.boolean(),
+  ),
+  // When the sale should actually handle the task (vs the deadline).
+  scheduledFor: z.string().optional().or(z.literal("")),
+  // Slot duration in minutes — capped at 8h ; null = engine default.
+  estimatedDurationMinutes: z
+    .preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().positive().max(480).nullable())
+    .optional(),
   assigneeId: z.string().uuid().optional().or(z.literal("")),
   companyId: z.string().uuid().optional().or(z.literal("")),
   contactId: z.string().uuid().optional().or(z.literal("")),
-});
+  // Optional site — bound to the selected company (field-visit tasks).
+  siteId: z.string().uuid().optional().or(z.literal("")),
+} as const;
+
+const createSchema = z.object(sharedTaskFields);
 
 async function _createTaskAction(formData: FormData) {
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
@@ -41,8 +63,12 @@ async function _createTaskAction(formData: FormData) {
     description: d.description || null,
     priority: d.priority,
     dueAt: d.dueAt ? new Date(d.dueAt) : null,
+    dueAtAllDay: d.dueAtAllDay,
+    scheduledFor: d.scheduledFor ? new Date(d.scheduledFor) : null,
+    estimatedDurationMinutes: d.estimatedDurationMinutes ?? null,
     companyId: d.companyId || null,
     contactId: d.contactId || null,
+    siteId: d.siteId || null,
   });
 
   revalidatePath("/tasks");
@@ -65,14 +91,7 @@ async function _completeTaskAction(formData: FormData) {
 
 const updateSchema = z.object({
   taskId: z.string().uuid(),
-  type: taskTypeEnum,
-  title: z.string().min(1).max(300),
-  description: z.string().max(2000).optional().or(z.literal("")),
-  priority: taskPriorityEnum.optional().default("medium"),
-  dueAt: z.string().optional().or(z.literal("")),
-  assigneeId: z.string().uuid().optional().or(z.literal("")),
-  companyId: z.string().uuid().optional().or(z.literal("")),
-  contactId: z.string().uuid().optional().or(z.literal("")),
+  ...sharedTaskFields,
 });
 
 async function _updateTaskAction(formData: FormData) {
@@ -88,9 +107,13 @@ async function _updateTaskAction(formData: FormData) {
     description: d.description || null,
     priority: d.priority,
     dueAt: d.dueAt ? new Date(d.dueAt) : null,
+    dueAtAllDay: d.dueAtAllDay,
+    scheduledFor: d.scheduledFor ? new Date(d.scheduledFor) : null,
+    estimatedDurationMinutes: d.estimatedDurationMinutes ?? null,
     assigneeId: d.assigneeId || null,
     companyId: d.companyId || null,
     contactId: d.contactId || null,
+    siteId: d.siteId || null,
   });
 
   revalidatePath("/tasks");

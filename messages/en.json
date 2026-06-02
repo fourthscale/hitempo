@@ -751,11 +751,18 @@
         "descriptionPlaceholder": "Context, notes, signal… (optional)",
         "priority": "Priority",
         "dueAt": "Due date",
+        "dueAtAllDay": "All day (no specific time)",
+        "scheduledFor": "Execution date",
+        "scheduledForHint": "When the task should actually be handled (used by the engine for agenda placement).",
+        "estimatedDurationMinutes": "Estimated duration (min)",
+        "estimatedDurationPlaceholder": "e.g. 30",
         "company": "Company",
         "contact": "Contact",
+        "site": "Site",
         "assignee": "Assignee",
         "noCompany": "— No company",
         "noContact": "— No contact",
+        "noSite": "— No site",
         "selectCompanyFirst": "Select a company first to pick a contact."
       },
       "create": {
@@ -1371,7 +1378,6 @@
           "sales": "Sales",
           "agent": "Agent",
           "agentHint": "The agent will send the email automatically via the assigned sale's connected mailbox, at the scheduled time. On failure (mailbox not connected, etc.) the task falls back to manual.",
-          "agentEmailOnly": "The agent can only auto-execute email steps.",
           "owner": "Account / contact owner",
           "specific": "Specific user"
         },

@@ -516,7 +516,6 @@ function AssignmentField({
         <button
           type="button"
           disabled={!actorAgentEnabled}
-          title={actorAgentEnabled ? undefined : t("editor.assign.agentEmailOnly")}
           onClick={() => onChange({ ...a, actor: "agent" })}
           className={`flex-1 rounded-md border px-3 py-1.5 text-sm transition-colors ${
             !actorAgentEnabled

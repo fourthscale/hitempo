@@ -2,14 +2,29 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { getActiveOrg } from "@/lib/auth/context";
-import { getTaskById, getCompaniesForTaskForm, getContactsForTaskForm } from "@/db/queries/tasks";
+import {
+  getTaskById,
+  getCompaniesForTaskForm,
+  getContactsForTaskForm,
+  getSitesForTaskForm,
+} from "@/db/queries/tasks";
 import { getOrgMembersWithNames } from "@/db/queries/members";
 import { updateTaskAction } from "@/lib/actions/tasks";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { CompanyContactSelect } from "@/components/app/company-contact-select";
+import { TaskDueAtField } from "@/components/app/task-due-at-field";
 import { FormFooter } from "@/components/app/form-footer";
+
+/**
+ * Format a Date for `<input type="datetime-local">` (local TZ, no
+ * seconds). Returns "" when the date is null.
+ */
+function toDateTimeLocal(d: Date | null | undefined): string {
+  if (!d) return "";
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
 
 export default async function EditTaskPage({
   params,
@@ -28,7 +43,10 @@ export default async function EditTaskPage({
 
   if (!task) notFound();
 
-  const contactsList = await getContactsForTaskForm(orgId, task.companyId);
+  const [contactsList, sitesList] = await Promise.all([
+    getContactsForTaskForm(orgId, task.companyId),
+    getSitesForTaskForm(orgId, task.companyId),
+  ]);
 
   const t = await getTranslations("pages.tasks");
   const tTaskType = await getTranslations("taskType");
@@ -37,11 +55,8 @@ export default async function EditTaskPage({
   const taskTypes = ["email", "linkedin", "phone", "visit", "follow_up", "research", "other"] as const;
   const priorities = ["low", "medium", "high", "urgent"] as const;
 
-  const dueAtValue = task.dueAt
-    ? new Date(task.dueAt.getTime() - task.dueAt.getTimezoneOffset() * 60000)
-        .toISOString()
-        .slice(0, 16)
-    : "";
+  const dueAtValue = toDateTimeLocal(task.dueAt);
+  const scheduledForValue = toDateTimeLocal(task.scheduledFor);
 
   return (
     <div className="max-w-[640px] mx-auto">
@@ -103,7 +118,7 @@ export default async function EditTaskPage({
             />
           </div>
 
-          {/* Priority + Due date */}
+          {/* Priority + Due date with all-day toggle */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
@@ -119,15 +134,43 @@ export default async function EditTaskPage({
                 ))}
               </select>
             </div>
+            <TaskDueAtField
+              label={t("fields.dueAt")}
+              allDayLabel={t("fields.dueAtAllDay")}
+              defaultDueAt={dueAtValue}
+              defaultAllDay={Boolean(task.dueAtAllDay)}
+            />
+          </div>
+
+          {/* Scheduled-for + estimated duration */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
-                {t("fields.dueAt")}
+                {t("fields.scheduledFor")}
               </label>
               <input
                 type="datetime-local"
-                name="dueAt"
-                defaultValue={dueAtValue}
+                name="scheduledFor"
+                defaultValue={scheduledForValue}
                 className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {t("fields.scheduledForHint")}
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+                {t("fields.estimatedDurationMinutes")}
+              </label>
+              <input
+                type="number"
+                name="estimatedDurationMinutes"
+                min={1}
+                max={480}
+                step={5}
+                defaultValue={task.estimatedDurationMinutes ?? ""}
+                className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm"
+                placeholder={t("fields.estimatedDurationPlaceholder")}
               />
             </div>
           </div>
@@ -154,12 +197,17 @@ export default async function EditTaskPage({
             companies={companiesList}
             defaultCompanyId={task.companyId ?? undefined}
             defaultContactId={task.contactId ?? undefined}
+            defaultSiteId={task.siteId ?? undefined}
             initialContacts={contactsList}
+            initialSites={sitesList}
             labelCompany={t("fields.company")}
             labelContact={t("fields.contact")}
+            labelSite={t("fields.site")}
             placeholderCompany={t("fields.noCompany")}
             placeholderContact={t("fields.noContact")}
+            placeholderSite={t("fields.noSite")}
             hintSelectCompany={t("fields.selectCompanyFirst")}
+            withSite
           />
 
           <FormFooter>
