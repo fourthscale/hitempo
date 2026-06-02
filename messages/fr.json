@@ -421,6 +421,17 @@
         "empty": "Rien à traiter aujourd'hui.",
         "emptyAction": "Créer une tâche →"
       },
+      "agent": {
+        "title": "Agent",
+        "pendingToday": "Envois prévus aujourd'hui",
+        "succeededLast7Days": "Envoyés ces 7 derniers jours",
+        "failedToTakeOver": "À reprendre"
+      },
+      "channelDonut": {
+        "title": "Canaux de prospection · 7 derniers jours",
+        "totalLabel": "actions",
+        "empty": "Pas encore d'activité sur les 7 derniers jours."
+      },
       "topTargets": {
         "title": "Top cibles cette semaine",
         "empty": "Aucune entreprise scorée pour l'instant."

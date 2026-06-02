@@ -1,19 +1,22 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { Mail, RefreshCcw, Phone, CheckCircle2, TrendingUp, Flame, AlertCircle, MapPin, Calendar, Search, Inbox, Clock } from "lucide-react";
+import { Mail, RefreshCcw, Phone, CheckCircle2, TrendingUp, Flame, AlertCircle, MapPin, Calendar, Search, Inbox, Clock, Bot, Send, CalendarClock } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import {
   getTasksDashboard,
   countTodayTasksByOrg,
   countOverdueTasksByOrg,
   getOldestOverdueTaskAgeDays,
+  getAgentDashboardStats,
 } from "@/db/queries/tasks";
 import {
   getRecentInteractionsByOrg,
   countRepliesToClassifyByOrg,
   countAwaitingReplyByOrg,
   getResponseRateLast30Days,
+  getOutboundChannelsLast7Days,
 } from "@/db/queries/interactions";
+import { ChannelDonut, type ChannelDonutSlice } from "@/components/app/dashboard/channel-donut";
 import { listCompaniesByOrg } from "@/db/queries/companies";
 import { scoreGrade, scoreBadgeClasses } from "@/lib/scoring/grade";
 import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
@@ -67,6 +70,8 @@ export default async function DashboardPage() {
     responseStats,
     repliesToClassify,
     awaitingReply,
+    agentStats,
+    channelStats,
   ] = await Promise.all([
     getTasksDashboard(orgId, user.id),
     getRecentInteractionsByOrg(orgId, 5),
@@ -77,7 +82,21 @@ export default async function DashboardPage() {
     getResponseRateLast30Days(orgId),
     countRepliesToClassifyByOrg(orgId),
     countAwaitingReplyByOrg(orgId, user.id),
+    getAgentDashboardStats(orgId, user.id),
+    getOutboundChannelsLast7Days(orgId, user.id),
   ]);
+
+  // Sprint 12 phase 5 — donut data. Colors picked to match the existing
+  // palette : brand-teal for email (the workhorse), sky for LinkedIn,
+  // amber for phone (warm/urgent), emerald for visit (field signal),
+  // muted for other. Strings translated via tInteractionChannel.
+  const channelSlices: ChannelDonutSlice[] = [
+    { key: "email",    label: tInteractionChannel("email"),    count: channelStats.email,    color: "#0d9488" },
+    { key: "linkedin", label: tInteractionChannel("linkedin"), count: channelStats.linkedin, color: "#0284c7" },
+    { key: "phone",    label: tInteractionChannel("phone"),    count: channelStats.phone,    color: "#f59e0b" },
+    { key: "visit",    label: tInteractionChannel("in_person"), count: channelStats.visit,   color: "#10b981" },
+    { key: "other",    label: tInteractionChannel("other"),    count: channelStats.other,    color: "#94a3b8" },
+  ];
 
   // listCompaniesByOrg already orders by score DESC, signal_detected_at DESC NULLS LAST
   const topTargets = topCompanies
@@ -297,6 +316,77 @@ export default async function DashboardPage() {
         </Card>
 
         <div className="flex flex-col gap-6">
+          {/* Sprint 12 phase 5 — Agent block. Three stats : what's
+              scheduled today, what shipped this week, and what failed
+              (the actionable one — linkable to a filtered task list). */}
+          <Card className="p-6">
+            <h2 className="font-serif text-lg font-bold mb-4 flex items-center gap-2">
+              <Bot className="h-4 w-4 text-sky-600" />
+              {t("agent.title")}
+            </h2>
+            <ul className="space-y-3 text-sm">
+              <li className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-muted-foreground">
+                  <CalendarClock className="h-4 w-4 shrink-0" />
+                  {t("agent.pendingToday")}
+                </span>
+                <span className="font-serif text-lg font-bold tabular-nums">
+                  {agentStats.pendingToday}
+                </span>
+              </li>
+              <li className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-muted-foreground">
+                  <Send className="h-4 w-4 shrink-0" />
+                  {t("agent.succeededLast7Days")}
+                </span>
+                <span className="font-serif text-lg font-bold tabular-nums">
+                  {agentStats.succeededLast7Days}
+                </span>
+              </li>
+              {agentStats.failedToTakeOver > 0 ? (
+                <li>
+                  <Link
+                    href="/tasks?agentFailed=1"
+                    className="flex items-center justify-between gap-3 rounded-md bg-rose-50 px-2 py-1.5 -mx-2 hover:bg-rose-100 transition-colors"
+                  >
+                    <span className="inline-flex items-center gap-2 text-rose-700">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      {t("agent.failedToTakeOver")}
+                    </span>
+                    <span className="font-serif text-lg font-bold text-rose-700 tabular-nums">
+                      {agentStats.failedToTakeOver}
+                    </span>
+                  </Link>
+                </li>
+              ) : (
+                <li className="flex items-center justify-between gap-3">
+                  <span className="inline-flex items-center gap-2 text-muted-foreground">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {t("agent.failedToTakeOver")}
+                  </span>
+                  <span className="font-serif text-lg font-bold tabular-nums text-muted-foreground">
+                    0
+                  </span>
+                </li>
+              )}
+            </ul>
+          </Card>
+
+          {/* Sprint 12 phase 5 — Channel donut. The Léon & George wedge
+              is "digital + field" — this surfaces the balance at a
+              glance. A sale doing 95% email gets a clear nudge. */}
+          <Card className="p-6">
+            <h2 className="font-serif text-lg font-bold mb-4 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-brand-teal" />
+              {t("channelDonut.title")}
+            </h2>
+            <ChannelDonut
+              slices={channelSlices}
+              totalLabel={t("channelDonut.totalLabel")}
+              emptyLabel={t("channelDonut.empty")}
+            />
+          </Card>
+
           {/* Top targets */}
           <Card className="p-6">
             <h2 className="font-serif text-lg font-bold mb-4 flex items-center gap-2">

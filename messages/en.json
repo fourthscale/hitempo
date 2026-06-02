@@ -421,6 +421,17 @@
         "empty": "Nothing due today.",
         "emptyAction": "Create a task →"
       },
+      "agent": {
+        "title": "Agent",
+        "pendingToday": "Sends scheduled today",
+        "succeededLast7Days": "Sent in the last 7 days",
+        "failedToTakeOver": "To take over"
+      },
+      "channelDonut": {
+        "title": "Prospection channels · last 7 days",
+        "totalLabel": "actions",
+        "empty": "No activity in the last 7 days yet."
+      },
       "topTargets": {
         "title": "Top targets this week",
         "empty": "No scored companies yet."

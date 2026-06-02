@@ -322,6 +322,52 @@ export async function countAwaitingReplyByOrg(
 }
 
 /**
+ * Sprint 12 phase 5 — outbound activity grouped by channel over the
+ * last 7 days. Feeds the dashboard's "Vos canaux de prospection" donut
+ * — gives the sale an instant read on whether they're balanced across
+ * digital and field, which is hitempo's positioning wedge.
+ *
+ * Excludes `email_received` (inbound) ; everything else is treated as
+ * outbound effort. Buckets video into "other" (rare, not a primary
+ * prospection channel for the Léon & George ICP).
+ */
+export async function getOutboundChannelsLast7Days(
+  orgId: string,
+  userId: string,
+): Promise<{ email: number; linkedin: number; phone: number; visit: number; other: number }> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const rows = await getDb()
+    .select({
+      channel: interactions.channel,
+      c: count(),
+    })
+    .from(interactions)
+    .where(
+      and(
+        eq(interactions.organizationId, orgId),
+        eq(interactions.userId, userId),
+        gte(interactions.occurredAt, sevenDaysAgo),
+        // Exclude inbound rows ; everything else is outbound activity.
+        ne(interactions.type, "email_received"),
+      ),
+    )
+    .groupBy(interactions.channel);
+
+  const out = { email: 0, linkedin: 0, phone: 0, visit: 0, other: 0 };
+  for (const row of rows) {
+    switch (row.channel) {
+      case "email":     out.email    += row.c; break;
+      case "linkedin":  out.linkedin += row.c; break;
+      case "phone":     out.phone    += row.c; break;
+      case "in_person": out.visit    += row.c; break;
+      default:          out.other    += row.c; break;
+    }
+  }
+  return out;
+}
+
+/**
  * Real response-rate metric : compares the last 30-day rolling window to
  * the prior 30-day window. Uses the new `status` enum (responded vs sent)
  * so it only counts outbound interactions where we have ground truth.

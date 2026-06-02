@@ -116,6 +116,10 @@ export async function getTasksDashboard(orgId: string, assigneeId?: string | nul
       or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
       lte(tasks.dueAt, endOfToday),
       assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
+      // Sprint 12 phase 4 — exclude tasks the agent is auto-executing.
+      // The human dashboard surfaces only what the sale should act on ;
+      // agent-pending tasks live in the dedicated "Agent" block.
+      isNull(tasks.autoExecutionStatus),
     ),
     with: {
       company: { columns: { id: true, name: true, score: true, signalType: true, notes: true } },
@@ -140,6 +144,7 @@ export async function countTodayTasksByOrg(orgId: string, assigneeId?: string | 
       gte(tasks.dueAt, startOfToday),
       lte(tasks.dueAt, endOfToday),
       assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
+      isNull(tasks.autoExecutionStatus),
     ),
     columns: { id: true },
   });
@@ -156,10 +161,89 @@ export async function countOverdueTasksByOrg(orgId: string, assigneeId?: string 
       or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
       lt(tasks.dueAt, startOfToday),
       assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
+      isNull(tasks.autoExecutionStatus),
     ),
     columns: { id: true },
   });
   return rows.length;
+}
+
+/**
+ * Sprint 12 phase 4 — dashboard "Agent" block stats. Three counters
+ * the sale checks at a glance :
+ *   - pendingToday : auto-pending tasks whose scheduledFor (or dueAt
+ *     as fallback) falls today. "L'agent va envoyer X messages
+ *     aujourd'hui."
+ *   - succeededLast7Days : agent runs that completed in the last 7
+ *     days. Shows the volume the system carried for them.
+ *   - failedToTakeOver : auto_execution_status='failed' still pending
+ *     (= the sale hasn't taken over). The actionable one.
+ *
+ * All three respect the assigneeId scope (per-user dashboard).
+ */
+export async function getAgentDashboardStats(
+  orgId: string,
+  assigneeId?: string | null,
+): Promise<{
+  pendingToday: number;
+  succeededLast7Days: number;
+  failedToTakeOver: number;
+}> {
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const baseAssignee = assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined;
+
+  // We run three small COUNT-like queries in parallel ; on small task
+  // tables (early hitempo customers have at most a few thousand rows)
+  // this is fine without raw SQL aggregates.
+  const [pendingTodayRows, succeededRows, failedRows] = await Promise.all([
+    getDb().query.tasks.findMany({
+      where: and(
+        eq(tasks.organizationId, orgId),
+        eq(tasks.autoExecutionStatus, "pending"),
+        // Prefer scheduledFor when set ; otherwise fall back on dueAt.
+        // SQL-side OR keeps the comparison index-friendly.
+        or(
+          and(gte(tasks.scheduledFor, startOfToday), lte(tasks.scheduledFor, endOfToday)),
+          and(
+            isNull(tasks.scheduledFor),
+            gte(tasks.dueAt, startOfToday),
+            lte(tasks.dueAt, endOfToday),
+          ),
+        ),
+        baseAssignee,
+      ),
+      columns: { id: true },
+    }),
+    getDb().query.tasks.findMany({
+      where: and(
+        eq(tasks.organizationId, orgId),
+        eq(tasks.autoExecutionStatus, "succeeded"),
+        gte(tasks.autoExecutionAt, sevenDaysAgo),
+        baseAssignee,
+      ),
+      columns: { id: true },
+    }),
+    getDb().query.tasks.findMany({
+      where: and(
+        eq(tasks.organizationId, orgId),
+        eq(tasks.autoExecutionStatus, "failed"),
+        baseAssignee,
+      ),
+      columns: { id: true },
+    }),
+  ]);
+
+  return {
+    pendingToday: pendingTodayRows.length,
+    succeededLast7Days: succeededRows.length,
+    failedToTakeOver: failedRows.length,
+  };
 }
 
 /**
