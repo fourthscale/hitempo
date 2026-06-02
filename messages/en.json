@@ -737,6 +737,8 @@
       },
       "overdueBadge": "{days, plural, one {# day late} other {# days late}}",
       "sequenceStepBadge": "step {current}/{total}",
+      "agentAutoExecPendingBadge": "Auto pending",
+      "agentAutoExecFailedBadge": "Auto failed:",
       "searchPlaceholder": "Search a task...",
       "signalPrefix": "Signal: {signal}",
       "assigneeMe": "Me",
@@ -1312,7 +1314,7 @@
           "manualHint": "Contacts are added to this sequence by hand from their page."
         },
         "modes": {
-          "ai": "AI draft",
+          "ai": "Generated message",
           "defined": "Defined message"
         },
         "attachments": {

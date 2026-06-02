@@ -737,6 +737,8 @@
       },
       "overdueBadge": "{days, plural, one {# jour de retard} other {# jours de retard}}",
       "sequenceStepBadge": "étape {current}/{total}",
+      "agentAutoExecPendingBadge": "Auto en attente",
+      "agentAutoExecFailedBadge": "Échec auto :",
       "searchPlaceholder": "Rechercher une tâche...",
       "signalPrefix": "Signal : {signal}",
       "assigneeMe": "Moi",
@@ -1312,7 +1314,7 @@
           "manualHint": "Les contacts sont ajoutés à cette séquence à la main depuis leur fiche."
         },
         "modes": {
-          "ai": "Brouillon IA",
+          "ai": "Message généré",
           "defined": "Message défini"
         },
         "attachments": {

@@ -2,8 +2,10 @@ import "server-only";
 import { addDays } from "date-fns";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { contacts } from "@/db/schema";
+import { contacts, tasks } from "@/db/schema";
 import { insertTaskForEnrolment } from "@/db/queries/tasks";
+import { inngest } from "@/lib/inngest/client";
+import { EVENT_TASK_AUTO_EXECUTE } from "./events";
 import {
   loadAssigneeTasksInWindow,
   loadSchedulingContext,
@@ -55,7 +57,7 @@ export class EngineExecutorServices implements SequenceExecutorServices {
     title: string;
     description: string | null;
     scheduling?: TaskScheduling;
-  }): Promise<{ taskId: string }> {
+  }): Promise<{ taskId: string; scheduledFor: Date | null }> {
     // 1. Resolve TZ cascades + assignee work pattern + quotas.
     const { contactTz, assigneeMember } = await loadSchedulingContext(
       this.db,
@@ -127,7 +129,7 @@ export class EngineExecutorServices implements SequenceExecutorServices {
       estimatedDurationMinutes:
         merged.estimatedDurationMinutes ?? DEFAULT_SCHEDULING.estimatedDurationMinutes,
     });
-    return { taskId: row.id };
+    return { taskId: row.id, scheduledFor };
   }
 
   async generateDraftForTask(): Promise<{ drafted: boolean }> {
@@ -173,6 +175,57 @@ export class EngineExecutorServices implements SequenceExecutorServices {
       return name;
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Sprint 12 phase 4 — flips the task into the agent auto-execution
+   * pipeline. Two side effects, both best-effort :
+   *   1. UPDATE tasks SET auto_execution_status = 'pending' — so the UI
+   *      can label the row and the Inngest handler refuses to act on
+   *      tasks where this flag has been cleared (= human took over).
+   *   2. Emit `sequences/task.auto-execute` so the handler picks the
+   *      task up. The handler's `sleepUntil(scheduledFor)` honours the
+   *      step's scheduling config (heures ouvrées, anti-conflit).
+   *
+   * Errors are caught + logged ; the engine step has already created
+   * the task and we don't want to roll that back. A failed schedule
+   * leaves the task in the human queue (graceful fallback).
+   */
+  async scheduleAgentAutoExecute(input: {
+    organizationId: string;
+    taskId: string;
+    scheduledFor: Date | null;
+  }): Promise<void> {
+    try {
+      await this.db
+        .update(tasks)
+        .set({
+          autoExecutionStatus: "pending",
+          updatedAt: new Date(),
+        })
+        .where(and(eq(tasks.id, input.taskId), eq(tasks.organizationId, input.organizationId)));
+    } catch (err) {
+      console.error(
+        "[EngineExecutorServices.scheduleAgentAutoExecute] flag-pending failed",
+        err,
+      );
+      return; // No point firing the event if the flag isn't set.
+    }
+    try {
+      await inngest.send({
+        name: EVENT_TASK_AUTO_EXECUTE,
+        data: {
+          organizationId: input.organizationId,
+          taskId: input.taskId,
+          scheduledFor: input.scheduledFor ? input.scheduledFor.toISOString() : null,
+        },
+      });
+    } catch (err) {
+      console.error(
+        "[EngineExecutorServices.scheduleAgentAutoExecute] event emit failed",
+        err,
+      );
     }
   }
 

@@ -33,7 +33,13 @@ export interface SequenceExecutorServices {
     description: string | null;
     /** Per-step scheduling config (heures TZ contact, quotas, etc.). */
     scheduling?: TaskScheduling;
-  }): Promise<{ taskId: string }>;
+  }): Promise<{
+    taskId: string;
+    /** Resolved scheduledFor (after TZ + work-pattern + anti-conflict
+     *  snapping). Null when the step had no scheduling. Passed back so
+     *  callers can hand it to the agent auto-execute scheduler. */
+    scheduledFor: Date | null;
+  }>;
 
   /**
    * Generate an AI draft and persist it as a `messages` row (status='draft')
@@ -82,6 +88,22 @@ export interface SequenceExecutorServices {
    * Cross-tenant : runs on the admin pool.
    */
   getSenderName(userId: string): Promise<{ firstName: string; lastName: string } | null>;
+
+  /**
+   * Sprint 12 phase 4 — schedule a freshly-created `send_email` task for
+   * agent auto-execution. Marks the task `auto_execution_status=pending`
+   * + emits `sequences/task.auto-execute` so an Inngest function picks
+   * it up at `scheduledFor` (or immediately if null/past).
+   *
+   * Best-effort : a side-effect failure here must NOT abort the engine
+   * step. Worst case the task lands in the human queue (the agent flag
+   * column stays null), which is a graceful fallback.
+   */
+  scheduleAgentAutoExecute(input: {
+    organizationId: string;
+    taskId: string;
+    scheduledFor: Date | null;
+  }): Promise<void>;
 }
 
 /**

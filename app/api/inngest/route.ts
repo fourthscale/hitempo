@@ -4,6 +4,7 @@ import { inngest } from "@/lib/inngest/client";
 import { classifyInteractionFunctions } from "@/inngest/functions/classify-interaction";
 import { pollGmailRepliesFunctions } from "@/inngest/functions/poll-gmail-replies";
 import { sequenceEngineFunctions } from "@/inngest/functions/sequence-engine";
+import { agentAutoExecuteFunctions } from "@/inngest/functions/agent-auto-execute";
 
 /**
  * The webhook Inngest's runtime calls to discover, invoke, and replay our
@@ -21,6 +22,7 @@ export const { GET, POST, PUT } = serve({
     ...pollGmailRepliesFunctions,
     ...sequenceEngineFunctions,
     ...classifyInteractionFunctions,
+    ...agentAutoExecuteFunctions,
   ],
   // signingKey is auto-discovered from the INNGEST_SIGNING_KEY env var.
 });

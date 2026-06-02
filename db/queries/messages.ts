@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { getDb, type Db } from "@/db/client";
 import { messages } from "@/db/schema";
 import type { MessageChannel, MessageIntent } from "@/lib/messages/types";
 
@@ -66,8 +66,18 @@ export type InsertMessageInput = {
  * commits** the message — either by sending via Gmail or by manually logging
  * the interaction. There is no longer a "draft" lifecycle.
  */
-export async function insertMessage(orgId: string, input: InsertMessageInput) {
-  const [row] = await getDb()
+/**
+ * `dbOverride` is honored so background jobs (Inngest agent auto-execution,
+ * sequence engine) can run against the admin pool. User-driven callers pass
+ * nothing and get the RLS-aware pool by default.
+ */
+export async function insertMessage(
+  orgId: string,
+  input: InsertMessageInput,
+  dbOverride?: Db,
+) {
+  const db = dbOverride ?? getDb();
+  const [row] = await db
     .insert(messages)
     .values({
       organizationId: orgId,

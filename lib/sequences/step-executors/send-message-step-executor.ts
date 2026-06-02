@@ -42,7 +42,7 @@ export class SendMessageStepExecutor implements SequenceStepExecutor {
       description = [subject ? `${subject}` : "", body].filter(Boolean).join("\n\n") || null;
     }
 
-    const { taskId } = await ctx.services.createTask({
+    const { taskId, scheduledFor } = await ctx.services.createTask({
       organizationId: ctx.enrolment.organizationId,
       companyId: ctx.enrolment.companyId,
       contactId: ctx.enrolment.contactId,
@@ -53,6 +53,18 @@ export class SendMessageStepExecutor implements SequenceStepExecutor {
       description,
       scheduling: config.scheduling,
     });
+
+    // Sprint 12 phase 4 — when the step's assignment.actor is "agent" AND
+    // the channel is email (the only thing we can auto-send), hand the
+    // task off to the agent auto-execute pipeline. Otherwise the task
+    // lands in the human queue normally.
+    if (config.assignment?.actor === "agent" && this.actionType === "send_email") {
+      await ctx.services.scheduleAgentAutoExecute({
+        organizationId: ctx.enrolment.organizationId,
+        taskId,
+        scheduledFor,
+      });
+    }
 
     if (config.mode === "ai") {
       const orientation = config.orientation

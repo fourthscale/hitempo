@@ -49,11 +49,12 @@ const enrolment: SequenceEnrolmentCtx = {
 
 function mockServices(over: Partial<SequenceExecutorServices> = {}): SequenceExecutorServices {
   return {
-    createTask: vi.fn().mockResolvedValue({ taskId: "task-1" }),
+    createTask: vi.fn().mockResolvedValue({ taskId: "task-1", scheduledFor: null }),
     generateDraftForTask: vi.fn().mockResolvedValue({ drafted: true }),
     cascadeEnrol: vi.fn().mockResolvedValue({ enrolmentId: "enrol-2" }),
     updateContact: vi.fn().mockResolvedValue(undefined),
     getSenderName: vi.fn().mockResolvedValue(null),
+    scheduleAgentAutoExecute: vi.fn().mockResolvedValue(undefined),
     ...over,
   };
 }

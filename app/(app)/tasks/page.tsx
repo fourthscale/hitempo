@@ -596,6 +596,30 @@ async function TaskRow({
           <div className="text-xs text-muted-foreground mt-0.5">{signalText}</div>
         )}
 
+        {/* Sprint 12 phase 4 — agent auto-execution flag. Two states the
+            sale needs to see :
+              - succeeded : the agent already sent ; the row is in the
+                "completed" list (status flips before this badge is
+                evaluated). No badge needed.
+              - failed : agent tried + failed (no Gmail, LLM error…).
+                Show the reason so the sale knows to take over. */}
+        {task.autoExecutionStatus === "failed" && (
+          <div
+            className="mt-1 inline-flex max-w-full items-start gap-1.5 rounded bg-rose-50 px-1.5 py-0.5 text-[11px] text-rose-700"
+            title={task.autoExecutionError ?? undefined}
+          >
+            <span className="font-semibold">{t("agentAutoExecFailedBadge")}</span>
+            {task.autoExecutionError && (
+              <span className="truncate">{task.autoExecutionError}</span>
+            )}
+          </div>
+        )}
+        {task.autoExecutionStatus === "pending" && (
+          <div className="mt-1 inline-flex items-center gap-1.5 rounded bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-700">
+            {t("agentAutoExecPendingBadge")}
+          </div>
+        )}
+
         {task.sequenceEnrolment?.sequence && (
           <Link
             href={`/sequences/${task.sequenceEnrolment.sequence.id}/enrolments/${task.sequenceEnrolment.id}`}

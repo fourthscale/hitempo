@@ -14,9 +14,25 @@ export const EVENT_TASK_COMPLETED = "sequences/task.completed" as const;
  */
 export const EVENT_OUTCOME_QUALIFIED = "sequences/outcome.qualified" as const;
 
+/**
+ * Sprint 12 phase 4 — fired by the engine when a task is created from a step
+ * whose `assignment.actor` is `"agent"`. The handler sleeps until
+ * `scheduledFor` (so the step's scheduling config — heures ouvrées,
+ * anti-conflit — is honored) then runs the agent executor : render template
+ * or call LLM, send via the assignee's Gmail, log, complete the task.
+ */
+export const EVENT_TASK_AUTO_EXECUTE = "sequences/task.auto-execute" as const;
+
 export type SequenceAdvanceEventData = { enrolmentId: string };
 export type SequenceTaskCompletedEventData = { enrolmentId: string };
 export type SequenceOutcomeQualifiedEventData = {
   organizationId: string;
   contactId: string;
+};
+export type SequenceTaskAutoExecuteEventData = {
+  organizationId: string;
+  taskId: string;
+  /** ISO timestamp — passed verbatim so the handler can sleepUntil it.
+   *  Null when the step had no scheduling (execute as soon as possible). */
+  scheduledFor: string | null;
 };

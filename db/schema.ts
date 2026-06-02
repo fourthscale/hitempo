@@ -81,6 +81,20 @@ export const taskStatus = pgEnum("task_status", [
   "pending", "in_progress", "completed", "cancelled", "snoozed",
 ]);
 
+/**
+ * Sprint 12 phase 4 — agent auto-execution lifecycle for a task created by a
+ * step whose assignment.actor is "agent". Null on every non-agent task.
+ *   - `pending`   : created, awaiting auto-execution (Inngest may sleepUntil
+ *                   scheduled_for before firing).
+ *   - `succeeded` : the agent sent + persisted + completed the task.
+ *   - `failed`    : auto-execution tripped (no Gmail, LLM error, etc.). The
+ *                   task stays pending and the human assignee picks it up,
+ *                   sees `auto_execution_error` in the UI.
+ */
+export const taskAutoExecutionStatus = pgEnum("task_auto_execution_status", [
+  "pending", "succeeded", "failed",
+]);
+
 export const taskPriority = pgEnum("task_priority", [
   "low", "medium", "high", "urgent",
 ]);
@@ -525,6 +539,14 @@ export const tasks = pgTable(
     sequenceEnrolmentId: uuid("sequence_run_id"),
     messageId: uuid("message_id"),
 
+    // Sprint 12 phase 4 — agent auto-execution flow. Null on tasks meant for
+    // a human ; one of pending|succeeded|failed when the source step's
+    // `assignment.actor` was "agent". The Inngest handler bumps this and
+    // optionally writes `auto_execution_error` + `auto_execution_at`.
+    autoExecutionStatus: taskAutoExecutionStatus("auto_execution_status"),
+    autoExecutionError: text("auto_execution_error"),
+    autoExecutionAt: timestamp("auto_execution_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -533,6 +555,9 @@ export const tasks = pgTable(
     byOrgStatus:   index("idx_tasks_org_status").on(t.organizationId, t.status),
     byCompany:     index("idx_tasks_company").on(t.companyId),
     bySequenceEnrolment: index("idx_tasks_sequence_enrolment").on(t.sequenceEnrolmentId),
+    // Lookup index for the agent Inngest handler — finds the pending agent
+    // tasks fast when the timer wakes up.
+    byAutoExecStatus: index("idx_tasks_auto_exec_status").on(t.autoExecutionStatus),
   }),
 );
 
