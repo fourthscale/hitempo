@@ -128,6 +128,36 @@
       "ref": "Référence d'erreur"
     }
   },
+  "templateVariables": {
+    "triggerLabel": "Insérer une variable",
+    "close": "Fermer",
+    "showPreview": "Aperçu",
+    "hidePreview": "Modifier",
+    "knownCount": "{n, plural, =1 {# variable} other {# variables}}",
+    "unknownCount": "Inconnue·s : {names}",
+    "category": {
+      "contact": "Contact",
+      "company": "Entreprise",
+      "sender": "Expéditeur (vous)"
+    },
+    "labels": {
+      "contact": {
+        "firstName": "Prénom du contact",
+        "lastName": "Nom du contact",
+        "fullName": "Nom complet du contact",
+        "jobTitle": "Poste du contact"
+      },
+      "company": {
+        "name": "Nom de l'entreprise",
+        "signalType": "Signal entreprise"
+      },
+      "sender": {
+        "firstName": "Votre prénom",
+        "lastName": "Votre nom",
+        "fullName": "Votre nom complet"
+      }
+    }
+  },
   "actionErrors": {
     "title": "L'action a échoué",
     "close": "OK",
@@ -149,7 +179,12 @@
     "enrolment_not_found": "Cette inscription est introuvable.",
     "contact_not_eligible": "Ce contact ne peut pas être inscrit (désinscrit, déjà dans une séquence, ou en période de pause).",
     "invalid_timezone": "Fuseau horaire inconnu. Choisis-en un dans la liste avant d'enregistrer.",
-    "invalid_work_pattern": "Une de tes plages horaires est invalide. Vérifie que les heures sont au format HH:MM et que la fin est bien après le début."
+    "invalid_work_pattern": "Une de tes plages horaires est invalide. Vérifie que les heures sont au format HH:MM et que la fin est bien après le début.",
+    "step_attachment_rejected": "Pièce jointe refusée. Vérifie le type, la taille (max 10 Mo) ou réduis le nombre de fichiers (max 5 par étape).",
+    "step_attachment_too_many": "Tu as atteint la limite de pièces jointes pour cette étape (5 max).",
+    "step_attachment_too_large": "Ce fichier dépasse la taille maximale autorisée (10 Mo).",
+    "step_attachments_total_too_large": "L'ensemble des pièces jointes de cette étape dépasse 20 Mo. Retire-en une avant d'en ajouter.",
+    "step_attachment_bad_mime": "Ce type de fichier n'est pas accepté (PDF, image, Word, Excel, texte, CSV)."
   },
   "common": {
     "appName": "hitempo",
@@ -945,7 +980,13 @@
         "subject": "Objet",
         "body": "Corps du message",
         "orientation": "Orientation pour la régénération",
-        "orientationPlaceholder": "ex : plus court, mentionne le contact précédent"
+        "orientationPlaceholder": "ex : plus court, mentionne le contact précédent",
+        "sequenceContext": "Contexte",
+        "sequenceContextOptions": {
+          "sequence": "Cet enrôlement de « {name} » uniquement",
+          "all": "Tous les échanges avec ce contact"
+        },
+        "sequenceContextHint": "Choisis l'historique d'interactions que l'IA voit pour générer ce message. Limiter à cet enrôlement évite que l'IA réponde à un mail hors-séquence."
       },
       "channelIntentOptions": {
         "email-first_contact": "Email — Premier contact",
@@ -996,6 +1037,10 @@
           "tooLarge": "« {filename } » dépasse la limite de {max} Mo par fichier.",
           "totalTooLarge": "Le total des pièces jointes dépasse {max} Mo."
         }
+      },
+      "stepAttachments": {
+        "label": "Pièces jointes de l'étape",
+        "help": "Ces fichiers proviennent de la configuration de la séquence. Pour les modifier, ouvre l'éditeur de la séquence."
       },
       "emptyState": "Choisis tes paramètres et clique sur Générer.",
       "legend": {
@@ -1068,6 +1113,20 @@
           "continue_default": {
             "label": "Continuer (branche par défaut)",
             "detail": "Bascule sur la branche par défaut tout de suite. Plus rapide, mais peut louper une réponse positive non encore classée."
+          }
+        }
+      },
+      "messageContextScope": {
+        "title": "Contexte IA pour les messages",
+        "description": "Quel historique d'interactions l'IA voit quand elle génère un message. Limité à l'enrôlement courant par défaut — chaque inscription dans la séquence a son propre fil. Modifiable par message dans la fenêtre de génération.",
+        "options": {
+          "sequence": {
+            "label": "Cet enrôlement uniquement",
+            "detail": "Seules les réponses liées à l'inscription en cours du contact dans cette séquence comptent. L'IA reste sur le fil prévu. Recommandé."
+          },
+          "all": {
+            "label": "Tous les échanges",
+            "detail": "Inclut toutes les interactions récentes avec le contact (emails manuels, autres séquences, anciens enrôlements). Utile quand le contexte hors-enrôlement compte."
           }
         }
       },
@@ -1159,6 +1218,7 @@
         "saveError": "Échec de l'enregistrement",
         "discard": "Supprimer le brouillon",
         "publish": "Publier",
+        "publishNoDraftTitle": "Modifie d'abord la séquence — aucun brouillon en attente à publier.",
         "lockedBanner": "Un autre utilisateur modifie cette séquence. Vous pouvez la consulter mais pas la modifier.",
         "palette": "Ajouter une étape",
         "conditions": {
@@ -1234,6 +1294,18 @@
         "modes": {
           "ai": "Brouillon IA",
           "defined": "Message défini"
+        },
+        "attachments": {
+          "label": "Pièces jointes",
+          "add": "Ajouter un fichier",
+          "uploading": "Envoi…",
+          "remove": "Retirer",
+          "help": "PDF uniquement. 15 Mo max par fichier, 4 fichiers max par étape.",
+          "errors": {
+            "tooLarge": "Ce fichier dépasse 15 Mo.",
+            "tooMany": "Tu as atteint la limite de 4 fichiers par étape.",
+            "uploadFailed": "L'envoi a échoué. Réessaie."
+          }
         },
         "branch": {
           "yes": "Si oui",

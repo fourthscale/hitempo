@@ -64,6 +64,11 @@ export default async function SequenceEditPage({
       <SequenceEditor
         sequenceId={id}
         initialDraft={initialDraft}
+        // A pending draft exists iff the DB has stored a draft_definition
+        // we successfully parsed. A seed built from the published steps
+        // (parsedDraft null/failure) is NOT a pending draft — Publish /
+        // Discard would have nothing to do.
+        initialHasPendingDraft={Boolean(parsedDraft?.success)}
         otherSequences={otherSequences}
         orgMembers={orgMembers}
         orgLocale={activeOrganization.defaultLocale}

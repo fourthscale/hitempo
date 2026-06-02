@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
-import { contacts, interactions, messages } from "@/db/schema";
+import { contacts, interactions, messages, tasks } from "@/db/schema";
 import { AUTO_APPLY_THRESHOLD } from "@/lib/ai/classification/thresholds";
 
 export type InteractionRow = Awaited<ReturnType<typeof getInteractionsByContact>>[number];
@@ -30,12 +30,52 @@ export async function getInteractionsByContact(orgId: string, contactId: string)
 export async function getRecentInteractionsForPrompt(
   orgId: string,
   companyId: string,
-  opts: { limit?: number; maxAgeDays?: number } = {},
+  opts: {
+    limit?: number;
+    maxAgeDays?: number;
+    /**
+     * Sprint 12 — when set, only return interactions linked (via
+     * outbound message → task) to this sequence enrolment. Used by the
+     * AI message generator to keep the prompt scoped to the current
+     * sequence (avoids "replying" to parallel out-of-sequence threads).
+     * Omit to get the full company history (legacy default).
+     */
+    sequenceEnrolmentId?: string;
+  } = {},
 ) {
   const limit = opts.limit ?? 10;
   const maxAgeDays = opts.maxAgeDays ?? 180;
   const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
 
+  // No scope → fast path : no joins, same query as before sprint 12.
+  if (!opts.sequenceEnrolmentId) {
+    return getDb()
+      .select({
+        id: interactions.id,
+        occurredAt: interactions.occurredAt,
+        type: interactions.type,
+        channel: interactions.channel,
+        outcome: interactions.outcome,
+        summary: interactions.summary,
+        interestLevel: interactions.interestLevel,
+      })
+      .from(interactions)
+      .where(
+        and(
+          eq(interactions.organizationId, orgId),
+          eq(interactions.companyId, companyId),
+          gte(interactions.occurredAt, cutoff),
+        ),
+      )
+      .orderBy(desc(interactions.occurredAt))
+      .limit(limit);
+  }
+
+  // Scoped : interactions whose underlying outbound message belongs to
+  // a task tagged with the current enrolment id. Chain
+  //   interactions.messageId → messages.taskId → tasks.sequenceEnrolmentId
+  // Same join chain as the predicate evaluator's per-sequence facts
+  // (sequence-engine query) so the two stay consistent.
   return getDb()
     .select({
       id: interactions.id,
@@ -47,11 +87,14 @@ export async function getRecentInteractionsForPrompt(
       interestLevel: interactions.interestLevel,
     })
     .from(interactions)
+    .innerJoin(messages, eq(messages.id, interactions.messageId))
+    .innerJoin(tasks, eq(tasks.id, messages.taskId))
     .where(
       and(
         eq(interactions.organizationId, orgId),
         eq(interactions.companyId, companyId),
         gte(interactions.occurredAt, cutoff),
+        eq(tasks.sequenceEnrolmentId, opts.sequenceEnrolmentId),
       ),
     )
     .orderBy(desc(interactions.occurredAt))

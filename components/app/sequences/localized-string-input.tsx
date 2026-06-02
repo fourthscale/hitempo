@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { TemplateTextarea } from "@/components/app/messages/template-textarea";
 import type { LocalizedString } from "@/lib/sequences/types";
 
 type LocaleMap = { fr?: string; en?: string };
@@ -29,17 +30,49 @@ export function LocalizedStringInput({
   onChange,
   placeholder,
   multiline,
+  templating,
 }: {
   label: string;
   value: LocalizedString | undefined | null;
   onChange: (value: LocaleMap) => void;
   placeholder?: string;
   multiline?: boolean;
+  /**
+   * Sprint 12 — when true, swaps the Input/Textarea for `<TemplateTextarea>`
+   * which adds the `{{variable}}` picker, highlight overlay, and preview.
+   * Used on the `send_email` subject + body fields ; off by default so
+   * other localized inputs (titleTemplate, descriptions) keep the plain
+   * Input/Textarea behavior.
+   */
+  templating?: boolean;
 }) {
   const map = toMap(value);
   const [showEn, setShowEn] = useState<boolean>(Boolean(map.en && map.en.length > 0));
 
-  const Field = multiline ? Textarea : Input;
+  // Choose the field renderer once, based on the templating + multiline combo.
+  const renderField = (lang: "fr" | "en") => {
+    const current = lang === "fr" ? map.fr : map.en;
+    const setLang = (next: string) => onChange({ ...map, [lang]: next });
+    if (templating) {
+      return (
+        <TemplateTextarea
+          value={current ?? ""}
+          onChange={setLang}
+          placeholder={placeholder}
+          singleLine={!multiline}
+          rows={multiline ? 6 : undefined}
+        />
+      );
+    }
+    const Field = multiline ? Textarea : Input;
+    return (
+      <Field
+        value={current ?? ""}
+        placeholder={placeholder}
+        onChange={(e) => setLang(e.target.value)}
+      />
+    );
+  };
 
   return (
     <div className="space-y-1.5">
@@ -47,20 +80,12 @@ export function LocalizedStringInput({
       <div className="space-y-2">
         <div>
           <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">FR</span>
-          <Field
-            value={map.fr ?? ""}
-            placeholder={placeholder}
-            onChange={(e) => onChange({ ...map, fr: e.target.value })}
-          />
+          {renderField("fr")}
         </div>
         {showEn ? (
           <div>
             <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">EN</span>
-            <Field
-              value={map.en ?? ""}
-              placeholder={placeholder}
-              onChange={(e) => onChange({ ...map, en: e.target.value })}
-            />
+            {renderField("en")}
           </div>
         ) : (
           <button

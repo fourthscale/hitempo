@@ -38,6 +38,19 @@ export type UploadInput = {
   content: Buffer;
 };
 
+/**
+ * Sprint 12 — input for the step-scoped variant. Same bucket, different
+ * path prefix (`step-<stepId>` instead of `<messageId>`) so storage RLS
+ * (org id as first segment) stays consistent.
+ */
+export type UploadForStepInput = {
+  organizationId: string;
+  stepId: string;
+  filename: string;
+  mimeType: string;
+  content: Buffer;
+};
+
 export type UploadResult = {
   storageBucket: string;
   storagePath: string;
@@ -71,6 +84,33 @@ export class AttachmentStorageService {
   public async upload(input: UploadInput): Promise<UploadResult> {
     const supabase = await createClient();
     const path = this.buildStoragePath(input);
+
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, input.content, {
+        contentType: input.mimeType,
+        upsert: false,
+      });
+
+    if (error) {
+      throw new AttachmentUploadFailedError(
+        `Could not upload ${input.filename} : ${error.message}`,
+      );
+    }
+
+    return { storageBucket: BUCKET, storagePath: path };
+  }
+
+  /**
+   * Sprint 12 — variant for sequence-step pre-attachments. Same bucket
+   * + same RLS policy ; the only difference is the path namespace
+   * (`step-<stepId>` instead of a message id) so cleanup hooks can
+   * distinguish step files from message files when listing for a sequence.
+   */
+  public async uploadForStep(input: UploadForStepInput): Promise<UploadResult> {
+    const supabase = await createClient();
+    const safeName = input.filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+    const path = `${input.organizationId}/step-${input.stepId}/${randomUUID()}-${safeName}`;
 
     const { error } = await supabase.storage
       .from(BUCKET)

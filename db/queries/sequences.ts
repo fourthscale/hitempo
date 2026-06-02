@@ -1,7 +1,12 @@
 import "server-only";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
-import { sequences, sequenceSteps, sequenceEnrolments } from "@/db/schema";
+import {
+  sequences,
+  sequenceSteps,
+  sequenceEnrolments,
+  sequenceStepExecutions,
+} from "@/db/schema";
 import type {
   SequenceStepActionConfig,
   SequenceStepActionType,
@@ -187,6 +192,8 @@ export type InsertSequenceInput = {
   cooldownAfterCompletedDays?: number | null;
   /** Slice D — defaults to 'park' on insert when omitted. */
   unknownOutcomeStrategy?: string;
+  /** Sprint 12 — defaults to 'sequence' on insert when omitted. */
+  messageContextScope?: string;
   draftDefinition?: unknown;
 };
 
@@ -210,6 +217,55 @@ export async function insertSequence(db: DbOrTx, orgId: string, input: InsertSeq
     .returning({ id: sequences.id });
   if (!row) throw new Error("insertSequence: no row returned");
   return row;
+}
+
+/**
+ * Sprint 12 — when generating an AI message from a task that comes from
+ * a sequence, the dialog / action needs to know the effective
+ * `messageContextScope` for that task. Resolves the (sequence, source
+ * step) pair via the existing chain :
+ *
+ *   tasks.id → sequence_step_executions.taskId → stepId → step + sequence
+ *
+ * Returns null if the task isn't sequence-driven (or the chain is broken
+ * after a publish swap — the caller falls back to the legacy full history).
+ */
+export async function getMessageContextResolutionForTask(
+  db: DbOrTx,
+  taskId: string,
+): Promise<{
+  sequenceEnrolmentId: string;
+  sequenceScope: string | null;
+  stepScope: string | null;
+  /**
+   * Sprint 12 — full action config of the source step, so the message
+   * generator can fall back on the step's `orientation` (and any other
+   * AI-mode field) when the dialog didn't override it. Stays untyped
+   * here (the action layer narrows when reading) so we keep the query
+   * fully reusable.
+   */
+  stepActionConfig: Record<string, unknown> | null;
+} | null> {
+  const [row] = await db
+    .select({
+      enrolmentId: sequenceStepExecutions.enrolmentId,
+      sequenceScope: sequences.messageContextScope,
+      stepScope: sequenceSteps.messageContextScope,
+      stepActionConfig: sequenceSteps.actionConfig,
+    })
+    .from(sequenceStepExecutions)
+    .innerJoin(sequenceSteps, eq(sequenceSteps.id, sequenceStepExecutions.stepId))
+    .innerJoin(sequences, eq(sequences.id, sequenceSteps.sequenceId))
+    .where(eq(sequenceStepExecutions.taskId, taskId))
+    .limit(1);
+  if (!row) return null;
+  return {
+    sequenceEnrolmentId: row.enrolmentId,
+    sequenceScope: row.sequenceScope,
+    stepScope: row.stepScope,
+    stepActionConfig:
+      (row.stepActionConfig as Record<string, unknown> | null) ?? null,
+  };
 }
 
 export type UpdateSequenceMetaInput = Partial<

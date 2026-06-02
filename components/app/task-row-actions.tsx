@@ -45,6 +45,17 @@ export type TaskGenerateContext = {
   detectedSignal: { type: string; daysAgo: number; isFresh: boolean } | null;
   brandBriefStatus: BrandBriefStatus;
   gmail: { connected: boolean; address: string | null };
+  /**
+   * Sprint 12 — when set, the task comes from a sequence and the dialog
+   * shows the "message context scope" selector. The `resolvedScope` is
+   * the effective default (sequence + step + dialog), pre-selected in
+   * the picker so the sale sees what'll be used and can override it for
+   * this generation.
+   */
+  sequenceContext?: {
+    sequenceName: string;
+    resolvedScope: "sequence" | "all";
+  };
 };
 
 export function TaskRowActions({
@@ -133,6 +144,7 @@ export function TaskRowActions({
           detectedSignal={generate.detectedSignal}
           brandBriefStatus={generate.brandBriefStatus}
           gmail={generate.gmail}
+          sequenceContext={generate.sequenceContext}
         />
       )}
 

@@ -473,6 +473,18 @@ async function TaskRow({
           ),
           brandBriefStatus,
           gmail: gmailStatus,
+          // Sprint 12 — surface the sequence context only for
+          // sequence-driven tasks ; otherwise the dialog hides the
+          // scope toggle.
+          sequenceContext: task.sequenceEnrolment?.sequence
+            ? {
+                sequenceName: task.sequenceEnrolment.sequence.name,
+                resolvedScope:
+                  task.sequenceEnrolment.sequence.messageContextScope === "all"
+                    ? ("all" as const)
+                    : ("sequence" as const),
+              }
+            : undefined,
         }
       : undefined;
 

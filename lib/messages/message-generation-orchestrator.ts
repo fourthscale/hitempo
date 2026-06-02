@@ -41,6 +41,14 @@ export type OrchestratorInput = {
     firstName: string;
     lastName: string;
   };
+  /**
+   * Sprint 12 — when set, restricts the interaction history loaded
+   * into the prompt to those linked to this enrolment (via outbound
+   * message → task). Resolved by the action layer from
+   * `sequences.messageContextScope` + step override + per-dialog
+   * override. Omit to load the full company history (legacy default).
+   */
+  sequenceEnrolmentId?: string | null;
 };
 
 export type OrchestratorResult = {
@@ -87,7 +95,15 @@ export class MessageGenerationOrchestrator {
         getContactById(input.organizationId, input.contactId),
         getCompanyById(input.organizationId, input.companyId),
         getBrandBrief(input.organizationId),
-        getRecentInteractionsForPrompt(input.organizationId, input.companyId),
+        getRecentInteractionsForPrompt(input.organizationId, input.companyId, {
+          // Sprint 12 — Scope the history to the current enrolment when
+          // the action layer asked for it. Otherwise (no enrolment, or
+          // scope === "all") fall through to the legacy full-company
+          // history.
+          ...(input.sequenceEnrolmentId
+            ? { sequenceEnrolmentId: input.sequenceEnrolmentId }
+            : {}),
+        }),
         getRecentMessagesByContact(input.organizationId, input.contactId, 5),
       ]);
 

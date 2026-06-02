@@ -74,6 +74,14 @@ export interface SequenceExecutorServices {
     contactId: string;
     patch: { status?: string; role?: string };
   }): Promise<void>;
+
+  /**
+   * Resolve the auth user's first/last name for `{{sender.*}}` template
+   * variables. Returns null when the user can't be found (deleted /
+   * unknown) — caller falls back to the template's `|| 'default'` clause.
+   * Cross-tenant : runs on the admin pool.
+   */
+  getSenderName(userId: string): Promise<{ firstName: string; lastName: string } | null>;
 }
 
 /**

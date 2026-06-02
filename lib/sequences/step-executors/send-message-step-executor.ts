@@ -2,6 +2,8 @@ import type { SequenceStepExecutor, StepExecutionContext, StepExecutionResult } 
 import type { SendMessageActionConfig } from "../types";
 import { resolveLocalizedString } from "../locale-resolver";
 import { localeCtx, narrowMessageLocale, resolveAssignee } from "./shared";
+import { renderTemplate, type TemplateFacts } from "@/lib/messages/template-render";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 
 /**
  * `send_email` / `send_linkedin` — creates an outreach task on the right
@@ -29,8 +31,14 @@ export class SendMessageStepExecutor implements SequenceStepExecutor {
 
     let description: string | null = null;
     if (config.mode === "defined") {
-      const subject = config.subject ? resolveLocalizedString(config.subject, lc) : "";
-      const body = config.body ? resolveLocalizedString(config.body, lc) : "";
+      // Sprint 12 — defined-mode templates may carry {{contact.*}},
+      // {{company.*}}, {{sender.*}} placeholders. Build the facts
+      // snapshot once, render subject + body against it.
+      const facts = await buildTemplateFacts(ctx);
+      const subjectRaw = config.subject ? resolveLocalizedString(config.subject, lc) : "";
+      const bodyRaw    = config.body    ? resolveLocalizedString(config.body, lc)    : "";
+      const subject = renderTemplate(subjectRaw, facts).text;
+      const body    = renderTemplate(bodyRaw, facts).text;
       description = [subject ? `${subject}` : "", body].filter(Boolean).join("\n\n") || null;
     }
 
@@ -80,4 +88,35 @@ export class SendMessageStepExecutor implements SequenceStepExecutor {
           : undefined,
     };
   }
+}
+
+/**
+ * Sprint 12 — assembles the `TemplateFacts` snapshot for the renderer.
+ * Sender name is best-effort : if the assignee can't be resolved (no
+ * userId, lookup failure), `{{sender.*}}` falls back to the template's
+ * `|| 'fallback'` clause or stays empty.
+ */
+async function buildTemplateFacts(ctx: StepExecutionContext): Promise<TemplateFacts> {
+  const sender = ctx.userId ? await ctx.services.getSenderName(ctx.userId) : null;
+  const senderFull = sender
+    ? [sender.firstName, sender.lastName].filter(Boolean).join(" ").trim()
+    : "";
+  return {
+    "contact.firstName": ctx.contact.firstName ?? null,
+    "contact.lastName":  ctx.contact.lastName ?? null,
+    "contact.fullName":  resolveContactDisplayName({
+      kind: ctx.contact.kind,
+      firstName: ctx.contact.firstName,
+      lastName: ctx.contact.lastName,
+      // resolveContactDisplayName tolerates missing email/jobTitle for the
+      // "fullName" purpose ; the helper falls back to "—" only when it has
+      // no other angle, which is acceptable in a template substitution.
+    } as Parameters<typeof resolveContactDisplayName>[0]),
+    "contact.jobTitle":  ctx.contact.jobTitle ?? null,
+    "company.name":       ctx.company.name ?? null,
+    "company.signalType": ctx.company.signalType ?? null,
+    "sender.firstName": sender?.firstName ?? null,
+    "sender.lastName":  sender?.lastName ?? null,
+    "sender.fullName":  senderFull || null,
+  };
 }

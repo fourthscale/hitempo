@@ -10,6 +10,8 @@ import {
 } from "@/db/queries/sequence-task-scheduling";
 import type { SequenceExecutorServices } from "../step-executor";
 import { SequenceEnrolmentService } from "../sequence-enrolment-service";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getSenderName as deriveSenderName } from "@/lib/auth/sender-name";
 import {
   computeTaskSchedule,
   DEFAULT_SCHEDULING,
@@ -151,6 +153,27 @@ export class EngineExecutorServices implements SequenceExecutorServices {
     return result.ok
       ? { enrolmentId: result.enrolmentId }
       : { enrolmentId: null, skippedReason: result.reason };
+  }
+
+  /**
+   * Sprint 12 — resolves the assignee's name from Supabase auth so the
+   * `send_email` defined-mode renderer can substitute `{{sender.*}}`
+   * placeholders. Runs on the service-role admin client (cross-tenant).
+   * Returns null on any lookup failure — the renderer falls back to the
+   * template's `|| 'fallback'` clause, or leaves the slot empty.
+   */
+  async getSenderName(userId: string): Promise<{ firstName: string; lastName: string } | null> {
+    try {
+      const { data, error } = await getSupabaseAdmin().auth.admin.getUserById(userId);
+      if (error || !data.user) return null;
+      const name = deriveSenderName({
+        email: data.user.email ?? null,
+        user_metadata: (data.user.user_metadata as Record<string, unknown>) ?? null,
+      });
+      return name;
+    } catch {
+      return null;
+    }
   }
 
   async updateContact(input: {

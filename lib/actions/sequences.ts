@@ -12,8 +12,10 @@ import { withActionError, wrapActionError } from "./wrap-action-error";
 import {
   InvalidInputError,
   SequenceNotFoundError,
+  SequenceLockedError,
   EnrolmentNotFoundError,
   ContactNotEligibleError,
+  StepAttachmentRejectedError,
 } from "./sequence-action-errors";
 import { SequenceEditingServiceFactory } from "@/lib/sequences/sequence-editing-service-factory";
 import { SequenceEnrolmentService } from "@/lib/sequences/sequence-enrolment-service";
@@ -21,10 +23,43 @@ import { getBuiltInTemplate } from "@/lib/sequences/built-in-templates";
 import {
   insertSequence,
   getSequenceById,
+  getStepsForSequence,
   setSequenceActive,
   softDeleteSequence,
   updateSequenceMeta,
 } from "@/db/queries/sequences";
+import {
+  collectAttachmentPathsFromSteps,
+  validateNewStepAttachment,
+} from "@/lib/sequences/step-attachments";
+import { getAttachmentStorageService } from "@/lib/gmail/attachment-storage-service";
+import type { SequenceStepAttachmentRef } from "@/lib/sequences/types";
+
+/**
+ * Same bucket as message attachments — shared RLS policy ; the path
+ * namespace (`<orgId>/step-<stepId>/...`) keeps step pre-attachments
+ * separate from message-bound uploads.
+ */
+const STEP_ATTACHMENT_BUCKET_NAME = "message-attachments";
+
+/**
+ * Mirrors `SequenceEditingService.assertLockAvailable` — the upload
+ * action lives outside the service (it doesn't follow the draft-save
+ * shape), so we re-implement the rule inline rather than leak service
+ * internals. TTL matches the service's 30-minute lock window.
+ */
+const LOCK_TTL_MS = 30 * 60_000;
+function assertEditingLockAvailable(
+  lockedBy: string | null,
+  lockedAt: Date | null,
+  userId: string,
+): void {
+  if (!lockedBy || lockedBy === userId) return;
+  const fresh = lockedAt != null && Date.now() - lockedAt.getTime() < LOCK_TTL_MS;
+  if (fresh) {
+    throw new SequenceLockedError(lockedBy);
+  }
+}
 import {
   getEnrolmentById,
   setEnrolmentStatus,
@@ -151,6 +186,35 @@ async function _updateSequenceUnknownOutcomeStrategyAction(formData: FormData) {
 }
 export const updateSequenceUnknownOutcomeStrategyAction = withActionError(
   _updateSequenceUnknownOutcomeStrategyAction,
+);
+
+/**
+ * Sprint 12 — sequence-level "AI message context scope" config. Drives
+ * what slice of interaction history the generator pulls into the prompt
+ * when generating a message for a task that comes from this sequence.
+ * Per-step override lives on `sequence_steps.message_context_scope` ;
+ * the dialog at generation time can also override per-message.
+ */
+const messageContextScopeSchema = z.object({
+  sequenceId: z.string().uuid(),
+  scope: z.enum(["sequence", "all"]),
+});
+
+async function _updateSequenceMessageContextScopeAction(formData: FormData) {
+  const parsed = messageContextScopeSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
+  const { activeOrganization } = await getActiveOrg();
+
+  const existing = await getSequenceById(getDb(), activeOrganization.id, parsed.data.sequenceId);
+  if (!existing) throw new SequenceNotFoundError(parsed.data.sequenceId);
+
+  await updateSequenceMeta(getDb(), activeOrganization.id, parsed.data.sequenceId, {
+    messageContextScope: parsed.data.scope,
+  });
+  revalidateSequence(parsed.data.sequenceId);
+}
+export const updateSequenceMessageContextScopeAction = withActionError(
+  _updateSequenceMessageContextScopeAction,
 );
 
 const activeSchema = z.object({
@@ -431,3 +495,134 @@ async function _stopEnrolmentAction(formData: FormData) {
   if (parsed.data.contactId) revalidatePath(`/contacts/${parsed.data.contactId}`);
 }
 export const stopEnrolmentAction = withActionError(_stopEnrolmentAction);
+
+// ---------------------------------------------------------------------------
+// Sprint 12 — Step attachments
+// ---------------------------------------------------------------------------
+
+const uploadStepAttachmentSchema = z.object({
+  sequenceId: z.string().uuid(),
+  stepId: z.string().min(1),
+});
+
+/**
+ * Uploads a single file to Storage scoped under the step. Returns the
+ * attachment ref the client merges into the draft (then auto-save
+ * persists the next draft snapshot). The client receives the ref via
+ * the action return value — `withActionError` preserves it on success.
+ *
+ * Validation : file size + MIME + per-step caps (see
+ * `validateNewStepAttachment`). The step's existing attachments must
+ * be POSTed alongside (encoded JSON) so the action can enforce the
+ * total-bytes cap without trusting a snapshot it doesn't own.
+ */
+async function _uploadStepAttachmentAction(
+  formData: FormData,
+): Promise<SequenceStepAttachmentRef> {
+  const parsed = uploadStepAttachmentSchema.safeParse({
+    sequenceId: formData.get("sequenceId"),
+    stepId: formData.get("stepId"),
+  });
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) throw new InvalidInputError();
+
+  const { activeOrganization, user } = await getActiveOrg();
+  const seq = await getSequenceById(getDb(), activeOrganization.id, parsed.data.sequenceId);
+  if (!seq) throw new SequenceNotFoundError(parsed.data.sequenceId);
+  // Lock check : we're effectively editing the draft. Reuse the same
+  // contract as saveDraft / publish (stale lock is OK to override).
+  assertEditingLockAvailable(seq.editingLockedBy, seq.editingLockedAt, user.id);
+
+  // Read the "existing" list from the form — the client passes the
+  // current draft's step attachments so we can enforce the aggregate
+  // caps. If absent, treat as empty (first upload).
+  const existingRaw = formData.get("existing");
+  let existing: SequenceStepAttachmentRef[] = [];
+  if (typeof existingRaw === "string" && existingRaw.length > 0) {
+    try {
+      const parsedExisting = JSON.parse(existingRaw);
+      if (Array.isArray(parsedExisting)) {
+        existing = parsedExisting.filter(
+          (a): a is SequenceStepAttachmentRef =>
+            a &&
+            typeof a === "object" &&
+            typeof a.storagePath === "string" &&
+            typeof a.filename === "string" &&
+            typeof a.mimeType === "string" &&
+            typeof a.sizeBytes === "number",
+        );
+      }
+    } catch {
+      // Bad client payload — treat as empty, the caps will still hold.
+    }
+  }
+
+  const validation = validateNewStepAttachment({
+    existing,
+    incoming: { mimeType: file.type, sizeBytes: file.size },
+  });
+  if (validation) {
+    throw new StepAttachmentRejectedError(validation);
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const { storagePath } = await getAttachmentStorageService().uploadForStep({
+    organizationId: activeOrganization.id,
+    stepId: parsed.data.stepId,
+    filename: file.name,
+    mimeType: file.type,
+    content: buffer,
+  });
+
+  return {
+    storagePath,
+    filename: file.name,
+    mimeType: file.type,
+    sizeBytes: file.size,
+  };
+}
+export const uploadStepAttachmentAction = withActionError(_uploadStepAttachmentAction);
+
+const removeStepAttachmentSchema = z.object({
+  sequenceId: z.string().uuid(),
+  storagePath: z.string().min(1),
+});
+
+/**
+ * Removes a step attachment from Storage if (and only if) the path is
+ * not referenced by the currently published step set of the sequence.
+ *
+ * Two scenarios :
+ *   - File was uploaded into the draft but never published → orphan,
+ *     safe to delete from Storage immediately.
+ *   - File is already in production → the user's "remove" only takes it
+ *     out of the draft ; the published version still serves it to
+ *     existing tasks. We leave it in Storage ; the eventual `publish`
+ *     hook will clean it when the new version commits.
+ *
+ * The client patches its draft locally + saves regardless — this action
+ * just decides whether the Storage object can go now.
+ */
+async function _removeStepAttachmentAction(formData: FormData): Promise<void> {
+  const parsed = removeStepAttachmentSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
+  const { activeOrganization } = await getActiveOrg();
+
+  const seq = await getSequenceById(getDb(), activeOrganization.id, parsed.data.sequenceId);
+  if (!seq) throw new SequenceNotFoundError(parsed.data.sequenceId);
+
+  const publishedSteps = await getStepsForSequence(getDb(), parsed.data.sequenceId);
+  const publishedPaths = new Set(collectAttachmentPathsFromSteps(publishedSteps));
+
+  if (!publishedPaths.has(parsed.data.storagePath)) {
+    // Safe to delete from Storage now — no one is serving it.
+    await getAttachmentStorageService()
+      .deleteQuietly(STEP_ATTACHMENT_BUCKET_NAME, parsed.data.storagePath)
+      .catch((err) => {
+        console.error("[uploadStepAttachmentAction] delete failed", err);
+      });
+  }
+}
+export const removeStepAttachmentAction = withActionError(_removeStepAttachmentAction);

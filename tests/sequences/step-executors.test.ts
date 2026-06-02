@@ -53,6 +53,7 @@ function mockServices(over: Partial<SequenceExecutorServices> = {}): SequenceExe
     generateDraftForTask: vi.fn().mockResolvedValue({ drafted: true }),
     cascadeEnrol: vi.fn().mockResolvedValue({ enrolmentId: "enrol-2" }),
     updateContact: vi.fn().mockResolvedValue(undefined),
+    getSenderName: vi.fn().mockResolvedValue(null),
     ...over,
   };
 }

@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import type { SequenceStepAttachmentRef } from "@/lib/sequences/types";
 
 import {
   annotateMessage,
@@ -84,6 +85,18 @@ export type GenerateMessageDialogProps = {
   /** Gmail OAuth state for this user — drives the "Envoyer via Gmail" button. */
   gmail: { connected: boolean; address: string | null };
 
+  /**
+   * Sprint 12 — when set, the task comes from a sequence. The dialog
+   * surfaces a "Contexte" selector with the resolved default
+   * pre-selected ; flipping it sends the override along on the
+   * generateMessageAction call (per-message only, doesn't persist
+   * anything on the sequence/step config).
+   */
+  sequenceContext?: {
+    sequenceName: string;
+    resolvedScope: "sequence" | "all";
+  };
+
   /** Channel can only be "email" for the Gmail send button to make sense. */
 };
 
@@ -106,6 +119,12 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
     props.detectedSignal !== null && props.detectedSignal.isFresh,
   );
   const [orientation, setOrientation] = useState<string>("");
+  // Sprint 12 — message context scope override for this generation only.
+  // Initialised from `sequenceContext.resolvedScope` so the picker shows
+  // what'll actually be used. Stays null for non-sequence tasks (no UI).
+  const [messageContextScope, setMessageContextScope] = useState<
+    "sequence" | "all" | null
+  >(props.sequenceContext?.resolvedScope ?? null);
 
   const [step, setStep] = useState<Step>({ kind: "config" });
   const [showOrientation, setShowOrientation] = useState(false);
@@ -220,6 +239,15 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
     fd.append("locale", locale);
     fd.append("includeSignal", includeSignal ? "true" : "false");
     if (orientation.trim()) fd.append("orientation", orientation.trim());
+    // Sprint 12 — Only send the override when the user actually flipped
+    // the toggle (state differs from server-resolved default). Saves a
+    // round-trip parse on the action.
+    if (
+      messageContextScope &&
+      messageContextScope !== props.sequenceContext?.resolvedScope
+    ) {
+      fd.append("messageContextScope", messageContextScope);
+    }
 
     try {
       const result = await generateMessageAction(fd);
@@ -295,6 +323,15 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
     // the "attachments" key — the server action's parser picks them up.
     for (const file of attachments) {
       fd.append("attachments", file, file.name);
+    }
+    // Sprint 12 — step pre-attachments travel as a JSON blob of
+    // SequenceStepAttachmentRef. The server downloads them from Storage
+    // and appends them to the MIME message alongside user uploads.
+    if (step.kind === "result" && step.result.stepAttachments?.length) {
+      fd.append(
+        "stepAttachmentPaths",
+        JSON.stringify(step.result.stepAttachments),
+      );
     }
     setGmailError(null);
     setGmailSending(true);
@@ -372,6 +409,9 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
               detectedSignal={props.detectedSignal}
               briefLocale={briefLocale}
               briefMissing={briefMissing}
+              sequenceContext={props.sequenceContext}
+              messageContextScope={messageContextScope}
+              onMessageContextScope={setMessageContextScope}
               t={t}
               tIntent={tIntent}
               tLang={tLang}
@@ -417,6 +457,9 @@ export function GenerateMessageDialog(props: GenerateMessageDialogProps) {
               onAddAttachments={addAttachments}
               onRemoveAttachment={removeAttachment}
               attachmentError={attachmentError}
+              stepAttachments={
+                step.kind === "result" ? step.result.stepAttachments ?? [] : []
+              }
               mode={props.mode}
               onGenerate={runGenerate}
               onRegenerate={runGenerate}
@@ -445,6 +488,9 @@ type ParamsColumnProps = {
   detectedSignal: GenerateMessageDialogProps["detectedSignal"];
   briefLocale: { configured: boolean; excerpt: string | null };
   briefMissing: boolean;
+  sequenceContext: GenerateMessageDialogProps["sequenceContext"];
+  messageContextScope: "sequence" | "all" | null;
+  onMessageContextScope: (v: "sequence" | "all" | null) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   t: any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -477,6 +523,33 @@ function ParamsColumn(p: ParamsColumnProps) {
           ))}
         </select>
       </div>
+
+      {/* Sprint 12 — sequence message-context-scope selector
+          (only visible when the task comes from a sequence). */}
+      {p.sequenceContext && (
+        <div className="space-y-1.5">
+          <Label>{p.t("fields.sequenceContext")}</Label>
+          <select
+            value={p.messageContextScope ?? p.sequenceContext.resolvedScope}
+            onChange={(e) =>
+              p.onMessageContextScope(e.target.value as "sequence" | "all")
+            }
+            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="sequence">
+              {p.t("fields.sequenceContextOptions.sequence", {
+                name: p.sequenceContext.sequenceName,
+              })}
+            </option>
+            <option value="all">
+              {p.t("fields.sequenceContextOptions.all")}
+            </option>
+          </select>
+          <p className="text-[11px] text-muted-foreground">
+            {p.t("fields.sequenceContextHint")}
+          </p>
+        </div>
+      )}
 
       {/* Signal — only if detected */}
       {p.detectedSignal && (
@@ -602,6 +675,12 @@ type ResultColumnProps = {
   onAddAttachments: (files: FileList | File[] | null) => void;
   onRemoveAttachment: (idx: number) => void;
   attachmentError: string | null;
+  /**
+   * Sprint 12 — files pre-attached at the sequence step. Rendered as
+   * locked chips above the user-editable attachments picker ; the dialog
+   * doesn't let the sale edit them here (they live on the step config).
+   */
+  stepAttachments: SequenceStepAttachmentRef[];
   onGenerate: () => void;
   onRegenerate: () => void;
   onCopy: () => void;
@@ -712,6 +791,13 @@ function ResultColumn(p: ResultColumnProps) {
             </div>
           )}
 
+          {/* Sprint 12 — step pre-attachments : files configured on the
+              source sequence step. Read-only here ; managed in the
+              sequence editor. Rendered only when present + sending via
+              Gmail (the channel that actually uses them). */}
+          {p.channel === "email" && p.gmail.connected && p.stepAttachments.length > 0 && (
+            <StepAttachmentsLockedList items={p.stepAttachments} t={p.t} />
+          )}
           {/* Attachments picker — only when sending via Gmail makes sense
               (email channel + Gmail connected). The actual files are
               uploaded server-side only after the Gmail send succeeds. */}
@@ -995,6 +1081,49 @@ function AttachmentsPicker(p: AttachmentsPickerProps) {
       {p.error && (
         <p className="text-[11px] text-rose-700">{p.error}</p>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// StepAttachmentsLockedList — Sprint 12
+// ---------------------------------------------------------------------------
+
+/**
+ * Read-only chips for files pre-attached at the sequence step. Visually
+ * distinct from the user-editable picker — same vertical rhythm, but a
+ * lock icon makes it clear the sale can't remove them here. They're
+ * managed in the sequence editor.
+ */
+function StepAttachmentsLockedList(p: {
+  items: SequenceStepAttachmentRef[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  t: any;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+        {p.t("stepAttachments.label")}
+      </Label>
+      <ul className="space-y-1">
+        {p.items.map((a) => (
+          <li
+            key={a.storagePath}
+            className="flex items-center gap-2 px-2 py-1.5 rounded-md border border-border bg-muted/40 text-xs"
+          >
+            <Paperclip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="flex-1 min-w-0 truncate" title={a.filename}>
+              {a.filename}
+            </span>
+            <span className="text-muted-foreground shrink-0">
+              {formatBytes(a.sizeBytes)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[11px] text-muted-foreground">
+        {p.t("stepAttachments.help")}
+      </p>
     </div>
   );
 }

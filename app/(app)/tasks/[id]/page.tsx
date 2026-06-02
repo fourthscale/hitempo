@@ -140,6 +140,15 @@ export default async function TaskDetailPage({
           ),
           brandBriefStatus,
           gmail: gmailStatus,
+          sequenceContext: task.sequenceEnrolment?.sequence
+            ? {
+                sequenceName: task.sequenceEnrolment.sequence.name,
+                resolvedScope:
+                  task.sequenceEnrolment.sequence.messageContextScope === "all"
+                    ? ("all" as const)
+                    : ("sequence" as const),
+              }
+            : undefined,
         }
       : undefined;
 

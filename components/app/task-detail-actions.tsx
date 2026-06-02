@@ -108,6 +108,7 @@ export function TaskDetailActions({
           detectedSignal={generate.detectedSignal}
           brandBriefStatus={generate.brandBriefStatus}
           gmail={generate.gmail}
+          sequenceContext={generate.sequenceContext}
         />
       )}
 

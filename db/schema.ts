@@ -905,6 +905,25 @@ export const sequences = pgTable(
      */
     unknownOutcomeStrategy: text("unknown_outcome_strategy").notNull().default("park"),
 
+    /**
+     * Sprint 12 — scope of the interaction history the AI message generator
+     * pulls into the prompt when the task that owns the message comes from
+     * this sequence.
+     *
+     *   - "sequence" : only interactions linked to THIS enrolment (via
+     *                  outbound message → task → sequenceEnrolmentId). Stops
+     *                  the AI from "replying" to a parallel out-of-sequence
+     *                  thread. Default.
+     *   - "all"      : include every recent interaction on the company
+     *                  (legacy pre-sprint-12 behavior). Use when the sale
+     *                  wants the AI to acknowledge parallel exchanges.
+     *
+     * Per-step override lives on `sequence_steps.message_context_scope`.
+     * The sale can also override per-message in the dialog at generation
+     * time without persisting anything.
+     */
+    messageContextScope: text("message_context_scope").notNull().default("sequence"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -943,6 +962,13 @@ export const sequenceSteps = pgTable(
      * on reply outcomes.
      */
     unknownOutcomeStrategy: text("unknown_outcome_strategy"),
+
+    /**
+     * Sprint 12 — per-step override of the sequence's `messageContextScope`.
+     * NULL = inherit. Only meaningful on `send_email` / `send_linkedin`
+     * steps in AI mode (the only ones that call the generator).
+     */
+    messageContextScope: text("message_context_scope"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

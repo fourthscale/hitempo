@@ -12,7 +12,9 @@ import { PageHeader } from "@/components/app/page-header";
 import { EmptyState } from "@/components/app/empty-state";
 import { SequenceFlowView } from "@/components/app/sequences/sequence-flow-view";
 import { UnknownOutcomeStrategySelector } from "@/components/app/sequences/unknown-outcome-strategy-selector";
+import { MessageContextScopeSelector } from "@/components/app/sequences/message-context-scope-selector";
 import { coerceStrategy } from "@/lib/sequences/unknown-outcome-strategy";
+import { coerceMessageContextScope } from "@/lib/sequences/message-context-scope";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -71,11 +73,17 @@ export default async function SequenceDetailPage({
         <h2 className="text-sm font-medium text-muted-foreground mb-3">
           {t("sections.advancedSettings")}
         </h2>
-        <Card className="p-4">
+        <Card className="p-4 space-y-6">
           <UnknownOutcomeStrategySelector
             sequenceId={id}
             current={coerceStrategy(data.sequence.unknownOutcomeStrategy)}
           />
+          <div className="border-t border-border pt-4">
+            <MessageContextScopeSelector
+              sequenceId={id}
+              current={coerceMessageContextScope(data.sequence.messageContextScope)}
+            />
+          </div>
         </Card>
       </section>
 

@@ -13,6 +13,11 @@ import { getContactById } from "@/db/queries/contacts";
 import { insertMessage } from "@/db/queries/messages";
 import { insertMessageAttachment } from "@/db/queries/message-attachments";
 import { MessageGenerationOrchestratorFactory } from "@/lib/messages/message-generation-orchestrator-factory";
+import { getMessageContextResolutionForTask } from "@/db/queries/sequences";
+import { resolveMessageContextScopeWithUserOverride } from "@/lib/sequences/message-context-scope";
+import { resolveLocalizedString } from "@/lib/sequences/locale-resolver";
+import type { SequenceStepAttachmentRef } from "@/lib/sequences/types";
+import { getDb } from "@/db/client";
 import { LlmGenerationServiceFactory } from "@/lib/ai/llm-generation-service-factory";
 import { GmailServiceFactory } from "@/lib/gmail/gmail-service-factory";
 import { GmailCredentialsNotFoundError, GmailApiError } from "@/lib/gmail/gmail-errors";
@@ -68,6 +73,13 @@ const generateSchema = z.object({
     z.boolean(),
   ),
   orientation: z.string().max(500).optional().or(z.literal("")),
+  /**
+   * Sprint 12 — per-message override of the sequence's
+   * `messageContextScope`. Optional ; when omitted the action resolves
+   * the default from the source sequence + step. The DOM `<select>` in
+   * the dialog posts "sequence" or "all".
+   */
+  messageContextScope: z.enum(["sequence", "all"]).optional().or(z.literal("")),
 });
 
 export type GenerateMessageResult = {
@@ -82,6 +94,15 @@ export type GenerateMessageResult = {
   llmUsageId: string;
   tokensIn: number;
   tokensOut: number;
+  /**
+   * Sprint 12 — files pre-attached at the source sequence step (live
+   * lookup A.3, no snapshot at task creation). The dialog displays them
+   * as locked chips and posts their storagePaths back on send so the
+   * server can stream them from Storage into the MIME message.
+   * Empty / omitted when the task isn't sequence-driven or the step has
+   * no attachments.
+   */
+  stepAttachments?: SequenceStepAttachmentRef[];
 };
 
 export async function generateMessageAction(
@@ -97,6 +118,78 @@ export async function generateMessageAction(
   const { activeOrganization, user } = await getActiveOrg();
   const sender = getSenderName(user);
 
+  // Sprint 12 — resolve the effective `messageContextScope` so the
+  // orchestrator can scope (or not) the interaction history it injects
+  // in the prompt. Precedence : dialog override > step override >
+  // sequence-level setting > hard default "sequence" (when the task is
+  // sequence-driven). Tasks created outside a sequence don't have an
+  // enrolment at all, so the orchestrator falls back to the legacy
+  // full-company history.
+  const taskId = input.taskId && input.taskId !== "" ? input.taskId : null;
+  const userOverrideRaw =
+    input.messageContextScope === "sequence" || input.messageContextScope === "all"
+      ? input.messageContextScope
+      : null;
+
+  let sequenceEnrolmentId: string | null = null;
+  let stepOrientation: string | null = null;
+  let stepAttachments: SequenceStepAttachmentRef[] = [];
+  if (taskId) {
+    const ctx = await getMessageContextResolutionForTask(getDb(), taskId);
+    if (ctx) {
+      const scope = resolveMessageContextScopeWithUserOverride({
+        sequence: ctx.sequenceScope,
+        step: ctx.stepScope,
+        user: userOverrideRaw,
+      });
+      if (scope === "sequence") {
+        sequenceEnrolmentId = ctx.sequenceEnrolmentId;
+      }
+      // Sprint 12 — read the source step's AI orientation (the "Consigne
+      // IA" the editor sets on send_email step config) so it actually
+      // reaches the LLM. The dialog never auto-fills its own orientation
+      // field, so without this fallback the step's orientation was
+      // silently dropped.
+      const rawOrientation = (ctx.stepActionConfig as { orientation?: unknown } | null)
+        ?.orientation;
+      if (rawOrientation) {
+        // The step config uses LocalizedString — resolve to the dialog locale.
+        // Read minimal locale ctx (contact preferred + org default — company
+        // not needed for fallback chain at this layer, omit).
+        stepOrientation = resolveLocalizedString(
+          rawOrientation as Parameters<typeof resolveLocalizedString>[0],
+          {
+            contact: { preferredLanguage: input.locale },
+            company: { primaryLocale: input.locale },
+            organization: { defaultLocale: input.locale },
+          },
+        ) || null;
+      }
+      // Sprint 12 — pull step pre-attachments live (A.3, no snapshot).
+      // The dialog renders them as locked chips and posts their storage
+      // paths back on Gmail send so the server attaches them server-side.
+      const rawAttachments = (ctx.stepActionConfig as { attachments?: unknown } | null)
+        ?.attachments;
+      if (Array.isArray(rawAttachments)) {
+        stepAttachments = rawAttachments.filter(
+          (a): a is SequenceStepAttachmentRef =>
+            a != null &&
+            typeof a === "object" &&
+            typeof (a as { storagePath?: unknown }).storagePath === "string" &&
+            typeof (a as { filename?: unknown }).filename === "string" &&
+            typeof (a as { mimeType?: unknown }).mimeType === "string" &&
+            typeof (a as { sizeBytes?: unknown }).sizeBytes === "number",
+        );
+      }
+    }
+  }
+
+  // Precedence : dialog orientation (user typed something) > step's
+  // pre-configured orientation (the sequence's "Consigne IA") > none.
+  const userOrientation =
+    input.orientation && input.orientation !== "" ? input.orientation : null;
+  const effectiveOrientation = userOrientation ?? stepOrientation;
+
   // 3. Delegate the whole pipeline to the orchestrator Facade.
   const orchestrator = MessageGenerationOrchestratorFactory.getInstance();
   const result = await orchestrator.generate({
@@ -104,14 +197,14 @@ export async function generateMessageAction(
     userId: user.id,
     contactId: input.contactId,
     companyId: input.companyId,
-    taskId: input.taskId && input.taskId !== "" ? input.taskId : null,
+    taskId,
     channel,
     intent,
     locale: input.locale as MessageLocale,
     includeSignal: input.includeSignal,
-    orientation:
-      input.orientation && input.orientation !== "" ? input.orientation : null,
+    orientation: effectiveOrientation,
     sender,
+    sequenceEnrolmentId,
   });
 
   // 4. Revalidate the surfaces that show messages.
@@ -119,7 +212,11 @@ export async function generateMessageAction(
   revalidatePath(`/companies/${input.companyId}`);
   if (input.taskId) revalidatePath("/tasks");
 
-  return result;
+  // Surface step pre-attachments to the dialog (empty array if none).
+  return {
+    ...result,
+    stepAttachments: stepAttachments.length > 0 ? stepAttachments : undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -208,6 +305,74 @@ async function parseAttachmentsFromFormData(
     result.push({ filename: file.name, mimeType: file.type, content: buf });
   }
   return result;
+}
+
+/**
+ * Sprint 12 — reads the dialog's `stepAttachmentPaths` field (a JSON
+ * array of `SequenceStepAttachmentRef`), validates each ref against the
+ * active org's storage namespace, downloads the bytes, and returns
+ * MIME-ready triples.
+ *
+ * Org-scoping is mandatory : a maliciously-crafted client could otherwise
+ * post a storagePath pointing into another org's prefix. We enforce by
+ * checking that every storagePath starts with `<orgId>/step-` ; refs that
+ * don't match are silently dropped (the user sees fewer attachments than
+ * they expected, but no cross-tenant leak).
+ *
+ * Returns [] when the field is absent or empty. Throws
+ * `AttachmentRejectedError` on cap violations to share the surface with
+ * user-uploaded attachments.
+ */
+async function loadStepAttachmentsFromFormData(
+  formData: FormData,
+  organizationId: string,
+): Promise<MimeAttachment[]> {
+  const raw = formData.get("stepAttachmentPaths");
+  if (typeof raw !== "string" || raw.length === 0) return [];
+
+  let refs: SequenceStepAttachmentRef[] = [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    refs = parsed.filter(
+      (a): a is SequenceStepAttachmentRef =>
+        a != null &&
+        typeof a === "object" &&
+        typeof a.storagePath === "string" &&
+        typeof a.filename === "string" &&
+        typeof a.mimeType === "string" &&
+        typeof a.sizeBytes === "number",
+    );
+  } catch {
+    return [];
+  }
+
+  // Org-scope guard : `<orgId>/step-...` is the only legal layout.
+  const prefix = `${organizationId}/step-`;
+  refs = refs.filter((r) => r.storagePath.startsWith(prefix));
+  if (refs.length === 0) return [];
+
+  if (refs.length > MAX_ATTACHMENTS_PER_MESSAGE) {
+    throw new AttachmentRejectedError(
+      `Too many step attachments (max ${MAX_ATTACHMENTS_PER_MESSAGE})`,
+    );
+  }
+  let totalBytes = 0;
+  const storage = getAttachmentStorageService();
+  const out: MimeAttachment[] = [];
+  for (const ref of refs) {
+    totalBytes += ref.sizeBytes;
+    if (totalBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+      throw new AttachmentRejectedError(
+        `Combined step-attachment size exceeds ${Math.round(MAX_TOTAL_ATTACHMENT_BYTES / 1024 / 1024)} MB cap`,
+      );
+    }
+    // Bucket is constant — `message-attachments`. We trust the ref's mime
+    // since it was validated at upload time against the same allow-list.
+    const content = await storage.download("message-attachments", ref.storagePath);
+    out.push({ filename: ref.filename, mimeType: ref.mimeType, content });
+  }
+  return out;
 }
 
 /**
@@ -425,6 +590,18 @@ export async function sendMessageViaGmailAction(
   // any limit violation (size, count, mime type).
   const attachments = await parseAttachmentsFromFormData(formData);
   const { activeOrganization, user } = await getActiveOrg();
+
+  // Sprint 12 — step pre-attachments. The dialog posts the storage refs
+  // (JSON-encoded) so the server can stream them from Storage and append
+  // them to the outgoing MIME alongside the user-uploaded files. We trust
+  // only refs whose storagePath sits under this org's namespace.
+  const stepAttachments = await loadStepAttachmentsFromFormData(
+    formData,
+    activeOrganization.id,
+  );
+  if (stepAttachments.length > 0) {
+    attachments.push(...stepAttachments);
+  }
 
   const contact = await getContactById(activeOrganization.id, data.contactId);
   if (!contact?.email) throw new ContactEmailMissingError(data.contactId);

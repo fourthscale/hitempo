@@ -28,6 +28,10 @@ import {
   SequenceDraftInvalidError,
   SequenceNoDraftError,
 } from "@/lib/actions/sequence-action-errors";
+import { collectAttachmentPathsFromSteps } from "./step-attachments";
+import { getAttachmentStorageService } from "@/lib/gmail/attachment-storage-service";
+
+const STEP_ATTACHMENT_BUCKET = "message-attachments";
 
 /** Default idle timeout after which another user may take over the lock. */
 const DEFAULT_LOCK_TTL_MS = 30 * 60_000;
@@ -125,6 +129,17 @@ export class SequenceEditingService {
     const seq = await getSequenceById(this.db, orgId, sequenceId);
     if (!seq) throw new SequenceNotFoundError(sequenceId);
     this.assertLockAvailable(seq.editingLockedBy, seq.editingLockedAt, userId);
+
+    // Sprint 12 — clean step attachments that were uploaded into the draft
+    // and never published. We diff the draft's attachment paths against
+    // the published step rows ; anything present in the draft but not
+    // in production is an orphan we can safely remove from Storage.
+    const orphans = await this.computeDraftOrphanAttachmentPaths(
+      sequenceId,
+      seq.draftDefinition,
+    );
+    await this.removeStorageObjectsQuietly(orphans);
+
     await clearSequenceDraft(this.db, orgId, sequenceId);
     await clearEditingLock(this.db, orgId, sequenceId);
   }
@@ -153,12 +168,25 @@ export class SequenceEditingService {
 
     const rows = this.remapToStepRows(draft);
 
+    // Sprint 12 — compute attachments that disappear on publish (= they
+    // were in the previously-published step set but not in the new draft).
+    // Done BEFORE the transaction so a Storage failure doesn't roll back
+    // the publish — Storage cleanup is best-effort, never blocking.
+    const published = await getStepsForSequence(this.db, sequenceId);
+    const publishedPaths = collectAttachmentPathsFromSteps(published);
+    const newPaths = collectAttachmentPathsFromSteps(rows);
+    const removed = this.diffPathsLeftOnly(publishedPaths, newPaths);
+
     await this.db.transaction(async (tx) => {
       await deleteStepsForSequence(tx, sequenceId);
       await insertSteps(tx, sequenceId, rows);
       await clearSequenceDraft(tx, orgId, sequenceId);
       await clearEditingLock(tx, orgId, sequenceId);
     });
+
+    // Cleanup after the commit succeeds — orphan files in Storage now
+    // that no published step references them.
+    await this.removeStorageObjectsQuietly(removed);
 
     return { stepCount: rows.length };
   }
@@ -226,6 +254,58 @@ export class SequenceEditingService {
   private safeStepCount(rawDraft: unknown): number {
     const parsed = draftDefinitionSchema.safeParse(rawDraft);
     return parsed.success ? parsed.data.steps.length : 0;
+  }
+
+  /**
+   * Sprint 12 — orphan attachment computation for `discardDraft`.
+   * Reads the draft (untyped — we don't want to fail discard if the
+   * schema is borderline) AND the currently published step set, then
+   * keeps the paths present in the draft but absent from production.
+   * These are the files that were uploaded into the draft and never
+   * survived a publish.
+   */
+  private async computeDraftOrphanAttachmentPaths(
+    sequenceId: string,
+    rawDraft: unknown,
+  ): Promise<string[]> {
+    if (rawDraft == null || typeof rawDraft !== "object") return [];
+    const draftSteps = (rawDraft as { steps?: unknown }).steps;
+    if (!Array.isArray(draftSteps)) return [];
+    const draftPaths = collectAttachmentPathsFromSteps(
+      draftSteps as Array<{ actionConfig?: unknown }>,
+    );
+    if (draftPaths.length === 0) return [];
+
+    const published = await getStepsForSequence(this.db, sequenceId);
+    const publishedPaths = new Set(collectAttachmentPathsFromSteps(published));
+    return draftPaths.filter((p) => !publishedPaths.has(p));
+  }
+
+  /** Same diff helper used by publishDraft — `left - right` by path. */
+  private diffPathsLeftOnly(left: readonly string[], right: readonly string[]): string[] {
+    const r = new Set(right);
+    return left.filter((p) => !r.has(p));
+  }
+
+  /**
+   * Best-effort removal of Storage objects. Storage failures must NEVER
+   * roll back the underlying sequence edit — at worst we leak a file,
+   * which is harmless from a correctness standpoint. Logged so we can
+   * spot pattern failures in production.
+   */
+  private async removeStorageObjectsQuietly(paths: readonly string[]): Promise<void> {
+    if (paths.length === 0) return;
+    const storage = getAttachmentStorageService();
+    await Promise.all(
+      paths.map((p) =>
+        storage.deleteQuietly(STEP_ATTACHMENT_BUCKET, p).catch((err) => {
+          console.error("[sequence-editing-service] storage delete failed", {
+            path: p,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        }),
+      ),
+    );
   }
 
   /**

@@ -39,7 +39,11 @@ export async function getTasksByOrg(
         columns: { id: true, currentStepOrder: true },
         with: {
           sequence: {
-            columns: { id: true, name: true },
+            // messageContextScope drives the AI "scope its context to
+            // this sequence" toggle in the GenerateMessageDialog
+            // (sprint 12). The step override is resolved server-side
+            // by the action layer at generate time.
+            columns: { id: true, name: true, messageContextScope: true },
             with: { steps: { columns: { id: true } } },
           },
         },
@@ -383,7 +387,11 @@ export async function getTaskDetail(orgId: string, taskId: string) {
         columns: { id: true, currentStepOrder: true },
         with: {
           sequence: {
-            columns: { id: true, name: true },
+            // messageContextScope drives the AI "scope its context to
+            // this sequence" toggle in the GenerateMessageDialog
+            // (sprint 12). The step override is resolved server-side
+            // by the action layer at generate time.
+            columns: { id: true, name: true, messageContextScope: true },
             with: { steps: { columns: { id: true } } },
           },
         },

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { LocalizedStringInput } from "./localized-string-input";
 import { ConditionBuilder } from "./condition-builder";
+import { StepAttachmentsField } from "./step-attachments-field";
 import { emptyGroup, type ConditionGroup } from "@/lib/sequences/conditions";
 import type { DraftStep } from "@/lib/sequences/draft-schema";
 import type {
@@ -20,6 +21,7 @@ import type {
   EnrollInSequenceActionConfig,
   TaskAssignment,
   LocalizedString,
+  SequenceStepAttachmentRef,
 } from "@/lib/sequences/types";
 import type { TaskScheduling } from "@/lib/sequences/scheduling";
 import { DEFAULT_SCHEDULING } from "@/lib/sequences/scheduling";
@@ -42,6 +44,7 @@ const selectCls =
 
 export function SequenceStepDetailPanel({
   step,
+  sequenceId,
   otherSequences,
   orgMembers,
   onChange,
@@ -50,6 +53,8 @@ export function SequenceStepDetailPanel({
   canDelete,
 }: {
   step: DraftStep;
+  /** Sprint 12 — needed by the attachments field to scope storage upload. */
+  sequenceId: string;
   otherSequences: { id: string; name: string }[];
   orgMembers: { id: string; name: string }[];
   onChange: (next: DraftStep) => void;
@@ -99,6 +104,18 @@ export function SequenceStepDetailPanel({
           label={t("editor.fields.title")}
           value={(step.actionConfig as { titleTemplate?: LocalizedString }).titleTemplate}
           onChange={(v) => patchConfig({ titleTemplate: v })}
+        />
+      )}
+
+      {/* ----- Assignment (task-creating steps only) -----
+          Placed right under the title : it answers "who will own this
+          task" before the user dives into channel/intent/body config —
+          mirrors the natural reading order of a task card. */}
+      {(isMessage || step.actionType === "phone_call") && (
+        <AssignmentField
+          assignment={(step.actionConfig as { assignment?: TaskAssignment }).assignment}
+          orgMembers={orgMembers}
+          onChange={(a) => patchConfig({ assignment: a })}
         />
       )}
 
@@ -161,14 +178,27 @@ export function SequenceStepDetailPanel({
                   label={t("editor.fields.subject")}
                   value={cfg.subject}
                   onChange={(v) => patchConfig({ subject: v })}
+                  templating
                 />
                 <LocalizedStringInput
                   label={t("editor.fields.body")}
                   value={cfg.body}
                   onChange={(v) => patchConfig({ body: v })}
                   multiline
+                  templating
                 />
               </>
+            )}
+            {/* Sprint 12 — attachments apply to BOTH modes (AI draft +
+                defined message). Gated on actionType because LinkedIn
+                doesn't accept file attachments. */}
+            {step.actionType === "send_email" && (
+              <StepAttachmentsField
+                sequenceId={sequenceId}
+                stepId={step.id}
+                value={(cfg.attachments ?? []) as SequenceStepAttachmentRef[]}
+                onChange={(next) => patchConfig({ attachments: next })}
+              />
             )}
           </>
         );
@@ -383,15 +413,6 @@ export function SequenceStepDetailPanel({
           </div>
         );
       })()}
-
-      {/* ----- Assignment (task-creating steps only) ----- */}
-      {(isMessage || step.actionType === "phone_call") && (
-        <AssignmentField
-          assignment={(step.actionConfig as { assignment?: TaskAssignment }).assignment}
-          orgMembers={orgMembers}
-          onChange={(a) => patchConfig({ assignment: a })}
-        />
-      )}
 
       {/* ----- Scheduling (task-creating steps only) ----- */}
       {(isMessage || step.actionType === "phone_call") && (

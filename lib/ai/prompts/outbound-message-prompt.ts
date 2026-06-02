@@ -104,6 +104,10 @@ function buildFrench(ctx: OutboundMessageContext) {
     `- Signature : ${ctx.sender.firstName} ${ctx.sender.lastName}`,
     `- Ne jamais inventer un proof point absent de la liste ci-dessus`,
     `- Ne jamais répéter une phrase mot pour mot d'un message précédent`,
+    // Anti em-dash : les modèles GPT-5 family abusent du tiret cadratin
+    // ("—") au point que ça signe le côté IA du message. On force la
+    // ponctuation française classique.
+    `- INTERDIT : aucun tiret cadratin "—" (em-dash), aucun tiret demi-cadratin "–" (en-dash). Utiliser virgule, point, deux-points, parenthèses ou point-virgule à la place.`,
   ];
 
   if (!ctx.signal) {
@@ -214,6 +218,9 @@ function buildEnglish(ctx: OutboundMessageContext) {
     `- Signature: ${ctx.sender.firstName} ${ctx.sender.lastName}`,
     `- Never invent a proof point not in the list above`,
     `- Never repeat a phrase verbatim from a previous message`,
+    // GPT-5 family overuses em-dashes ("—") and en-dashes ("–") to the
+    // point of giving the email an "AI-written" smell. Forbid both.
+    `- FORBIDDEN: no em-dash "—", no en-dash "–". Use a comma, period, colon, parentheses, or semicolon instead.`,
   ];
 
   if (!ctx.signal) {

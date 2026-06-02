@@ -104,6 +104,7 @@ function defaultConfig(type: SequenceStepActionType): DraftStep["actionConfig"] 
 export function SequenceEditor({
   sequenceId,
   initialDraft,
+  initialHasPendingDraft,
   otherSequences,
   orgMembers,
   orgLocale,
@@ -112,6 +113,13 @@ export function SequenceEditor({
 }: {
   sequenceId: string;
   initialDraft: DraftDefinition;
+  /**
+   * True when the sequence currently has a `draftDefinition` row pending
+   * publish (i.e. some edits have been saved but not committed yet).
+   * Drives whether the Publish / Discard buttons are actionable —
+   * showing them when there's nothing to publish was misleading.
+   */
+  initialHasPendingDraft: boolean;
   otherSequences: { id: string; name: string }[];
   orgMembers: { id: string; name: string }[];
   orgLocale: string;
@@ -124,6 +132,11 @@ export function SequenceEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [publishing, setPublishing] = useState(false);
+  // Tracks whether a draft exists server-side. Starts from the prop ;
+  // flips to true the moment the auto-save persists the first edit
+  // ("dirty" client state turns into "server has a draft") ; flips to
+  // false right after Publish or Discard succeeds.
+  const [hasPendingDraft, setHasPendingDraft] = useState(initialHasPendingDraft);
   const [insertCtx, setInsertCtx] = useState<{ sourceId: string; slot: string } | null>(null);
   const [deletePathFor, setDeletePathFor] = useState<DraftStep | null>(null);
   const [keepChoice, setKeepChoice] = useState<{ slot: string | null } | null>(null);
@@ -166,7 +179,12 @@ export function SequenceEditor({
           fd.set("draft", JSON.stringify(next));
           await saveDraftAction(fd);
           setSaveState("saved");
-        } catch {
+          setHasPendingDraft(true);
+        } catch (err) {
+          // Match the publish handler — log the real reason instead of
+          // silently flagging "error". An auto-save failure is the most
+          // common cause of "publish says no_draft".
+          console.error("[sequence-editor] auto-save failed", err);
           setSaveState("error");
         }
       }, 800);
@@ -327,7 +345,11 @@ export function SequenceEditor({
       fd.set("sequenceId", sequenceId);
       await publishSequenceAction(fd);
       router.push(`/sequences/${sequenceId}`);
-    } catch {
+    } catch (err) {
+      // Log the real error so we can debug. The previous `catch {}` made
+      // every failure look identical. Keep the local state in sync so
+      // the spinner clears and the inline error banner appears.
+      console.error("[sequence-editor] publish failed", err);
       setPublishing(false);
       setSaveState("error");
     }
@@ -390,10 +412,17 @@ export function SequenceEditor({
             </span>
             {!readOnly && (
               <>
-                <Button variant="outline" size="sm" onClick={onDiscard}>
-                  {t("editor.discard")}
-                </Button>
-                <Button size="sm" onClick={onPublish} disabled={publishing}>
+                {hasPendingDraft && (
+                  <Button variant="outline" size="sm" onClick={onDiscard}>
+                    {t("editor.discard")}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  onClick={onPublish}
+                  disabled={publishing || !hasPendingDraft}
+                  title={!hasPendingDraft ? t("editor.publishNoDraftTitle") : undefined}
+                >
                   {publishing && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                   {t("editor.publish")}
                 </Button>
@@ -473,6 +502,7 @@ export function SequenceEditor({
             <div className="w-80 shrink-0 rounded-lg border border-border bg-card">
               <SequenceStepDetailPanel
                 step={selectedStep}
+                sequenceId={sequenceId}
                 otherSequences={otherSequences}
                 orgMembers={orgMembers}
                 onChange={updateStep}

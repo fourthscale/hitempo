@@ -128,6 +128,36 @@
       "ref": "Error reference"
     }
   },
+  "templateVariables": {
+    "triggerLabel": "Insert variable",
+    "close": "Close",
+    "showPreview": "Preview",
+    "hidePreview": "Edit",
+    "knownCount": "{n, plural, =1 {# variable} other {# variables}}",
+    "unknownCount": "Unknown: {names}",
+    "category": {
+      "contact": "Contact",
+      "company": "Company",
+      "sender": "Sender (you)"
+    },
+    "labels": {
+      "contact": {
+        "firstName": "Contact first name",
+        "lastName": "Contact last name",
+        "fullName": "Contact full name",
+        "jobTitle": "Contact job title"
+      },
+      "company": {
+        "name": "Company name",
+        "signalType": "Company signal"
+      },
+      "sender": {
+        "firstName": "Sender first name",
+        "lastName": "Sender last name",
+        "fullName": "Sender full name"
+      }
+    }
+  },
   "actionErrors": {
     "title": "Action failed",
     "close": "Got it",
@@ -149,7 +179,12 @@
     "enrolment_not_found": "This enrolment couldn't be found.",
     "contact_not_eligible": "This contact can't be enrolled (opted out, already in a sequence, or in cooldown).",
     "invalid_timezone": "Unknown timezone. Pick one from the list before saving.",
-    "invalid_work_pattern": "One of your day windows is invalid. Check that times are HH:MM and that each end is after its start."
+    "invalid_work_pattern": "One of your day windows is invalid. Check that times are HH:MM and that each end is after its start.",
+    "step_attachment_rejected": "Attachment rejected. Check the file type, size (max 10 MB) or reduce the number of files (max 5 per step).",
+    "step_attachment_too_many": "You've reached the attachment limit for this step (max 5).",
+    "step_attachment_too_large": "This file exceeds the maximum allowed size (10 MB).",
+    "step_attachments_total_too_large": "The combined size of this step's attachments exceeds 20 MB. Remove one before adding more.",
+    "step_attachment_bad_mime": "This file type isn't accepted (PDF, image, Word, Excel, text, CSV)."
   },
   "common": {
     "appName": "hitempo",
@@ -945,7 +980,13 @@
         "subject": "Subject",
         "body": "Message body",
         "orientation": "Orientation for regeneration",
-        "orientationPlaceholder": "e.g. shorter, mention the previous contact"
+        "orientationPlaceholder": "e.g. shorter, mention the previous contact",
+        "sequenceContext": "Context",
+        "sequenceContextOptions": {
+          "sequence": "This « {name} » enrolment only",
+          "all": "All exchanges with this contact"
+        },
+        "sequenceContextHint": "Pick what interaction history the AI sees when generating this message. Limiting to the current enrolment prevents the AI from replying to off-sequence threads."
       },
       "channelIntentOptions": {
         "email-first_contact": "Email — First contact",
@@ -996,6 +1037,10 @@
           "tooLarge": "\"{filename}\" exceeds the {max} MB per-file limit.",
           "totalTooLarge": "Combined attachments exceed {max} MB."
         }
+      },
+      "stepAttachments": {
+        "label": "Step attachments",
+        "help": "These files come from the sequence step's configuration. Open the sequence editor to change them."
       },
       "emptyState": "Pick your parameters and click Generate.",
       "legend": {
@@ -1068,6 +1113,20 @@
           "continue_default": {
             "label": "Continue (default branch)",
             "detail": "Fall through to the default branch immediately. Faster, but may skip positive replies the AI hasn't yet labeled."
+          }
+        }
+      },
+      "messageContextScope": {
+        "title": "AI message context",
+        "description": "Which interaction history the AI sees when generating a message. Limited to the current enrolment by default — each enrolment of a contact in this sequence has its own thread. Can be overridden per-message in the dialog.",
+        "options": {
+          "sequence": {
+            "label": "This enrolment only",
+            "detail": "Only replies linked to the contact's current enrolment in this sequence count. Keeps the AI on the planned thread. Recommended."
+          },
+          "all": {
+            "label": "All exchanges",
+            "detail": "Include every recent interaction with the contact (manual mails, parallel sequences, prior enrolments). Use when out-of-enrolment context matters."
           }
         }
       },
@@ -1159,6 +1218,7 @@
         "saveError": "Save failed",
         "discard": "Discard draft",
         "publish": "Publish",
+        "publishNoDraftTitle": "Edit the sequence first — there's no pending draft to publish.",
         "lockedBanner": "Another user is editing this sequence. You can view it but not make changes.",
         "palette": "Add a step",
         "conditions": {
@@ -1234,6 +1294,18 @@
         "modes": {
           "ai": "AI draft",
           "defined": "Defined message"
+        },
+        "attachments": {
+          "label": "Attachments",
+          "add": "Add file",
+          "uploading": "Uploading…",
+          "remove": "Remove",
+          "help": "PDF only. 15 MB max per file, 4 files max per step.",
+          "errors": {
+            "tooLarge": "This file exceeds 15 MB.",
+            "tooMany": "You've reached the limit of 4 files per step.",
+            "uploadFailed": "Upload failed. Please try again."
+          }
         },
         "branch": {
           "yes": "If yes",

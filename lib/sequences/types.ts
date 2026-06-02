@@ -126,6 +126,27 @@ export type TaskAssignment = {
 /** "ai" → generate a draft on task open ; "defined" → use the stored subject/body. */
 export type MessageMode = "ai" | "defined";
 
+/**
+ * Sprint 12 — Files pre-attached at sequence step level. When the sale
+ * opens the GenerateMessageDialog for a task created by this step, these
+ * files are pre-loaded as attachments. Stored in Supabase Storage under
+ * the shared `message-attachments` bucket with a `step-` prefixed path
+ * so storage RLS keeps org scoping (first path segment = org id).
+ *
+ * Lookup is live (A.3 from sprint planning) : the dialog reads the
+ * current step config each time it opens, no snapshot at task creation.
+ */
+export type SequenceStepAttachmentRef = {
+  /** Path inside the storage bucket — globally unique. */
+  storagePath: string;
+  /** Original filename for display + Gmail MIME. */
+  filename: string;
+  /** MIME type for the Gmail multipart envelope. */
+  mimeType: string;
+  /** Pre-computed byte size for the UI ("brochure.pdf · 2.4 MB"). */
+  sizeBytes: number;
+};
+
 /** send_email / send_linkedin. The step creates a task ; the message is either
  *  AI-generated (deferred to on-open) or a defined localized body. */
 export type SendMessageActionConfig = {
@@ -148,6 +169,12 @@ export type SendMessageActionConfig = {
    * will only resume on the `sequences/task.completed` event.
    */
   awaitTaskTimeoutDays?: number;
+  /**
+   * Sprint 12 — files pre-attached to this step's generated message.
+   * Same on both `ai` and `defined` modes. Empty / omitted = no
+   * pre-attachments.
+   */
+  attachments?: SequenceStepAttachmentRef[];
 };
 
 /** phone_call — a manual call task, no message. */

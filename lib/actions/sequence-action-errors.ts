@@ -77,3 +77,20 @@ export class ContactNotEligibleError extends UserFacingActionError {
     });
   }
 }
+
+/**
+ * Sprint 12 — a step-attachment upload tripped a cap (count, file size,
+ * total bytes) or a MIME filter. The `code` we set here is the wire
+ * code surfaced to the modal AND the body of `redirectParams.reason`
+ * carries the structured violation code from `validateNewStepAttachment`
+ * (e.g. `step_attachment_too_large`) so the modal can render a precise
+ * message.
+ */
+export class StepAttachmentRejectedError extends UserFacingActionError {
+  public readonly code = "STEP_ATTACHMENT_REJECTED";
+  constructor(public readonly reason: string) {
+    super(`Step attachment rejected: ${reason}`, {
+      redirectParams: { reason },
+    });
+  }
+}

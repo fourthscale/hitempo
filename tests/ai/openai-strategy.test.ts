@@ -45,13 +45,15 @@ describe("OpenAiStrategy", () => {
     expect(client.chat.completions.create).toHaveBeenCalledOnce();
   });
 
-  it("forwards maxTokens and temperature to the API call when both are set", async () => {
+  it("forwards maxTokens and temperature to the API call for non-reasoning models", async () => {
     const client = makeFakeClient(async () => ({
       choices: [{ message: { content: "ok" } }],
       usage: { prompt_tokens: 1, completion_tokens: 1 },
     }));
+    // Non-reasoning model : temperature IS forwarded. gpt-5 family
+    // rejects custom temperature so we drop it silently (see next test).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const strategy = new OpenAiStrategy(client as any, "gpt-5-mini", PRICING);
+    const strategy = new OpenAiStrategy(client as any, "gpt-4o-mini", PRICING);
 
     await strategy.generate({
       systemPrompt: "s",
@@ -66,6 +68,20 @@ describe("OpenAiStrategy", () => {
     };
     expect(calledWith.max_completion_tokens).toBe(250);
     expect(calledWith.temperature).toBe(0.1);
+  });
+
+  it("drops temperature on reasoning (gpt-5*) models even when caller set it", async () => {
+    const client = makeFakeClient(async () => ({
+      choices: [{ message: { content: "ok" } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const strategy = new OpenAiStrategy(client as any, "gpt-5-mini", PRICING);
+
+    await strategy.generate({ systemPrompt: "s", userPrompt: "u", temperature: 0.1 });
+
+    const calledWith = client.chat.completions.create.mock.calls[0]![0] as Record<string, unknown>;
+    expect(calledWith).not.toHaveProperty("temperature");
   });
 
   it("omits temperature from the request when not provided (gpt-5 family compatibility)", async () => {

@@ -138,6 +138,13 @@ const taskSchedulingSchema = z
 // (defeating the safety-net purpose). Omit to wait indefinitely.
 const awaitTaskTimeoutDaysSchema = z.number().int().positive().max(180).optional();
 
+const stepAttachmentSchema = z.object({
+  storagePath: z.string().min(1),
+  filename: z.string().min(1),
+  mimeType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+});
+
 const sendMessageConfigSchema = z.object({
   mode: z.enum(["ai", "defined"]),
   channel: z.enum(MESSAGE_CHANNELS),
@@ -150,6 +157,8 @@ const sendMessageConfigSchema = z.object({
   assignment: taskAssignmentSchema,
   scheduling: taskSchedulingSchema,
   awaitTaskTimeoutDays: awaitTaskTimeoutDaysSchema,
+  /** Sprint 12 — pre-attached files. Empty / omitted = no attachments. */
+  attachments: z.array(stepAttachmentSchema).optional(),
 });
 
 const phoneCallConfigSchema = z.object({
