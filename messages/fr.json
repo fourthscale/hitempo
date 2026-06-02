@@ -397,10 +397,6 @@
       "kpis": {
         "actionsToday": "À traiter aujourd'hui",
         "actionsTodayDetail": "{emails} emails · {calls} appels · {visits} visites",
-        "actionsThisWeek": "À traiter cette semaine",
-        "actionsThisWeekDetail": "Hors aujourd'hui · 7 prochains jours",
-        "actionsNextWeek": "À traiter semaine prochaine",
-        "actionsNextWeekDetail": "Jours +8 à +14",
         "overdue": "Relances en retard",
         "overdueDetail": "Plus ancienne : {days, plural, one {# jour} other {# jours}}",
         "overdueDetailNone": "Aucune en retard",
@@ -420,10 +416,17 @@
       },
       "today": {
         "title": "À traiter aujourd'hui",
-        "sortHint": "Triées par priorité IA",
         "viewAll": "Voir toutes les tâches",
         "empty": "Rien à traiter aujourd'hui.",
         "emptyAction": "Créer une tâche →"
+      },
+      "thisWeek": {
+        "title": "À traiter cette semaine",
+        "empty": "Rien de prévu sur les 7 prochains jours."
+      },
+      "nextWeek": {
+        "title": "À traiter semaine prochaine",
+        "empty": "Rien de prévu sur la semaine prochaine."
       },
       "agent": {
         "title": "Agent",

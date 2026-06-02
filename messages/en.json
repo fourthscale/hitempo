@@ -397,10 +397,6 @@
       "kpis": {
         "actionsToday": "To handle today",
         "actionsTodayDetail": "{emails} emails · {calls} calls · {visits} visits",
-        "actionsThisWeek": "To handle this week",
-        "actionsThisWeekDetail": "Excludes today · next 7 days",
-        "actionsNextWeek": "To handle next week",
-        "actionsNextWeekDetail": "Days +8 to +14",
         "overdue": "Overdue follow-ups",
         "overdueDetail": "Oldest: {days, plural, one {# day} other {# days}}",
         "overdueDetailNone": "Nothing overdue",
@@ -420,10 +416,17 @@
       },
       "today": {
         "title": "To handle today",
-        "sortHint": "Sorted by AI priority",
         "viewAll": "View all tasks",
         "empty": "Nothing due today.",
         "emptyAction": "Create a task →"
+      },
+      "thisWeek": {
+        "title": "To handle this week",
+        "empty": "Nothing scheduled for the next 7 days."
+      },
+      "nextWeek": {
+        "title": "To handle next week",
+        "empty": "Nothing scheduled for next week."
       },
       "agent": {
         "title": "Agent",

@@ -4,9 +4,9 @@ import { Mail, RefreshCcw, Phone, CheckCircle2, TrendingUp, Flame, AlertCircle, 
 import { getActiveOrg } from "@/lib/auth/context";
 import {
   getTasksDashboard,
+  getThisWeekTasksDashboard,
+  getNextWeekTasksDashboard,
   countTodayTasksByOrg,
-  countThisWeekTasksByOrg,
-  countNextWeekTasksByOrg,
   countOverdueTasksByOrg,
   getOldestOverdueTaskAgeDays,
   getAgentDashboardStats,
@@ -64,10 +64,10 @@ export default async function DashboardPage() {
 
   const [
     todayTasks,
+    thisWeekTasks,
+    nextWeekTasks,
     recentInteractions,
     actionsToday,
-    actionsThisWeek,
-    actionsNextWeek,
     overdueCount,
     oldestOverdueDays,
     topCompanies,
@@ -78,10 +78,10 @@ export default async function DashboardPage() {
     channelStats,
   ] = await Promise.all([
     getTasksDashboard(orgId, user.id),
+    getThisWeekTasksDashboard(orgId, user.id),
+    getNextWeekTasksDashboard(orgId, user.id),
     getRecentInteractionsByOrg(orgId, 5),
     countTodayTasksByOrg(orgId, user.id),
-    countThisWeekTasksByOrg(orgId, user.id),
-    countNextWeekTasksByOrg(orgId, user.id),
     countOverdueTasksByOrg(orgId, user.id),
     getOldestOverdueTaskAgeDays(orgId, user.id),
     listCompaniesByOrg(orgId),
@@ -192,18 +192,6 @@ export default async function DashboardPage() {
           icon={<CheckCircle2 className="h-4 w-4 text-brand-teal" />}
         />
         <KpiCard
-          label={t("kpis.actionsThisWeek")}
-          value={actionsThisWeek}
-          detail={t("kpis.actionsThisWeekDetail")}
-          icon={<Calendar className="h-4 w-4 text-brand-teal" />}
-        />
-        <KpiCard
-          label={t("kpis.actionsNextWeek")}
-          value={actionsNextWeek}
-          detail={t("kpis.actionsNextWeekDetail")}
-          icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
-        />
-        <KpiCard
           label={t("kpis.overdue")}
           value={overdueCount}
           detail={
@@ -246,14 +234,19 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+        {/* Sprint 12 phase 5 — three task-list cards stacked in the main
+            column : today, this week, next week. Each card mirrors the
+            other two so the sale's eye reads the same vertical pattern
+            (header + list of rows). The row markup is duplicated inline
+            on purpose — extracting it to a helper means passing the
+            three i18n translators down and gains very little, while
+            the duplicated JSX stays cheap to scan. */}
+        <div className="flex flex-col gap-6">
         {/* Today's tasks — anchored so the "X actions vous attendent" subtitle
             link above can scroll the user straight to this section. */}
         <Card id="today-tasks" className="p-6 scroll-mt-6">
           <div className="flex items-start justify-between gap-4 mb-5">
-            <div>
-              <h2 className="font-serif text-2xl font-bold">{t("today.title")}</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">{t("today.sortHint")}</p>
-            </div>
+            <h2 className="font-serif text-2xl font-bold">{t("today.title")}</h2>
             <Link href="/tasks" className="text-sm text-brand-teal hover:underline shrink-0">
               {t("today.viewAll")} →
             </Link>
@@ -273,57 +266,67 @@ export default async function DashboardPage() {
                 const isOverdue = task.dueAt && task.dueAt < new Date(new Date().setHours(0, 0, 0, 0));
                 const grade = scoreGrade(task.company?.score);
                 const typeLabel = tTaskType(task.type as Parameters<typeof tTaskType>[0]);
-
                 return (
                   <li key={task.id} className="py-4 first:pt-0 last:pb-0">
-                    {/* Line 1 — task title (the action to do). Primary, text-sm
-                        font-semibold so it dominates the secondary context below. */}
                     <div className="flex flex-wrap items-center gap-2 text-sm mb-1">
-                      <Icon className={cn(
-                        "h-4 w-4 shrink-0",
-                        isOverdue ? "text-brand-amber" : "text-muted-foreground",
-                      )} />
-                      <Link
-                        href={`/tasks/${task.id}`}
-                        className={cn(
-                          "font-semibold hover:text-brand-teal hover:underline",
-                          isOverdue ? "text-brand-amber" : "text-foreground",
-                        )}
-                      >
+                      <Icon className={cn("h-4 w-4 shrink-0", isOverdue ? "text-brand-amber" : "text-muted-foreground")} />
+                      <Link href={`/tasks/${task.id}`} className={cn("font-semibold hover:text-brand-teal hover:underline", isOverdue ? "text-brand-amber" : "text-foreground")}>
                         {typeLabel} — {task.title}
                       </Link>
-                      {task.type === "follow_up" && (
-                        <RefreshCcw className="h-3 w-3 text-brand-amber" aria-hidden />
-                      )}
+                      {task.type === "follow_up" && (<RefreshCcw className="h-3 w-3 text-brand-amber" aria-hidden />)}
                       {task.company?.score != null && grade && (
-                        <span className={cn(
-                          "inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium",
-                          scoreBadgeClasses(task.company.score),
-                        )}>
+                        <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium", scoreBadgeClasses(task.company.score))}>
                           {tScoring("scoreBadge", { score: task.company.score, grade })}
                         </span>
                       )}
                     </div>
-                    {/* Line 2 — company / contact context. Smaller and muted. */}
                     {task.company && (
                       <div className="text-xs text-muted-foreground pl-6">
-                        <Link href={`/companies/${task.company.id}`} className="font-medium text-foreground hover:text-brand-teal">
-                          {task.company.name}
-                        </Link>
-                        {task.contact && (
-                          <>
-                            {" — "}
-                            <Link href={`/contacts/${task.contact.id}`} className="hover:text-brand-teal">
-                              {resolveContactDisplayName(task.contact)}
-                            </Link>
-                            {task.contact.jobTitle && `, ${task.contact.jobTitle}`}
-                          </>
-                        )}
+                        <Link href={`/companies/${task.company.id}`} className="font-medium text-foreground hover:text-brand-teal">{task.company.name}</Link>
+                        {task.contact && (<>{" — "}<Link href={`/contacts/${task.contact.id}`} className="hover:text-brand-teal">{resolveContactDisplayName(task.contact)}</Link>{task.contact.jobTitle && `, ${task.contact.jobTitle}`}</>)}
                       </div>
                     )}
                     {task.company?.signalType && (
-                      <div className="text-xs text-muted-foreground/80 pl-6 mt-0.5">
-                        {tTasks("signalPrefix", { signal: task.company.signalType })}
+                      <div className="text-xs text-muted-foreground/80 pl-6 mt-0.5">{tTasks("signalPrefix", { signal: task.company.signalType })}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+
+        {/* This week (excludes today) */}
+        <Card className="p-6">
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <h2 className="font-serif text-2xl font-bold">{t("thisWeek.title")}</h2>
+            <Link href="/tasks" className="text-sm text-brand-teal hover:underline shrink-0">{t("today.viewAll")} →</Link>
+          </div>
+          {thisWeekTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">{t("thisWeek.empty")}</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {thisWeekTasks.map((task) => {
+                const Icon = taskIcon(task.type);
+                const grade = scoreGrade(task.company?.score);
+                const typeLabel = tTaskType(task.type as Parameters<typeof tTaskType>[0]);
+                return (
+                  <li key={task.id} className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex flex-wrap items-center gap-2 text-sm mb-1">
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <Link href={`/tasks/${task.id}`} className="font-semibold text-foreground hover:text-brand-teal hover:underline">
+                        {typeLabel} — {task.title}
+                      </Link>
+                      {task.company?.score != null && grade && (
+                        <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium", scoreBadgeClasses(task.company.score))}>
+                          {tScoring("scoreBadge", { score: task.company.score, grade })}
+                        </span>
+                      )}
+                    </div>
+                    {task.company && (
+                      <div className="text-xs text-muted-foreground pl-6">
+                        <Link href={`/companies/${task.company.id}`} className="font-medium text-foreground hover:text-brand-teal">{task.company.name}</Link>
+                        {task.contact && (<>{" — "}<Link href={`/contacts/${task.contact.id}`} className="hover:text-brand-teal">{resolveContactDisplayName(task.contact)}</Link>{task.contact.jobTitle && `, ${task.contact.jobTitle}`}</>)}
                       </div>
                     )}
                   </li>
@@ -332,6 +335,47 @@ export default async function DashboardPage() {
             </ul>
           )}
         </Card>
+
+        {/* Next week (+8 to +14) */}
+        <Card className="p-6">
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <h2 className="font-serif text-2xl font-bold">{t("nextWeek.title")}</h2>
+            <Link href="/tasks" className="text-sm text-brand-teal hover:underline shrink-0">{t("today.viewAll")} →</Link>
+          </div>
+          {nextWeekTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">{t("nextWeek.empty")}</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {nextWeekTasks.map((task) => {
+                const Icon = taskIcon(task.type);
+                const grade = scoreGrade(task.company?.score);
+                const typeLabel = tTaskType(task.type as Parameters<typeof tTaskType>[0]);
+                return (
+                  <li key={task.id} className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex flex-wrap items-center gap-2 text-sm mb-1">
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <Link href={`/tasks/${task.id}`} className="font-semibold text-foreground hover:text-brand-teal hover:underline">
+                        {typeLabel} — {task.title}
+                      </Link>
+                      {task.company?.score != null && grade && (
+                        <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium", scoreBadgeClasses(task.company.score))}>
+                          {tScoring("scoreBadge", { score: task.company.score, grade })}
+                        </span>
+                      )}
+                    </div>
+                    {task.company && (
+                      <div className="text-xs text-muted-foreground pl-6">
+                        <Link href={`/companies/${task.company.id}`} className="font-medium text-foreground hover:text-brand-teal">{task.company.name}</Link>
+                        {task.contact && (<>{" — "}<Link href={`/contacts/${task.contact.id}`} className="hover:text-brand-teal">{resolveContactDisplayName(task.contact)}</Link>{task.contact.jobTitle && `, ${task.contact.jobTitle}`}</>)}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+        </div>
 
         <div className="flex flex-col gap-6">
           {/* Sprint 12 phase 5 — Agent block. Three stats : what's

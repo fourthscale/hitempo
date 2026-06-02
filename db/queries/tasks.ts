@@ -152,17 +152,16 @@ export async function countTodayTasksByOrg(orgId: string, assigneeId?: string | 
 }
 
 /**
- * Sprint 12 phase 5 — "À traiter cette semaine" KPI counter.
- * Pending/in-progress tasks due/scheduled between tomorrow 00:00 and
- * end-of-day-7 (rolling). Excludes today (covered by countTodayTasks)
- * and excludes agent-auto tasks. The "this week" framing matches the
- * agent block's rolling 7-day horizon ; the sale gets the same mental
- * model on both sides of the dashboard.
+ * Sprint 12 phase 5 — "À traiter cette semaine" list block.
+ * Pending/in-progress tasks scheduled between tomorrow 00:00 and
+ * +7 days end-of-day. Excludes today (covered by getTasksDashboard)
+ * and excludes agent-auto tasks. Same with-clause as
+ * getTasksDashboard so the list rows render identically.
  */
-export async function countThisWeekTasksByOrg(
+export async function getThisWeekTasksDashboard(
   orgId: string,
   assigneeId?: string | null,
-): Promise<number> {
+) {
   const now = new Date();
   const startOfTomorrow = new Date(now);
   startOfTomorrow.setHours(0, 0, 0, 0);
@@ -171,12 +170,10 @@ export async function countThisWeekTasksByOrg(
   endOfPlus7Days.setHours(23, 59, 59, 999);
   endOfPlus7Days.setDate(endOfPlus7Days.getDate() + 7);
 
-  const rows = await getDb().query.tasks.findMany({
+  return getDb().query.tasks.findMany({
     where: and(
       eq(tasks.organizationId, orgId),
       or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
-      // Prefer scheduledFor (= when the sale should act) ; fall back
-      // on dueAt when no scheduledFor was set.
       or(
         and(gte(tasks.scheduledFor, startOfTomorrow), lte(tasks.scheduledFor, endOfPlus7Days)),
         and(
@@ -188,20 +185,28 @@ export async function countThisWeekTasksByOrg(
       assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
       isNull(tasks.autoExecutionStatus),
     ),
-    columns: { id: true },
+    with: {
+      company: { columns: { id: true, name: true, score: true, signalType: true, notes: true } },
+      contact: { columns: { id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true } },
+    },
+    orderBy: [
+      // Sort by the effective execution date (scheduledFor falls back
+      // to dueAt) so the agenda reads chronologically.
+      sql`coalesce(${tasks.scheduledFor}, ${tasks.dueAt}) asc nulls last`,
+    ],
+    limit: 10,
   });
-  return rows.length;
 }
 
 /**
- * Sprint 12 phase 5 — "À traiter semaine prochaine" KPI counter.
- * The week starting +8 days from now, +14 days inclusive — same rolling
- * model. Gives the sale a forward look without leaking into "this week".
+ * Sprint 12 phase 5 — "À traiter semaine prochaine" list block.
+ * Same shape, window +8 to +14 days. Gives the sale a forward look
+ * without leaking into "this week".
  */
-export async function countNextWeekTasksByOrg(
+export async function getNextWeekTasksDashboard(
   orgId: string,
   assigneeId?: string | null,
-): Promise<number> {
+) {
   const now = new Date();
   const startOfPlus8 = new Date(now);
   startOfPlus8.setHours(0, 0, 0, 0);
@@ -210,7 +215,7 @@ export async function countNextWeekTasksByOrg(
   endOfPlus14.setHours(23, 59, 59, 999);
   endOfPlus14.setDate(endOfPlus14.getDate() + 14);
 
-  const rows = await getDb().query.tasks.findMany({
+  return getDb().query.tasks.findMany({
     where: and(
       eq(tasks.organizationId, orgId),
       or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
@@ -225,9 +230,13 @@ export async function countNextWeekTasksByOrg(
       assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
       isNull(tasks.autoExecutionStatus),
     ),
-    columns: { id: true },
+    with: {
+      company: { columns: { id: true, name: true, score: true, signalType: true, notes: true } },
+      contact: { columns: { id: true, kind: true, firstName: true, lastName: true, jobTitle: true, email: true } },
+    },
+    orderBy: [sql`coalesce(${tasks.scheduledFor}, ${tasks.dueAt}) asc nulls last`],
+    limit: 10,
   });
-  return rows.length;
 }
 
 export async function countOverdueTasksByOrg(orgId: string, assigneeId?: string | null): Promise<number> {
