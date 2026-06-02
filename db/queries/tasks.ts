@@ -153,33 +153,36 @@ export async function countTodayTasksByOrg(orgId: string, assigneeId?: string | 
 
 /**
  * Sprint 12 phase 5 — "À traiter cette semaine" list block.
- * Pending/in-progress tasks scheduled between tomorrow 00:00 and
- * +7 days end-of-day. Excludes today (covered by getTasksDashboard)
- * and excludes agent-auto tasks. Same with-clause as
- * getTasksDashboard so the list rows render identically.
+ * Pending/in-progress tasks scheduled between tomorrow 00:00 and the
+ * end of Sunday of the current Mon→Sun week. Excludes today (covered
+ * by `getTasksDashboard`) and excludes agent-auto tasks.
+ *
+ * Falls back to empty when today is already Sunday — there's nothing
+ * left "this week" to show, and the next-week card takes over.
  */
 export async function getThisWeekTasksDashboard(
   orgId: string,
   assigneeId?: string | null,
 ) {
   const now = new Date();
+  const { thisWeek } = monToSunWeekBounds(now);
+  // The "today" card already owns today ; bump the start to tomorrow
+  // 00:00 so the same task doesn't appear in two cards at once.
   const startOfTomorrow = new Date(now);
   startOfTomorrow.setHours(0, 0, 0, 0);
   startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-  const endOfPlus7Days = new Date(now);
-  endOfPlus7Days.setHours(23, 59, 59, 999);
-  endOfPlus7Days.setDate(endOfPlus7Days.getDate() + 7);
+  if (startOfTomorrow > thisWeek.end) return [];
 
   return getDb().query.tasks.findMany({
     where: and(
       eq(tasks.organizationId, orgId),
       or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
       or(
-        and(gte(tasks.scheduledFor, startOfTomorrow), lte(tasks.scheduledFor, endOfPlus7Days)),
+        and(gte(tasks.scheduledFor, startOfTomorrow), lte(tasks.scheduledFor, thisWeek.end)),
         and(
           isNull(tasks.scheduledFor),
           gte(tasks.dueAt, startOfTomorrow),
-          lte(tasks.dueAt, endOfPlus7Days),
+          lte(tasks.dueAt, thisWeek.end),
         ),
       ),
       assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
@@ -200,31 +203,24 @@ export async function getThisWeekTasksDashboard(
 
 /**
  * Sprint 12 phase 5 — "À traiter semaine prochaine" list block.
- * Same shape, window +8 to +14 days. Gives the sale a forward look
- * without leaking into "this week".
+ * Pending/in-progress tasks scheduled Monday → Sunday of next week.
  */
 export async function getNextWeekTasksDashboard(
   orgId: string,
   assigneeId?: string | null,
 ) {
-  const now = new Date();
-  const startOfPlus8 = new Date(now);
-  startOfPlus8.setHours(0, 0, 0, 0);
-  startOfPlus8.setDate(startOfPlus8.getDate() + 8);
-  const endOfPlus14 = new Date(now);
-  endOfPlus14.setHours(23, 59, 59, 999);
-  endOfPlus14.setDate(endOfPlus14.getDate() + 14);
+  const { nextWeek } = monToSunWeekBounds(new Date());
 
   return getDb().query.tasks.findMany({
     where: and(
       eq(tasks.organizationId, orgId),
       or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
       or(
-        and(gte(tasks.scheduledFor, startOfPlus8), lte(tasks.scheduledFor, endOfPlus14)),
+        and(gte(tasks.scheduledFor, nextWeek.start), lte(tasks.scheduledFor, nextWeek.end)),
         and(
           isNull(tasks.scheduledFor),
-          gte(tasks.dueAt, startOfPlus8),
-          lte(tasks.dueAt, endOfPlus14),
+          gte(tasks.dueAt, nextWeek.start),
+          lte(tasks.dueAt, nextWeek.end),
         ),
       ),
       assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
@@ -284,11 +280,10 @@ export async function getAgentDashboardStats(
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date(now);
   endOfToday.setHours(23, 59, 59, 999);
-  // Rolling 7-day "this week" window — Sunday/Monday distinction would
-  // be locale-dependent, so we use a simple from-now-to-7-days horizon
-  // which is what "sends scheduled this week" intuitively means to a
-  // sale checking their dashboard on a Wednesday.
-  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  // "This week" = Monday → Sunday of the current calendar week, same
+  // convention as the dashboard's task-list cards. Same horizon for
+  // both sides keeps the sale's mental model consistent.
+  const { thisWeek } = monToSunWeekBounds(now);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const baseAssignee = assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined;
@@ -323,7 +318,7 @@ export async function getAgentDashboardStats(
       where: and(
         eq(tasks.organizationId, orgId),
         eq(tasks.autoExecutionStatus, "pending"),
-        scheduledWithin(startOfToday, sevenDaysFromNow),
+        scheduledWithin(startOfToday, thisWeek.end),
         baseAssignee,
       ),
       columns: { id: true },
@@ -407,9 +402,42 @@ export async function countPendingTasksByOrg(orgId: string, assigneeId?: string)
         eq(tasks.organizationId, orgId),
         or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
         assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
+        // Sprint 12 phase 4 — sidebar badge counts only the tasks the
+        // sale needs to act on. Agent-pipeline tasks are off the
+        // human queue and live on the dashboard's Agent block.
+        isNull(tasks.autoExecutionStatus),
       ),
     );
   return row?.c ?? 0;
+}
+
+/**
+ * Sprint 12 phase 5 — shared helper that returns the [start, end]
+ * timestamps for "this week" (Monday 00:00 → Sunday 23:59:59) and
+ * "next week" (Monday + 7 → Sunday + 7) relative to a given moment.
+ *
+ * `getDay()` returns 0 for Sunday — we shift so Monday=0, Sunday=6 to
+ * compute the offset to Monday cleanly.
+ */
+function monToSunWeekBounds(reference: Date): {
+  thisWeek: { start: Date; end: Date };
+  nextWeek: { start: Date; end: Date };
+} {
+  const monOffset = (reference.getDay() + 6) % 7; // 0 (Mon) … 6 (Sun)
+  const thisWeekMon = new Date(reference);
+  thisWeekMon.setHours(0, 0, 0, 0);
+  thisWeekMon.setDate(thisWeekMon.getDate() - monOffset);
+  const thisWeekSun = new Date(thisWeekMon);
+  thisWeekSun.setDate(thisWeekSun.getDate() + 6);
+  thisWeekSun.setHours(23, 59, 59, 999);
+  const nextWeekMon = new Date(thisWeekMon);
+  nextWeekMon.setDate(nextWeekMon.getDate() + 7);
+  const nextWeekSun = new Date(thisWeekSun);
+  nextWeekSun.setDate(nextWeekSun.getDate() + 7);
+  return {
+    thisWeek: { start: thisWeekMon, end: thisWeekSun },
+    nextWeek: { start: nextWeekMon, end: nextWeekSun },
+  };
 }
 
 export async function getTasksByCompany(orgId: string, companyId: string) {
