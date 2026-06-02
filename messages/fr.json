@@ -1042,6 +1042,20 @@
         "label": "Pièces jointes de l'étape",
         "help": "Ces fichiers proviennent de la configuration de la séquence. Pour les modifier, ouvre l'éditeur de la séquence."
       },
+      "defined": {
+        "title": "Envoyer le message",
+        "subtitle": "À {contact} ({company})",
+        "loading": "Préparation du message…",
+        "insertVariable": "Insérer une variable",
+        "emptyVariableTooltip": "Donnée absente sur ce contact — complète sa fiche pour pouvoir l'insérer.",
+        "warnings": {
+          "missing": "Variables sans valeur ni alternative : {list}. Vérifie la fiche du contact ou édite le message.",
+          "unknown": "Variables inconnues dans le modèle : {list}. Vérifie la configuration de la séquence."
+        },
+        "errors": {
+          "loadFailed": "Impossible de charger le message. Réessaie."
+        }
+      },
       "emptyState": "Choisis tes paramètres et clique sur Générer.",
       "legend": {
         "personalize": "Variables personnalisées",

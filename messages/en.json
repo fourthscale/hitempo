@@ -1042,6 +1042,20 @@
         "label": "Step attachments",
         "help": "These files come from the sequence step's configuration. Open the sequence editor to change them."
       },
+      "defined": {
+        "title": "Send message",
+        "subtitle": "To {contact} ({company})",
+        "loading": "Preparing message…",
+        "insertVariable": "Insert variable",
+        "emptyVariableTooltip": "No data for this contact — complete their record to insert it.",
+        "warnings": {
+          "missing": "Variables without value or fallback: {list}. Check the contact record or edit the message.",
+          "unknown": "Unknown variables in the template: {list}. Check the sequence configuration."
+        },
+        "errors": {
+          "loadFailed": "Could not load the message. Please try again."
+        }
+      },
       "emptyState": "Pick your parameters and click Generate.",
       "legend": {
         "personalize": "Personalized variables",

@@ -605,9 +605,12 @@ export const messages = pgTable(
     content:     text("content").notNull(), // final content after user edits if any
 
     // Single source of truth for provenance (provider/model/tokens/cost) — JOIN llm_usage when needed
-    llmUsageId: uuid("llm_usage_id")
-      .notNull()
-      .references(() => llmUsage.id, { onDelete: "restrict" }),
+    // Sprint 12 phase 3 — nullable. AI-generated messages link to their
+    // `llm_usage` audit row ; messages rendered from a `defined`-mode
+    // sequence step have no LLM call and write NULL here.
+    llmUsageId: uuid("llm_usage_id").references(() => llmUsage.id, {
+      onDelete: "restrict",
+    }),
 
     status: messageStatus("status").notNull().default("draft"),
 

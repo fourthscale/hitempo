@@ -17,6 +17,16 @@ import { getMessageContextResolutionForTask } from "@/db/queries/sequences";
 import { resolveMessageContextScopeWithUserOverride } from "@/lib/sequences/message-context-scope";
 import { resolveLocalizedString } from "@/lib/sequences/locale-resolver";
 import type { SequenceStepAttachmentRef } from "@/lib/sequences/types";
+import {
+  renderTemplate,
+  type TemplateFacts,
+} from "@/lib/messages/template-render";
+import {
+  TEMPLATE_VARIABLES,
+  type TemplateVariableKey,
+} from "@/lib/messages/template-variables";
+import { getCompanyById } from "@/db/queries/companies";
+import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { getDb } from "@/db/client";
 import { LlmGenerationServiceFactory } from "@/lib/ai/llm-generation-service-factory";
 import { GmailServiceFactory } from "@/lib/gmail/gmail-service-factory";
@@ -220,6 +230,225 @@ export async function generateMessageAction(
 }
 
 // ---------------------------------------------------------------------------
+// prefillDefinedMessageAction — Sprint 12 phase 3
+//
+// Sequence steps in `defined` mode carry a templated subject/body (with
+// {{contact.firstName || 'fallback'}} placeholders). When the sale opens
+// a task that came from such a step, we don't want to call the LLM —
+// we want to render the template against the contact + company + sender,
+// hand the result to a "send message" dialog the sale can edit, attach
+// more files to, and send via Gmail. The send/log path is exactly the
+// same as for AI-generated drafts (`sendMessageViaGmailAction` /
+// `logSentInteractionAction`) ; only the *content origin* is different.
+//
+// This action does NO LLM call, NO `llm_usage` row, NO `messages` row.
+// It just resolves what the dialog should display.
+// ---------------------------------------------------------------------------
+
+const prefillSchema = z.object({
+  taskId: z.string().uuid(),
+});
+
+export type DefinedMessageVariable = {
+  /** Canonical key from `TEMPLATE_VARIABLES` (e.g. `contact.firstName`). */
+  key: TemplateVariableKey;
+  /** Resolved value for this specific contact/company/sender. Empty
+   *  string when the underlying fact is null/empty — the picker grays
+   *  the entry in that case. */
+  value: string;
+};
+
+export type PrefillDefinedMessageResult = {
+  contactId: string;
+  companyId: string;
+  channel: MessageChannel;
+  intent: MessageIntent;
+  locale: MessageLocale;
+  /** Rendered subject (template placeholders already substituted). */
+  subject: string;
+  /** Rendered body. */
+  body: string;
+  contactDisplayName: string;
+  companyDisplayName: string;
+  /** For the dialog's annotation overlay — same shape as in AI mode. */
+  annotationContact: {
+    firstName: string | null;
+    lastName: string | null;
+    jobTitle: string | null;
+  };
+  /** Files pre-attached on the step (sent server-side at Gmail send). */
+  stepAttachments: SequenceStepAttachmentRef[];
+  /** All template variables + their resolved values for the picker. */
+  variables: DefinedMessageVariable[];
+  /** Variables referenced in the template but missing AND no fallback —
+   *  the dialog surfaces a warning bandeau. */
+  missingVariables: string[];
+  /** Variables referenced but unknown (typo in the step config). */
+  unknownVariables: string[];
+};
+
+/**
+ * Resolves a localized string against a `(contact, company, organization)`
+ * locale chain. Mirrors what `lib/sequences/locale-resolver.ts` does — kept
+ * inline here to avoid threading the org row through the action signature.
+ */
+function localeFromContext(
+  contactPreferred: string | null,
+  companyPrimary: string | null,
+  orgDefault: string,
+): MessageLocale {
+  const pick = contactPreferred || companyPrimary || orgDefault || "fr";
+  return pick === "en" ? "en" : "fr";
+}
+
+export async function prefillDefinedMessageAction(
+  formData: FormData,
+): Promise<PrefillDefinedMessageResult> {
+  const parsed = prefillSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
+
+  const { activeOrganization, user } = await getActiveOrg();
+
+  // 1. Load the step config for this task. Only sequence-driven tasks
+  //    can be in defined mode ; a free-form task always goes through
+  //    the AI dialog.
+  const ctx = await getMessageContextResolutionForTask(getDb(), parsed.data.taskId);
+  if (!ctx || !ctx.stepActionConfig) {
+    throw new InvalidInputError();
+  }
+  const stepCfg = ctx.stepActionConfig as {
+    mode?: "ai" | "defined";
+    channel?: MessageChannel;
+    intent?: MessageIntent;
+    subject?: unknown;
+    body?: unknown;
+    attachments?: unknown;
+  };
+  if (stepCfg.mode !== "defined") {
+    // Defensive : the client routes by `sourceStepMode` so this shouldn't
+    // happen ; if a race lands here, the dialog falls back to AI.
+    throw new InvalidInputError();
+  }
+
+  // 2. Find the task's contact + company. We query the task minimally
+  //    (just the FKs) then fan out to the existing per-entity loaders so
+  //    we get the same shape the AI dialog uses elsewhere.
+  const taskRow = await getDb().query.tasks.findFirst({
+    where: (t, { and: a, eq: e }) =>
+      a(e(t.id, parsed.data.taskId), e(t.organizationId, activeOrganization.id)),
+    columns: { contactId: true, companyId: true },
+  });
+  if (!taskRow?.contactId || !taskRow.companyId) throw new InvalidInputError();
+
+  const [contactRow, companyRow] = await Promise.all([
+    getContactById(activeOrganization.id, taskRow.contactId),
+    getCompanyById(activeOrganization.id, taskRow.companyId),
+  ]);
+  if (!contactRow || !companyRow) throw new InvalidInputError();
+
+  // 3. Resolve locale + sender + facts.
+  const locale = localeFromContext(
+    contactRow.preferredLanguage,
+    companyRow.primaryLocale,
+    activeOrganization.defaultLocale,
+  );
+  const sender = getSenderName(user);
+
+  const contactFullName = resolveContactDisplayName({
+    kind: contactRow.kind,
+    firstName: contactRow.firstName,
+    lastName: contactRow.lastName,
+    email: contactRow.email,
+  });
+  const senderFullName = [sender.firstName, sender.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  const facts: TemplateFacts = {
+    "contact.firstName": contactRow.firstName,
+    "contact.lastName": contactRow.lastName,
+    "contact.fullName": contactFullName,
+    "contact.jobTitle": contactRow.jobTitle,
+    "company.name": companyRow.name,
+    "company.signalType": companyRow.signalType,
+    "sender.firstName": sender.firstName,
+    "sender.lastName": sender.lastName,
+    "sender.fullName": senderFullName,
+  };
+
+  // 4. Resolve the LocalizedString subject + body to the target locale,
+  //    then render template placeholders.
+  const subjectTemplate = resolveLocalizedString(
+    (stepCfg.subject as Parameters<typeof resolveLocalizedString>[0]) ?? "",
+    {
+      contact: { preferredLanguage: locale },
+      company: { primaryLocale: locale },
+      organization: { defaultLocale: locale },
+    },
+  );
+  const bodyTemplate = resolveLocalizedString(
+    (stepCfg.body as Parameters<typeof resolveLocalizedString>[0]) ?? "",
+    {
+      contact: { preferredLanguage: locale },
+      company: { primaryLocale: locale },
+      organization: { defaultLocale: locale },
+    },
+  );
+
+  const rendSubject = renderTemplate(subjectTemplate, facts);
+  const rendBody = renderTemplate(bodyTemplate, facts);
+
+  // 5. Extract step attachments (validate the array shape defensively).
+  const stepAttachments: SequenceStepAttachmentRef[] = Array.isArray(stepCfg.attachments)
+    ? (stepCfg.attachments as unknown[]).filter(
+        (a): a is SequenceStepAttachmentRef =>
+          a != null &&
+          typeof a === "object" &&
+          typeof (a as { storagePath?: unknown }).storagePath === "string" &&
+          typeof (a as { filename?: unknown }).filename === "string" &&
+          typeof (a as { mimeType?: unknown }).mimeType === "string" &&
+          typeof (a as { sizeBytes?: unknown }).sizeBytes === "number",
+      )
+    : [];
+
+  // 6. Build the variables list for the dialog's "Insert variable" picker.
+  const variables: DefinedMessageVariable[] = TEMPLATE_VARIABLES.map((v) => ({
+    key: v.key,
+    value: typeof facts[v.key] === "string" ? (facts[v.key] as string) : "",
+  }));
+
+  // 7. Merge missing/unknown sets from subject + body for the warning UI.
+  const missing = Array.from(
+    new Set([...rendSubject.missingVariables, ...rendBody.missingVariables]),
+  );
+  const unknownVars = Array.from(
+    new Set([...rendSubject.unknownVariables, ...rendBody.unknownVariables]),
+  );
+
+  return {
+    contactId: taskRow.contactId,
+    companyId: taskRow.companyId,
+    channel: stepCfg.channel ?? "email",
+    intent: stepCfg.intent ?? "first_contact",
+    locale,
+    subject: rendSubject.text,
+    body: rendBody.text,
+    contactDisplayName: contactFullName,
+    companyDisplayName: companyRow.name,
+    annotationContact: {
+      firstName: contactRow.firstName,
+      lastName: contactRow.lastName,
+      jobTitle: contactRow.jobTitle,
+    },
+    stepAttachments,
+    variables,
+    missingVariables: missing,
+    unknownVariables: unknownVars,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Commit a generated message — shared schema + helper
 // ---------------------------------------------------------------------------
 
@@ -236,7 +465,12 @@ const commitSchema = z.object({
   channelIntent: z.enum(channelIntentValues),
   locale: z.enum(["fr", "en"]),
   content: z.string().min(1).max(20_000),
-  llmUsageId: z.string().uuid(),
+  /**
+   * Sprint 12 phase 3 — nullable / optional. Defined-mode messages post
+   * an empty string (no LLM call → no `llm_usage` row). The AI flow
+   * always sends a real UUID it got from `generateMessageAction`.
+   */
+  llmUsageId: z.string().uuid().or(z.literal("")).optional(),
   orientation: z.string().max(500).optional().or(z.literal("")),
 });
 
@@ -405,6 +639,11 @@ async function persistSentMessage(args: {
     data.orientation && data.orientation !== "" ? data.orientation : null;
 
   // 1. Persist the message row — sent state from the start, no draft phase.
+  //    Defined-mode commits arrive with `llmUsageId` empty/undefined ;
+  //    normalise to null for the DB column (nullable since Sprint 12 phase 3).
+  const llmUsageId =
+    data.llmUsageId && data.llmUsageId !== "" ? data.llmUsageId : null;
+
   const inserted = await insertMessage(orgId, {
     contactId: data.contactId,
     companyId: data.companyId,
@@ -415,21 +654,24 @@ async function persistSentMessage(args: {
     locale: data.locale,
     orientation,
     content: data.content,
-    llmUsageId: data.llmUsageId,
+    llmUsageId,
     sentAt: new Date(),
     gmailThreadId: gmail?.threadId ?? null,
     gmailMessageId: gmail?.messageId ?? null,
   });
 
   // 2. Patch the llm_usage backref — best-effort, never blocks the commit.
-  try {
-    await LlmGenerationServiceFactory.getInstance().linkUsageToEntity(
-      data.llmUsageId,
-      "message",
-      inserted.id,
-    );
-  } catch (err) {
-    console.error("[persistSentMessage] linkUsageToEntity failed (non-fatal)", err);
+  //    Skipped entirely for defined-mode messages (no usage row to patch).
+  if (llmUsageId) {
+    try {
+      await LlmGenerationServiceFactory.getInstance().linkUsageToEntity(
+        llmUsageId,
+        "message",
+        inserted.id,
+      );
+    } catch (err) {
+      console.error("[persistSentMessage] linkUsageToEntity failed (non-fatal)", err);
+    }
   }
 
   // 3. Log the outbound interaction. messageId points back at the freshly

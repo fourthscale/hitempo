@@ -149,6 +149,8 @@ export default async function TaskDetailPage({
                     : ("sequence" as const),
               }
             : undefined,
+          // Sprint 12 phase 3 — defined-mode steps open SendDefinedMessageDialog.
+          sourceStepMode: task.sourceStepMode ?? null,
         }
       : undefined;
 

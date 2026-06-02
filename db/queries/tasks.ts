@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNull, lt, lte, gte, or, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
-import { companies, contacts, tasks, sequenceStepExecutions } from "@/db/schema";
+import { companies, contacts, tasks, sequenceStepExecutions, sequenceSteps } from "@/db/schema";
 
 export type TaskWithContext = Awaited<ReturnType<typeof getTasksByOrg>>[number];
 
@@ -62,11 +62,14 @@ export async function getTasksByOrg(
   // that came from a sequence. The UI displays this — not the enrolment's
   // current cursor — so a task still pending shows "Étape 1 sur 3" instead
   // of "Étape 2 sur 3" (the engine has technically advanced).
+  // Sprint 12 phase 3 — also attach `sourceStepMode` so the task action
+  // menu can route to the right dialog (AI vs defined-template).
   const taskIds = rows.filter((r) => r.sequenceEnrolmentId).map((r) => r.id);
-  const stepOrderByTaskId = await loadSourceStepOrderForTasks(taskIds);
+  const infoByTaskId = await loadSourceStepInfoForTasks(taskIds);
   return rows.map((r) => ({
     ...r,
-    sourceStepOrder: r.id ? stepOrderByTaskId.get(r.id) ?? null : null,
+    sourceStepOrder: r.id ? infoByTaskId.get(r.id)?.stepOrder ?? null : null,
+    sourceStepMode: r.id ? infoByTaskId.get(r.id)?.mode ?? null : null,
   }));
 }
 
@@ -76,20 +79,28 @@ export async function getTasksByOrg(
  * for an empty input. Engine-private (no org filter) — callers must
  * already have scoped their `tasks` query.
  */
-async function loadSourceStepOrderForTasks(
+async function loadSourceStepInfoForTasks(
   taskIds: string[],
-): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
+): Promise<Map<string, { stepOrder: number; mode: "ai" | "defined" | null }>> {
+  const map = new Map<string, { stepOrder: number; mode: "ai" | "defined" | null }>();
   if (taskIds.length === 0) return map;
+  // Join sequence_step_executions → sequence_steps to read `action_config.mode`.
+  // Steps that aren't send_email / send_linkedin have no mode → null.
   const rows = await getDb()
     .select({
       taskId: sequenceStepExecutions.taskId,
       stepOrder: sequenceStepExecutions.stepOrder,
+      actionConfig: sequenceSteps.actionConfig,
     })
     .from(sequenceStepExecutions)
+    .innerJoin(sequenceSteps, eq(sequenceSteps.id, sequenceStepExecutions.stepId))
     .where(inArray(sequenceStepExecutions.taskId, taskIds));
   for (const r of rows) {
-    if (r.taskId) map.set(r.taskId, r.stepOrder);
+    if (!r.taskId) continue;
+    const rawMode = (r.actionConfig as { mode?: unknown } | null)?.mode;
+    const mode: "ai" | "defined" | null =
+      rawMode === "ai" || rawMode === "defined" ? rawMode : null;
+    map.set(r.taskId, { stepOrder: r.stepOrder, mode });
   }
   return map;
 }
@@ -401,10 +412,16 @@ export async function getTaskDetail(orgId: string, taskId: string) {
   if (!row) return null;
   // Same enrichment as getTasksByOrg : surface the step that created the
   // task so the UI shows it instead of the engine's already-advanced cursor.
-  const stepOrderByTaskId = row.sequenceEnrolmentId
-    ? await loadSourceStepOrderForTasks([row.id])
-    : new Map<string, number>();
-  return { ...row, sourceStepOrder: stepOrderByTaskId.get(row.id) ?? null };
+  // Sprint 12 phase 3 — also expose `sourceStepMode` for AI-vs-defined routing.
+  const infoByTaskId = row.sequenceEnrolmentId
+    ? await loadSourceStepInfoForTasks([row.id])
+    : new Map<string, { stepOrder: number; mode: "ai" | "defined" | null }>();
+  const info = infoByTaskId.get(row.id);
+  return {
+    ...row,
+    sourceStepOrder: info?.stepOrder ?? null,
+    sourceStepMode: info?.mode ?? null,
+  };
 }
 
 export type TaskDetail = NonNullable<Awaited<ReturnType<typeof getTaskDetail>>>;

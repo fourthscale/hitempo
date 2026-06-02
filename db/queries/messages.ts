@@ -44,7 +44,12 @@ export type InsertMessageInput = {
   locale: string;
   orientation: string | null;
   content: string;
-  llmUsageId: string;
+  /**
+   * FK to `llm_usage`. Nullable since Sprint 12 phase 3 — defined-mode
+   * messages (rendered from a template, no LLM call) carry no usage row.
+   * The AI flow always sets this to a real id.
+   */
+  llmUsageId: string | null;
   /** Always "sent" since the row is only created when the user commits.
    *  Kept as a parameter so the caller is explicit about it. */
   status?: "sent";

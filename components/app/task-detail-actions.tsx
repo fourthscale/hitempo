@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { TaskInteractionDialog } from "@/components/app/task-interaction-dialog";
 import { GenerateMessageDialog } from "@/components/app/generate-message-dialog";
+import { SendDefinedMessageDialog } from "@/components/app/send-defined-message-dialog";
 import { updateTaskStatusAction, deleteTaskAction } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
 import type { TaskGenerateContext } from "@/components/app/task-row-actions";
@@ -88,28 +89,37 @@ export function TaskDetailActions({
       )}
 
       {generate && companyId && contactId && (
-        <GenerateMessageDialog
-          open={generateOpen}
-          onOpenChange={setGenerateOpen}
-          mode="task"
-          taskId={taskId}
-          contactId={contactId}
-          companyId={companyId}
-          contactDisplayName={generate.contactDisplayName}
-          companyDisplayName={generate.companyDisplayName}
-          annotationContact={{
-            firstName: generate.contactFirstName,
-            lastName: generate.contactLastName,
-            jobTitle: generate.contactJobTitle,
-          }}
-          defaultChannelIntent={generate.defaultChannelIntent}
-          defaultLocale={generate.defaultLocale}
-          preferredLocaleHint={generate.preferredLocaleHint}
-          detectedSignal={generate.detectedSignal}
-          brandBriefStatus={generate.brandBriefStatus}
-          gmail={generate.gmail}
-          sequenceContext={generate.sequenceContext}
-        />
+        generate.sourceStepMode === "defined" ? (
+          <SendDefinedMessageDialog
+            open={generateOpen}
+            onOpenChange={setGenerateOpen}
+            taskId={taskId}
+            gmail={generate.gmail}
+          />
+        ) : (
+          <GenerateMessageDialog
+            open={generateOpen}
+            onOpenChange={setGenerateOpen}
+            mode="task"
+            taskId={taskId}
+            contactId={contactId}
+            companyId={companyId}
+            contactDisplayName={generate.contactDisplayName}
+            companyDisplayName={generate.companyDisplayName}
+            annotationContact={{
+              firstName: generate.contactFirstName,
+              lastName: generate.contactLastName,
+              jobTitle: generate.contactJobTitle,
+            }}
+            defaultChannelIntent={generate.defaultChannelIntent}
+            defaultLocale={generate.defaultLocale}
+            preferredLocaleHint={generate.preferredLocaleHint}
+            detectedSignal={generate.detectedSignal}
+            brandBriefStatus={generate.brandBriefStatus}
+            gmail={generate.gmail}
+            sequenceContext={generate.sequenceContext}
+          />
+        )
       )}
 
       <div className="space-y-3">

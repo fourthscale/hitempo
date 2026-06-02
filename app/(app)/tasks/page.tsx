@@ -485,6 +485,9 @@ async function TaskRow({
                     : ("sequence" as const),
               }
             : undefined,
+          // Sprint 12 phase 3 — route to SendDefinedMessageDialog when
+          // the source step is in `defined` mode (no LLM call).
+          sourceStepMode: task.sourceStepMode ?? null,
         }
       : undefined;
 

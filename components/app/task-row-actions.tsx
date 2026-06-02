@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TaskInteractionDialog } from "@/components/app/task-interaction-dialog";
 import { GenerateMessageDialog } from "@/components/app/generate-message-dialog";
+import { SendDefinedMessageDialog } from "@/components/app/send-defined-message-dialog";
 import { updateTaskStatusAction, deleteTaskAction } from "@/lib/actions/tasks";
 import type { BrandBriefStatus } from "@/db/queries/brand";
 import type { ChannelIntent, MessageLocale } from "@/lib/messages/types";
@@ -56,6 +57,13 @@ export type TaskGenerateContext = {
     sequenceName: string;
     resolvedScope: "sequence" | "all";
   };
+  /**
+   * Sprint 12 phase 3 — when the task comes from a sequence step in
+   * `defined` mode, we open `SendDefinedMessageDialog` (renders the
+   * step's template) instead of the AI generation dialog. `null` (or
+   * "ai") falls through to the AI dialog.
+   */
+  sourceStepMode?: "ai" | "defined" | null;
 };
 
 export function TaskRowActions({
@@ -124,28 +132,39 @@ export function TaskRowActions({
       )}
 
       {generate && companyId && contactId && (
-        <GenerateMessageDialog
-          open={generateOpen}
-          onOpenChange={setGenerateOpen}
-          mode="task"
-          taskId={taskId}
-          contactId={contactId}
-          companyId={companyId}
-          contactDisplayName={generate.contactDisplayName}
-          companyDisplayName={generate.companyDisplayName}
-          annotationContact={{
-            firstName: generate.contactFirstName,
-            lastName: generate.contactLastName,
-            jobTitle: generate.contactJobTitle,
-          }}
-          defaultChannelIntent={generate.defaultChannelIntent}
-          defaultLocale={generate.defaultLocale}
-          preferredLocaleHint={generate.preferredLocaleHint}
-          detectedSignal={generate.detectedSignal}
-          brandBriefStatus={generate.brandBriefStatus}
-          gmail={generate.gmail}
-          sequenceContext={generate.sequenceContext}
-        />
+        generate.sourceStepMode === "defined" ? (
+          // Sprint 12 phase 3 — defined-mode step → render template +
+          // send, no LLM round-trip.
+          <SendDefinedMessageDialog
+            open={generateOpen}
+            onOpenChange={setGenerateOpen}
+            taskId={taskId}
+            gmail={generate.gmail}
+          />
+        ) : (
+          <GenerateMessageDialog
+            open={generateOpen}
+            onOpenChange={setGenerateOpen}
+            mode="task"
+            taskId={taskId}
+            contactId={contactId}
+            companyId={companyId}
+            contactDisplayName={generate.contactDisplayName}
+            companyDisplayName={generate.companyDisplayName}
+            annotationContact={{
+              firstName: generate.contactFirstName,
+              lastName: generate.contactLastName,
+              jobTitle: generate.contactJobTitle,
+            }}
+            defaultChannelIntent={generate.defaultChannelIntent}
+            defaultLocale={generate.defaultLocale}
+            preferredLocaleHint={generate.preferredLocaleHint}
+            detectedSignal={generate.detectedSignal}
+            brandBriefStatus={generate.brandBriefStatus}
+            gmail={generate.gmail}
+            sequenceContext={generate.sequenceContext}
+          />
+        )
       )}
 
       <DropdownMenu>
