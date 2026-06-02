@@ -1370,6 +1370,8 @@
           "label": "Attribution",
           "sales": "Commercial",
           "agent": "Agent",
+          "agentHint": "L'agent enverra l'email automatiquement via le compte Gmail du commercial assigné, à l'heure planifiée. En cas d'échec (Gmail non connecté, etc.) la tâche revient en manuel.",
+          "agentEmailOnly": "L'agent ne peut auto-traiter que des emails.",
           "owner": "Propriétaire du compte / contact",
           "specific": "Commercial spécifique"
         },

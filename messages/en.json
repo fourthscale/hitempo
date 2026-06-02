@@ -1370,6 +1370,8 @@
           "label": "Assignment",
           "sales": "Sales",
           "agent": "Agent",
+          "agentHint": "The agent will send the email automatically via the assigned sale's connected Gmail account, at the scheduled time. On failure (Gmail not connected, etc.) the task falls back to manual.",
+          "agentEmailOnly": "The agent can only auto-execute email steps.",
           "owner": "Account / contact owner",
           "specific": "Specific user"
         },

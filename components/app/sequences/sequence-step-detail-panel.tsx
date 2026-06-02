@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Label } from "@/components/ui/label";
@@ -115,6 +115,10 @@ export function SequenceStepDetailPanel({
         <AssignmentField
           assignment={(step.actionConfig as { assignment?: TaskAssignment }).assignment}
           orgMembers={orgMembers}
+          // Sprint 12 phase 4 — agent auto-execution is only wired for
+          // `send_email`. LinkedIn (no public API) and phone_call (real
+          // human) always stay manual.
+          actorAgentEnabled={step.actionType === "send_email"}
           onChange={(a) => patchConfig({ assignment: a })}
         />
       )}
@@ -470,19 +474,35 @@ export function SequenceStepDetailPanel({
 function AssignmentField({
   assignment,
   orgMembers,
+  actorAgentEnabled,
   onChange,
 }: {
   assignment: TaskAssignment | undefined;
   orgMembers: { id: string; name: string }[];
+  /** Sprint 12 phase 4 — true on `send_email` steps only. Other action
+   *  types (LinkedIn, phone) can't be auto-executed and the toggle is
+   *  greyed out with an explanatory tooltip. */
+  actorAgentEnabled: boolean;
   onChange: (a: TaskAssignment) => void;
 }) {
   const t = useTranslations("pages.sequences");
   const a: TaskAssignment = assignment ?? { actor: "sales", assignTo: "owner" };
 
+  // Defensive : if the actor is "agent" but the action type no longer
+  // supports it (the user flipped the channel from email to phone, for
+  // example), bounce back to sales so the engine doesn't see an
+  // inconsistent config at publish time. Runs in an effect to avoid
+  // setState-during-render.
+  useEffect(() => {
+    if (!actorAgentEnabled && a.actor === "agent") {
+      onChange({ ...a, actor: "sales" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actorAgentEnabled, a.actor]);
+
   return (
     <div className="space-y-2 border-t border-border pt-4">
       <Label>{t("editor.assign.label")}</Label>
-      {/* Sale / Agent — Agent disabled (acts on behalf of the rep, coming soon). */}
       <div className="flex gap-2">
         <button
           type="button"
@@ -495,13 +515,28 @@ function AssignmentField({
         </button>
         <button
           type="button"
-          disabled
-          title={t("editor.comingSoon")}
-          className="flex-1 cursor-not-allowed rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground opacity-50"
+          disabled={!actorAgentEnabled}
+          title={actorAgentEnabled ? undefined : t("editor.assign.agentEmailOnly")}
+          onClick={() => onChange({ ...a, actor: "agent" })}
+          className={`flex-1 rounded-md border px-3 py-1.5 text-sm transition-colors ${
+            !actorAgentEnabled
+              ? "cursor-not-allowed border-border text-muted-foreground opacity-50"
+              : a.actor === "agent"
+                ? "border-brand-teal bg-brand-teal/10"
+                : "border-border"
+          }`}
         >
-          {t("editor.assign.agent")} ({t("editor.comingSoon")})
+          {t("editor.assign.agent")}
         </button>
       </div>
+
+      {/* Sprint 12 phase 4 — explain what "agent" actually does so the
+          sale knows their Gmail account will be used to send. */}
+      {a.actor === "agent" && (
+        <p className="text-[11px] text-muted-foreground">
+          {t("editor.assign.agentHint")}
+        </p>
+      )}
 
       <select
         className={selectCls}
