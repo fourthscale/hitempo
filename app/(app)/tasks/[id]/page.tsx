@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations, getLocale } from "next-intl/server";
 import {
-  Mail, Phone, MapPin, RefreshCcw, Search, Calendar, User, AlertTriangle, Workflow,
+  Mail, Phone, MapPin, RefreshCcw, Search, Calendar, User, AlertTriangle, Workflow, Bot,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
@@ -188,12 +188,23 @@ export default async function TaskDetailPage({
             {typeLabel} · {task.title}
           </h1>
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className={cn(
-              "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
-              statusBadge[safeStatus].className,
-            )}>
-              {statusBadge[safeStatus].label}
-            </span>
+            {/* Sprint 12 phase 4 — when in the agent pipeline, the
+                "Agent auto" badge replaces the regular status pill ;
+                the regular pending label is meaningless because the
+                human isn't supposed to act. */}
+            {task.autoExecutionStatus === "pending" ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-800">
+                <Bot className="h-3 w-3" />
+                {t("agentAutoExecBadge")}
+              </span>
+            ) : (
+              <span className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                statusBadge[safeStatus].className,
+              )}>
+                {statusBadge[safeStatus].label}
+              </span>
+            )}
 
             <span className={cn(
               "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
@@ -432,6 +443,7 @@ export default async function TaskDetailPage({
               companyName={task.company?.name ?? null}
               contactId={task.contact?.id ?? null}
               generate={generateCtx}
+              isAgentPending={task.autoExecutionStatus === "pending"}
               labels={{
                 statusSection: t("actions.statusSection"),
                 pending: t("actions.pending"),
@@ -443,6 +455,7 @@ export default async function TaskDetailPage({
                 edit: t("actions.edit"),
                 delete: t("actions.delete"),
                 deleteConfirm: t("detail.deleteConfirm"),
+                takeOverAgent: t("actions.takeOverAgent"),
               }}
             />
           </Card>

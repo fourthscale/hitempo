@@ -4,13 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Circle, Clock, CheckCircle2, MessageSquarePlus, Sparkles, Pencil, Trash2, Send,
+  Circle, Clock, CheckCircle2, MessageSquarePlus, Sparkles, Pencil, Trash2, Send, Hand,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TaskInteractionDialog } from "@/components/app/task-interaction-dialog";
 import { GenerateMessageDialog } from "@/components/app/generate-message-dialog";
 import { SendDefinedMessageDialog } from "@/components/app/send-defined-message-dialog";
-import { updateTaskStatusAction, deleteTaskAction } from "@/lib/actions/tasks";
+import { updateTaskStatusAction, deleteTaskAction, takeOverAgentTaskAction } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
 import type { TaskGenerateContext } from "@/components/app/task-row-actions";
 
@@ -29,6 +29,7 @@ export function TaskDetailActions({
   companyName,
   contactId,
   generate,
+  isAgentPending = false,
   labels,
 }: {
   taskId: string;
@@ -37,6 +38,11 @@ export function TaskDetailActions({
   companyName?: string | null;
   contactId?: string | null;
   generate?: TaskGenerateContext;
+  /** Sprint 12 phase 4 — collapses the action panel to a single
+   *  "Take over" button when the task is in the agent auto-execution
+   *  pipeline. Status changes, generate-message and other operations
+   *  don't make sense while the system owns the task. */
+  isAgentPending?: boolean;
   labels: {
     statusSection: string;
     pending: string;
@@ -48,6 +54,7 @@ export function TaskDetailActions({
     edit: string;
     delete: string;
     deleteConfirm: string;
+    takeOverAgent: string;
   };
 }) {
   const router = useRouter();
@@ -69,6 +76,13 @@ export function TaskDetailActions({
     fd.append("taskId", taskId);
     await deleteTaskAction(fd);
     router.push("/tasks");
+  }
+
+  async function handleTakeOver() {
+    const fd = new FormData();
+    fd.append("taskId", taskId);
+    await takeOverAgentTaskAction(fd);
+    router.refresh();
   }
 
   const statusLabels: Record<TaskStatus, string> = {
@@ -124,6 +138,24 @@ export function TaskDetailActions({
         />
       )}
 
+      {/* Sprint 12 phase 4 — when the task is in the agent pipeline,
+          collapse the whole action panel to a single "Take over" CTA.
+          The sale isn't supposed to act on the task while the system
+          owns it ; if they want to act, they take over first and the
+          full panel becomes available again on refresh. */}
+      {isAgentPending ? (
+        <div className="space-y-3">
+          <Button
+            variant="default"
+            size="sm"
+            className="w-full justify-start gap-2"
+            onClick={handleTakeOver}
+          >
+            <Hand className="h-4 w-4" />
+            {labels.takeOverAgent}
+          </Button>
+        </div>
+      ) : (
       <div className="space-y-3">
         {/* Inline status buttons */}
         <div>
@@ -209,6 +241,7 @@ export function TaskDetailActions({
           </Button>
         </div>
       </div>
+      )}
     </>
   );
 }

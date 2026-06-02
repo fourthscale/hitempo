@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTranslations, getLocale } from "next-intl/server";
 import {
   Mail, Phone, MapPin, RefreshCcw, Search, Calendar,
-  ChevronDown, LayoutList, LayoutGrid, Plus, User, Workflow,
+  ChevronDown, LayoutList, LayoutGrid, Plus, User, Workflow, Bot,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
@@ -603,6 +603,9 @@ async function TaskRow({
                 evaluated). No badge needed.
               - failed : agent tried + failed (no Gmail, LLM error…).
                 Show the reason so the sale knows to take over. */}
+        {/* Pending agent state is shown via the status pill instead — see
+            the badge logic below. Failed agent state stays inline here
+            so the sale sees the reason next to the row context. */}
         {task.autoExecutionStatus === "failed" && (
           <div
             className="mt-1 inline-flex max-w-full items-start gap-1.5 rounded bg-rose-50 px-1.5 py-0.5 text-[11px] text-rose-700"
@@ -612,11 +615,6 @@ async function TaskRow({
             {task.autoExecutionError && (
               <span className="truncate">{task.autoExecutionError}</span>
             )}
-          </div>
-        )}
-        {task.autoExecutionStatus === "pending" && (
-          <div className="mt-1 inline-flex items-center gap-1.5 rounded bg-sky-50 px-1.5 py-0.5 text-[11px] text-sky-700">
-            {t("agentAutoExecPendingBadge")}
           </div>
         )}
 
@@ -644,13 +642,24 @@ async function TaskRow({
         )}
       </div>
 
-      {/* Status badge */}
-      <span className={cn(
-        "inline-flex items-center shrink-0 mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-medium",
-        statusBadge[safeStatus].className,
-      )}>
-        {statusBadge[safeStatus].label}
-      </span>
+      {/* Status badge — replaced by an "Agent Auto" badge when the task
+          is in the agent auto-execution pipeline (the regular pending
+          label is meaningless since the human isn't supposed to act on
+          it). The same badge replaces the inline pending-state hint
+          rendered earlier in the row. */}
+      {task.autoExecutionStatus === "pending" ? (
+        <span className="inline-flex items-center gap-1 shrink-0 mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-100 text-sky-800">
+          <Bot className="h-3 w-3" />
+          {t("agentAutoExecBadge")}
+        </span>
+      ) : (
+        <span className={cn(
+          "inline-flex items-center shrink-0 mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-medium",
+          statusBadge[safeStatus].className,
+        )}>
+          {statusBadge[safeStatus].label}
+        </span>
+      )}
 
       <TaskRowActions
         taskId={task.id}
@@ -659,6 +668,7 @@ async function TaskRow({
         companyName={task.company?.name ?? null}
         contactId={task.contact?.id ?? null}
         generate={generateCtx}
+        isAgentPending={task.autoExecutionStatus === "pending"}
         labels={{
           statusSection: t("actions.statusSection"),
           pending: t("actions.pending"),
@@ -669,6 +679,7 @@ async function TaskRow({
           sendDefinedMessage: tMessages("actions.sendDefinedMessage"),
           edit: t("actions.edit"),
           delete: t("actions.delete"),
+          takeOverAgent: t("actions.takeOverAgent"),
         }}
       />
     </div>

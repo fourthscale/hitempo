@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   MoreHorizontal, Pencil, Trash2, Circle, Clock, CheckCircle2,
-  MessageSquarePlus, Sparkles, Send,
+  MessageSquarePlus, Sparkles, Send, Hand, Bot,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -16,7 +16,7 @@ import {
 import { TaskInteractionDialog } from "@/components/app/task-interaction-dialog";
 import { GenerateMessageDialog } from "@/components/app/generate-message-dialog";
 import { SendDefinedMessageDialog } from "@/components/app/send-defined-message-dialog";
-import { updateTaskStatusAction, deleteTaskAction } from "@/lib/actions/tasks";
+import { updateTaskStatusAction, deleteTaskAction, takeOverAgentTaskAction } from "@/lib/actions/tasks";
 import type { BrandBriefStatus } from "@/db/queries/brand";
 import type { ChannelIntent, MessageLocale } from "@/lib/messages/types";
 
@@ -73,6 +73,13 @@ export function TaskRowActions({
   companyName,
   contactId,
   generate,
+  /**
+   * Sprint 12 phase 4 — when true, this task is sitting in the agent
+   * auto-execution pipeline (`auto_execution_status = "pending"`).
+   * The menu collapses to a single "Take over" item that clears the
+   * flag so the sale handles it manually.
+   */
+  isAgentPending = false,
   labels,
 }: {
   taskId: string;
@@ -82,6 +89,7 @@ export function TaskRowActions({
   contactId?: string | null;
   /** Present iff the task is message-eligible and has a contact. */
   generate?: TaskGenerateContext;
+  isAgentPending?: boolean;
   labels: {
     statusSection: string;
     pending: string;
@@ -92,6 +100,7 @@ export function TaskRowActions({
     sendDefinedMessage: string;
     edit: string;
     delete: string;
+    takeOverAgent: string;
   };
 }) {
   const router = useRouter();
@@ -114,6 +123,13 @@ export function TaskRowActions({
     const fd = new FormData();
     fd.append("taskId", taskId);
     await deleteTaskAction(fd);
+    router.refresh();
+  }
+
+  async function handleTakeOver() {
+    const fd = new FormData();
+    fd.append("taskId", taskId);
+    await takeOverAgentTaskAction(fd);
     router.refresh();
   }
 
@@ -180,6 +196,17 @@ export function TaskRowActions({
           <MoreHorizontal className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
+          {/* Sprint 12 phase 4 — agent-pending tasks collapse to a single
+              "Take over" action. Status changes, generate-message and
+              other operations don't make sense while the system owns
+              the task ; if the sale wants to act, they take over first. */}
+          {isAgentPending ? (
+            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={handleTakeOver}>
+              <Hand className="h-3.5 w-3.5 text-sky-600" />
+              {labels.takeOverAgent}
+            </DropdownMenuItem>
+          ) : (
+            <>
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
             {labels.statusSection}
           </div>
@@ -248,8 +275,14 @@ export function TaskRowActions({
             <Trash2 className="h-3.5 w-3.5" />
             {labels.delete}
           </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </>
   );
 }
+
+// Re-exported for callers that want to render the agent badge inline
+// (e.g. the task list using the same Bot icon as the menu's headline).
+export { Bot as AgentIcon };

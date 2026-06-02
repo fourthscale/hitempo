@@ -152,6 +152,39 @@ async function _updateTaskStatusAction(formData: FormData) {
   if (updated?.companyId) void recomputeCompanyScore(activeOrganization.id, updated.companyId);
 }
 
+/**
+ * Sprint 12 phase 4 — "Reprendre la main" : take an agent task out of the
+ * auto-execution pipeline so the sale handles it manually. Clears the
+ * `auto_execution_status` column (NULL = not an agent task).
+ *
+ * Race window : the Inngest handler may already be past its sleepUntil
+ * and inside `execute()`. The executor re-loads the task and refuses
+ * to act when `auto_execution_status !== "pending"`, so the worst
+ * case is a no-op race ; no double-send.
+ */
+const takeOverAgentTaskSchema = z.object({
+  taskId: z.string().uuid(),
+});
+
+async function _takeOverAgentTaskAction(formData: FormData) {
+  const parsed = takeOverAgentTaskSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
+  const { activeOrganization } = await getActiveOrg();
+  await getDb()
+    .update(tasks)
+    .set({
+      autoExecutionStatus: null,
+      autoExecutionError: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(tasks.id, parsed.data.taskId), eq(tasks.organizationId, activeOrganization.id)),
+    );
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${parsed.data.taskId}`);
+  revalidatePath("/dashboard");
+}
+
 async function _deleteTaskAction(formData: FormData) {
   const taskId = z.string().uuid().safeParse(formData.get("taskId"));
   if (!taskId.success) throw new InvalidInputError(taskId.error);
@@ -179,3 +212,4 @@ export const completeTaskAction = withActionError(_completeTaskAction);
 export const updateTaskAction = withActionError(_updateTaskAction);
 export const updateTaskStatusAction = withActionError(_updateTaskStatusAction);
 export const deleteTaskAction = withActionError(_deleteTaskAction);
+export const takeOverAgentTaskAction = withActionError(_takeOverAgentTaskAction);

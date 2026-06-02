@@ -725,7 +725,8 @@
         "completed": "Done",
         "logInteraction": "Log interaction",
         "edit": "Edit",
-        "delete": "Delete"
+        "delete": "Delete",
+        "takeOverAgent": "Take over"
       },
       "empty": "Nothing here. Enjoy the quiet.",
       "emptyGroup": "No tasks in this period.",
@@ -739,6 +740,7 @@
       "sequenceStepBadge": "step {current}/{total}",
       "agentAutoExecPendingBadge": "Auto pending",
       "agentAutoExecFailedBadge": "Auto failed:",
+      "agentAutoExecBadge": "Agent Auto Execution",
       "searchPlaceholder": "Search a task...",
       "signalPrefix": "Signal: {signal}",
       "assigneeMe": "Me",

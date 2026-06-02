@@ -725,7 +725,8 @@
         "completed": "Terminée",
         "logInteraction": "Enregistrer une interaction",
         "edit": "Modifier",
-        "delete": "Supprimer"
+        "delete": "Supprimer",
+        "takeOverAgent": "Reprendre la main"
       },
       "empty": "Rien ici. Profites-en.",
       "emptyGroup": "Aucune tâche sur cette période.",
@@ -739,6 +740,7 @@
       "sequenceStepBadge": "étape {current}/{total}",
       "agentAutoExecPendingBadge": "Auto en attente",
       "agentAutoExecFailedBadge": "Échec auto :",
+      "agentAutoExecBadge": "Agent Auto Execution",
       "searchPlaceholder": "Rechercher une tâche...",
       "signalPrefix": "Signal : {signal}",
       "assigneeMe": "Moi",
