@@ -151,6 +151,85 @@ export async function countTodayTasksByOrg(orgId: string, assigneeId?: string | 
   return rows.length;
 }
 
+/**
+ * Sprint 12 phase 5 — "À traiter cette semaine" KPI counter.
+ * Pending/in-progress tasks due/scheduled between tomorrow 00:00 and
+ * end-of-day-7 (rolling). Excludes today (covered by countTodayTasks)
+ * and excludes agent-auto tasks. The "this week" framing matches the
+ * agent block's rolling 7-day horizon ; the sale gets the same mental
+ * model on both sides of the dashboard.
+ */
+export async function countThisWeekTasksByOrg(
+  orgId: string,
+  assigneeId?: string | null,
+): Promise<number> {
+  const now = new Date();
+  const startOfTomorrow = new Date(now);
+  startOfTomorrow.setHours(0, 0, 0, 0);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const endOfPlus7Days = new Date(now);
+  endOfPlus7Days.setHours(23, 59, 59, 999);
+  endOfPlus7Days.setDate(endOfPlus7Days.getDate() + 7);
+
+  const rows = await getDb().query.tasks.findMany({
+    where: and(
+      eq(tasks.organizationId, orgId),
+      or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
+      // Prefer scheduledFor (= when the sale should act) ; fall back
+      // on dueAt when no scheduledFor was set.
+      or(
+        and(gte(tasks.scheduledFor, startOfTomorrow), lte(tasks.scheduledFor, endOfPlus7Days)),
+        and(
+          isNull(tasks.scheduledFor),
+          gte(tasks.dueAt, startOfTomorrow),
+          lte(tasks.dueAt, endOfPlus7Days),
+        ),
+      ),
+      assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
+      isNull(tasks.autoExecutionStatus),
+    ),
+    columns: { id: true },
+  });
+  return rows.length;
+}
+
+/**
+ * Sprint 12 phase 5 — "À traiter semaine prochaine" KPI counter.
+ * The week starting +8 days from now, +14 days inclusive — same rolling
+ * model. Gives the sale a forward look without leaking into "this week".
+ */
+export async function countNextWeekTasksByOrg(
+  orgId: string,
+  assigneeId?: string | null,
+): Promise<number> {
+  const now = new Date();
+  const startOfPlus8 = new Date(now);
+  startOfPlus8.setHours(0, 0, 0, 0);
+  startOfPlus8.setDate(startOfPlus8.getDate() + 8);
+  const endOfPlus14 = new Date(now);
+  endOfPlus14.setHours(23, 59, 59, 999);
+  endOfPlus14.setDate(endOfPlus14.getDate() + 14);
+
+  const rows = await getDb().query.tasks.findMany({
+    where: and(
+      eq(tasks.organizationId, orgId),
+      or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
+      or(
+        and(gte(tasks.scheduledFor, startOfPlus8), lte(tasks.scheduledFor, endOfPlus14)),
+        and(
+          isNull(tasks.scheduledFor),
+          gte(tasks.dueAt, startOfPlus8),
+          lte(tasks.dueAt, endOfPlus14),
+        ),
+      ),
+      assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
+      isNull(tasks.autoExecutionStatus),
+    ),
+    columns: { id: true },
+  });
+  return rows.length;
+}
+
 export async function countOverdueTasksByOrg(orgId: string, assigneeId?: string | null): Promise<number> {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);

@@ -5,6 +5,8 @@ import { getActiveOrg } from "@/lib/auth/context";
 import {
   getTasksDashboard,
   countTodayTasksByOrg,
+  countThisWeekTasksByOrg,
+  countNextWeekTasksByOrg,
   countOverdueTasksByOrg,
   getOldestOverdueTaskAgeDays,
   getAgentDashboardStats,
@@ -64,6 +66,8 @@ export default async function DashboardPage() {
     todayTasks,
     recentInteractions,
     actionsToday,
+    actionsThisWeek,
+    actionsNextWeek,
     overdueCount,
     oldestOverdueDays,
     topCompanies,
@@ -76,6 +80,8 @@ export default async function DashboardPage() {
     getTasksDashboard(orgId, user.id),
     getRecentInteractionsByOrg(orgId, 5),
     countTodayTasksByOrg(orgId, user.id),
+    countThisWeekTasksByOrg(orgId, user.id),
+    countNextWeekTasksByOrg(orgId, user.id),
     countOverdueTasksByOrg(orgId, user.id),
     getOldestOverdueTaskAgeDays(orgId, user.id),
     listCompaniesByOrg(orgId),
@@ -184,6 +190,18 @@ export default async function DashboardPage() {
             visits: todayTasks.filter((tk) => tk.type === "visit").length,
           })}
           icon={<CheckCircle2 className="h-4 w-4 text-brand-teal" />}
+        />
+        <KpiCard
+          label={t("kpis.actionsThisWeek")}
+          value={actionsThisWeek}
+          detail={t("kpis.actionsThisWeekDetail")}
+          icon={<Calendar className="h-4 w-4 text-brand-teal" />}
+        />
+        <KpiCard
+          label={t("kpis.actionsNextWeek")}
+          value={actionsNextWeek}
+          detail={t("kpis.actionsNextWeekDetail")}
+          icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
         />
         <KpiCard
           label={t("kpis.overdue")}

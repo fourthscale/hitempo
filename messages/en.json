@@ -395,8 +395,12 @@
       "greeting": "Hello {name}",
       "subtitle": "{date} · <em>{actions, plural, one {# action waiting} other {# actions waiting}}</em>",
       "kpis": {
-        "actionsToday": "Today's actions",
+        "actionsToday": "To handle today",
         "actionsTodayDetail": "{emails} emails · {calls} calls · {visits} visits",
+        "actionsThisWeek": "To handle this week",
+        "actionsThisWeekDetail": "Excludes today · next 7 days",
+        "actionsNextWeek": "To handle next week",
+        "actionsNextWeekDetail": "Days +8 to +14",
         "overdue": "Overdue follow-ups",
         "overdueDetail": "Oldest: {days, plural, one {# day} other {# days}}",
         "overdueDetailNone": "Nothing overdue",
