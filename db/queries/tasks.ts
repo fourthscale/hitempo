@@ -186,6 +186,8 @@ export async function getAgentDashboardStats(
   assigneeId?: string | null,
 ): Promise<{
   pendingToday: number;
+  pendingThisWeek: number;
+  pendingTotal: number;
   succeededLast7Days: number;
   failedToTakeOver: number;
 }> {
@@ -194,28 +196,57 @@ export async function getAgentDashboardStats(
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date(now);
   endOfToday.setHours(23, 59, 59, 999);
+  // Rolling 7-day "this week" window — Sunday/Monday distinction would
+  // be locale-dependent, so we use a simple from-now-to-7-days horizon
+  // which is what "sends scheduled this week" intuitively means to a
+  // sale checking their dashboard on a Wednesday.
+  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const baseAssignee = assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined;
 
-  // We run three small COUNT-like queries in parallel ; on small task
+  // A common helper : "the task is scheduled within [start, end]",
+  // preferring scheduledFor and falling back on dueAt. Drizzle helper
+  // expressions compose cleanly with `and()`/`or()`.
+  const scheduledWithin = (start: Date, end: Date) =>
+    or(
+      and(gte(tasks.scheduledFor, start), lte(tasks.scheduledFor, end)),
+      and(
+        isNull(tasks.scheduledFor),
+        gte(tasks.dueAt, start),
+        lte(tasks.dueAt, end),
+      ),
+    );
+
+  // We run five small COUNT-like queries in parallel ; on small task
   // tables (early hitempo customers have at most a few thousand rows)
   // this is fine without raw SQL aggregates.
-  const [pendingTodayRows, succeededRows, failedRows] = await Promise.all([
+  const [pendingTodayRows, pendingThisWeekRows, pendingTotalRows, succeededRows, failedRows] = await Promise.all([
     getDb().query.tasks.findMany({
       where: and(
         eq(tasks.organizationId, orgId),
         eq(tasks.autoExecutionStatus, "pending"),
-        // Prefer scheduledFor when set ; otherwise fall back on dueAt.
-        // SQL-side OR keeps the comparison index-friendly.
-        or(
-          and(gte(tasks.scheduledFor, startOfToday), lte(tasks.scheduledFor, endOfToday)),
-          and(
-            isNull(tasks.scheduledFor),
-            gte(tasks.dueAt, startOfToday),
-            lte(tasks.dueAt, endOfToday),
-          ),
-        ),
+        scheduledWithin(startOfToday, endOfToday),
+        baseAssignee,
+      ),
+      columns: { id: true },
+    }),
+    getDb().query.tasks.findMany({
+      where: and(
+        eq(tasks.organizationId, orgId),
+        eq(tasks.autoExecutionStatus, "pending"),
+        scheduledWithin(startOfToday, sevenDaysFromNow),
+        baseAssignee,
+      ),
+      columns: { id: true },
+    }),
+    // Total upcoming pending — no date filter. Includes tasks without
+    // any schedule (scheduledFor + dueAt both null) ; those would show
+    // up neither in "today" nor "this week" but are still queued.
+    getDb().query.tasks.findMany({
+      where: and(
+        eq(tasks.organizationId, orgId),
+        eq(tasks.autoExecutionStatus, "pending"),
         baseAssignee,
       ),
       columns: { id: true },
@@ -241,6 +272,8 @@ export async function getAgentDashboardStats(
 
   return {
     pendingToday: pendingTodayRows.length,
+    pendingThisWeek: pendingThisWeekRows.length,
+    pendingTotal: pendingTotalRows.length,
     succeededLast7Days: succeededRows.length,
     failedToTakeOver: failedRows.length,
   };

@@ -336,6 +336,24 @@ export default async function DashboardPage() {
               </li>
               <li className="flex items-center justify-between gap-3">
                 <span className="inline-flex items-center gap-2 text-muted-foreground">
+                  <CalendarClock className="h-4 w-4 shrink-0" />
+                  {t("agent.pendingThisWeek")}
+                </span>
+                <span className="font-serif text-lg font-bold tabular-nums">
+                  {agentStats.pendingThisWeek}
+                </span>
+              </li>
+              <li className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-muted-foreground">
+                  <CalendarClock className="h-4 w-4 shrink-0" />
+                  {t("agent.pendingTotal")}
+                </span>
+                <span className="font-serif text-lg font-bold tabular-nums">
+                  {agentStats.pendingTotal}
+                </span>
+              </li>
+              <li className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-muted-foreground">
                   <Send className="h-4 w-4 shrink-0" />
                   {t("agent.succeededLast7Days")}
                 </span>

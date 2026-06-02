@@ -424,6 +424,8 @@
       "agent": {
         "title": "Agent",
         "pendingToday": "Envois prévus aujourd'hui",
+        "pendingThisWeek": "Envois prévus cette semaine",
+        "pendingTotal": "Envois prévus",
         "succeededLast7Days": "Envoyés ces 7 derniers jours",
         "failedToTakeOver": "À reprendre"
       },

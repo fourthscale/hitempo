@@ -424,6 +424,8 @@
       "agent": {
         "title": "Agent",
         "pendingToday": "Sends scheduled today",
+        "pendingThisWeek": "Sends scheduled this week",
+        "pendingTotal": "Sends scheduled",
         "succeededLast7Days": "Sent in the last 7 days",
         "failedToTakeOver": "To take over"
       },
