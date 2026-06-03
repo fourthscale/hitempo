@@ -78,3 +78,24 @@ export async function executionCounterExists(db: DbOrTx, enrolmentId: string, co
   });
   return row != null;
 }
+
+/** True if a given (enrolment, step) pair already has an executed row. Used
+ *  by the engine to detect terminal-step re-entry : when the engine parks on
+ *  a terminal step awaiting its human task to close, the next
+ *  `sequences/task.completed` event re-enters here ; this guard tells us
+ *  "the step has already run, end the enrolment now". */
+export async function stepHasExecutedRow(
+  db: DbOrTx,
+  enrolmentId: string,
+  stepId: string,
+): Promise<boolean> {
+  const row = await db.query.sequenceStepExecutions.findFirst({
+    where: and(
+      eq(sequenceStepExecutions.enrolmentId, enrolmentId),
+      eq(sequenceStepExecutions.stepId, stepId),
+      eq(sequenceStepExecutions.outcome, "executed"),
+    ),
+    columns: { id: true },
+  });
+  return row != null;
+}

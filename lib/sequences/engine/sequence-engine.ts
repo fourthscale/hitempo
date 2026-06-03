@@ -17,6 +17,7 @@ import {
 import {
   insertStepExecution,
   executionCounterExists,
+  stepHasExecutedRow,
 } from "@/db/queries/sequence-executions";
 import { SequencePredicateEvaluatorFactory } from "../predicates/predicate-evaluator-factory";
 import { SequenceStepExecutorFactory } from "../step-executor-factory";
@@ -97,6 +98,22 @@ export class SequenceEngine {
       steps.find((s) => s.id === enrolment.currentStepId) ??
       steps.find((s) => s.stepOrder === enrolment.currentStepOrder);
     if (!step) {
+      await this.end(enrolmentId, "exhausted");
+      return { status: "ended", reason: "exhausted" };
+    }
+
+    // Terminal-step re-entry guard. When the engine reaches a step that has
+    // no outgoing edges AND that step's `awaitTaskCompletion=true` executor
+    // result asked to wait, we park the enrolment on this step instead of
+    // ending immediately (so the UI / enrolment.status reflects "still
+    // waiting on the rep / agent"). When the task gets closed,
+    // `sequences/task.completed` re-enters here ; this guard sees the step
+    // already has an executed row, so we end the enrolment now.
+    //
+    // Terminal := no outgoing nextStepIds at all. A step with branches that
+    // all happen to be null at runtime is still treated as terminal — same
+    // as the post-execution branch below.
+    if (isTerminalStep(step) && (await stepHasExecutedRow(this.db, enrolmentId, step.id))) {
       await this.end(enrolmentId, "exhausted");
       return { status: "ended", reason: "exhausted" };
     }
@@ -233,6 +250,29 @@ export class SequenceEngine {
 
     if (!nextStep) {
       // No outgoing edge → reached a terminal point.
+      //
+      // If the terminal step is a human-action step (awaitTaskCompletion=true),
+      // we must NOT end the enrolment now — the task is just born, the rep /
+      // agent hasn't closed it yet. Park the enrolment on this step
+      // (next_due_at = null, ignored by the cron sweep) and wait for
+      // `sequences/task.completed` to re-enter ; the guard at the top of
+      // advanceEnrolment (`isTerminalStep + stepHasExecutedRow`) ends the
+      // enrolment then. `awaitTaskTimeoutMs` provides a fallback wake-up.
+      if (result.awaitTaskCompletion) {
+        const nextDueAt =
+          result.awaitTaskTimeoutMs != null
+            ? new Date(this.now().getTime() + result.awaitTaskTimeoutMs)
+            : null;
+        await advanceEnrolment(this.db, enrolment.id, {
+          currentStepId: step.id,
+          currentStepOrder: step.stepOrder,
+          nextDueAt,
+          lastExecutionCounter: nextCounter,
+        });
+        return { status: "executed", taskId: result.taskId ?? null, navigatedTo };
+      }
+      // Pure leaf (e.g. wait_delay at the end, or a non-blocking action) —
+      // nothing more to do, end immediately.
       await this.end(enrolment.id, "exhausted");
       return { status: "ended", reason: "exhausted" };
     }
@@ -338,4 +378,16 @@ function pickNext(next: NextStepIds, key: string): string | undefined {
   if (key === "no") return next.no ?? next.default;
   if (key === "default") return next.default;
   return next.cases?.[key] ?? next.default;
+}
+
+/** True when a step has no outgoing edges at all — reaching it means the
+ *  engine has nowhere to go next regardless of the executor's navigateTo
+ *  result. Mirrors the post-execution `!nextStep` branch but is callable
+ *  before execution (for the terminal-step re-entry guard). */
+function isTerminalStep(step: SequenceStepRow): boolean {
+  const n = step.nextStepIds;
+  if (!n) return true;
+  if (n.default || n.yes || n.no) return false;
+  if (n.cases && Object.values(n.cases).some((v) => v)) return false;
+  return true;
 }
