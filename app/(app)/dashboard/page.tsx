@@ -426,7 +426,7 @@ export default async function DashboardPage() {
               {agentStats.failedToTakeOver > 0 ? (
                 <li>
                   <Link
-                    href="/tasks?agentFailed=1"
+                    href="/tasks?status=agent_failed"
                     className="flex items-center justify-between gap-3 rounded-md bg-rose-50 px-2 py-1.5 -mx-2 hover:bg-rose-100 transition-colors"
                   >
                     <span className="inline-flex items-center gap-2 text-rose-700">

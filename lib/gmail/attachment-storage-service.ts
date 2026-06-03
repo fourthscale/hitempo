@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * Errors specific to attachment storage. The service throws these instead
@@ -163,10 +164,34 @@ export class AttachmentStorageService {
   }
 
   /** Downloads the file bytes — used at send time to feed the MIME builder
-   *  after a fresh upload (or by a future "resend with original attachment"
-   *  flow). */
+   *  after a fresh upload. Runs through the RLS-bound user client : the
+   *  caller is a server action with the current user's session, so the
+   *  Storage RLS policy (org-membership check) applies normally.
+   *
+   *  ⚠ Do NOT call from a background worker (Inngest, cron, etc.) — there
+   *  is no session cookie there, RLS denies, and Storage returns a
+   *  "Object not found" error indistinguishable from a true 404. Use
+   *  {@link downloadAsAdmin} from worker contexts. */
   public async download(bucket: string, path: string): Promise<Buffer> {
     const supabase = await createClient();
+    const { data, error } = await supabase.storage.from(bucket).download(path);
+    if (error || !data) {
+      throw new AttachmentUploadFailedError(
+        `Could not download ${path} : ${error?.message ?? "unknown"}`,
+      );
+    }
+    const arrayBuffer = await data.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+
+  /** Service-role download — bypasses RLS. Used by trusted background
+   *  workers (Inngest agent auto-execute) that don't have a user session
+   *  but legitimately need to fetch attachments to compose an outbound
+   *  email. The caller is responsible for checking the attachment belongs
+   *  to the org being processed (defense in depth — the path is
+   *  `<orgId>/...` so a path-prefix check is enough). */
+  public async downloadAsAdmin(bucket: string, path: string): Promise<Buffer> {
+    const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage.from(bucket).download(path);
     if (error || !data) {
       throw new AttachmentUploadFailedError(

@@ -197,6 +197,17 @@ export class EngineExecutorServices implements SequenceExecutorServices {
     taskId: string;
     scheduledFor: Date | null;
   }): Promise<void> {
+    // Defensive — never flag-pending or emit an event for an empty taskId.
+    // Without this guard, a transient `createTask` regression that returns
+    // `{taskId: undefined, ...}` would (a) UPDATE every task in the org and
+    // (b) emit a poisoned Inngest event that loops through retries forever.
+    if (!input.taskId) {
+      console.error(
+        "[EngineExecutorServices.scheduleAgentAutoExecute] refusing to schedule with empty taskId",
+        { organizationId: input.organizationId },
+      );
+      return;
+    }
     try {
       await this.db
         .update(tasks)

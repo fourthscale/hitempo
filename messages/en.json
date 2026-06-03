@@ -719,7 +719,8 @@
         "statusActive": "Active",
         "statusPending": "To do",
         "statusInProgress": "In progress",
-        "statusCompleted": "Done"
+        "statusCompleted": "Done",
+        "statusAgentFailed": "Agent failed"
       },
       "views": {
         "list": "List",

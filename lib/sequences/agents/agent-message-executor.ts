@@ -70,6 +70,17 @@ export class AgentMessageExecutor {
   ) {}
 
   public async execute(input: AgentExecutionInput): Promise<AgentExecutionResult> {
+    // Defensive : reject empty/undefined taskId upfront. Without this guard,
+    // every downstream DB query passes `undefined` to a parameterized
+    // `where tasks.id = $1` and postgres-js raises `UNDEFINED_VALUE`. We've
+    // seen this happen with stale Inngest events queued before the engine
+    // started returning {taskId, scheduledFor} (older payloads memoized at
+    // the time of the event still flow through the step.run replay).
+    if (!input.taskId || typeof input.taskId !== "string") {
+      const reason = `AgentMessageExecutor invoked with invalid taskId (${JSON.stringify(input.taskId)})`;
+      console.error("[AgentMessageExecutor]", reason);
+      return { status: "failed", error: reason };
+    }
     try {
       const result = await this.executeInner(input.taskId);
       await this.markTaskAutoExecutionSucceeded(input.taskId);
@@ -437,7 +448,11 @@ export class AgentMessageExecutor {
     const owned = refs.filter((r) => r.storagePath.startsWith(prefix));
     const out: MimeAttachment[] = [];
     for (const ref of owned) {
-      const content = await this.storage.download(
+      // downloadAsAdmin (vs download) — we're in an Inngest worker without
+      // a user session ; the RLS-bound client would return "Object not
+      // found". The `<orgId>/step-` prefix filter above is our defense in
+      // depth against accidentally fetching another org's file.
+      const content = await this.storage.downloadAsAdmin(
         "message-attachments",
         ref.storagePath,
       );
@@ -484,6 +499,10 @@ export class AgentMessageExecutor {
     taskId: string,
     reason: string,
   ): Promise<void> {
+    // Defensive — should be caught by execute()'s upfront guard, but a
+    // belt-and-braces check here prevents an UNDEFINED_VALUE blast from a
+    // logic change elsewhere reaching the DB driver.
+    if (!taskId) return;
     // Truncate the reason to keep the column reasonable (the underlying
     // text column has no limit but the UI tooltip does).
     const truncated = reason.slice(0, 500);

@@ -8,12 +8,16 @@ export type TaskWithContext = Awaited<ReturnType<typeof getTasksByOrg>>[number];
 export async function getTasksByOrg(
   orgId: string,
   assigneeId?: string | null,
-  status?: "active" | "pending" | "in_progress" | "completed",
+  status?: "active" | "pending" | "in_progress" | "completed" | "agent_failed",
 ) {
+  // Sprint 12 phase 4 — "agent_failed" is a cross-cut over the agent
+  // state machine (auto_execution_status), not the task lifecycle, so
+  // it bypasses the regular status filter entirely.
   const statusFilter =
-    status === "pending"     ? eq(tasks.status, "pending") :
-    status === "in_progress" ? eq(tasks.status, "in_progress") :
-    status === "completed"   ? eq(tasks.status, "completed") :
+    status === "agent_failed" ? eq(tasks.autoExecutionStatus, "failed") :
+    status === "pending"      ? eq(tasks.status, "pending") :
+    status === "in_progress"  ? eq(tasks.status, "in_progress") :
+    status === "completed"    ? eq(tasks.status, "completed") :
     or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress"));
 
   const rows = await getDb().query.tasks.findMany({

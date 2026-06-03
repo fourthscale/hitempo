@@ -719,7 +719,8 @@
         "statusActive": "Actives",
         "statusPending": "À faire",
         "statusInProgress": "En cours",
-        "statusCompleted": "Terminées"
+        "statusCompleted": "Terminées",
+        "statusAgentFailed": "Échec agent"
       },
       "views": {
         "list": "Liste",

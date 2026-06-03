@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import type { TaskWithContext } from "@/db/queries/tasks";
 
 type Period = "all" | "today" | "week" | "later";
-type StatusFilter = "active" | "pending" | "in_progress" | "completed";
+type StatusFilter = "active" | "pending" | "in_progress" | "completed" | "agent_failed";
 
 function parsePeriod(raw: string | undefined): Period {
   if (raw === "today" || raw === "week" || raw === "later") return raw;
@@ -33,7 +33,14 @@ function parsePeriod(raw: string | undefined): Period {
 }
 
 function parseStatus(raw: string | undefined): StatusFilter {
-  if (raw === "pending" || raw === "in_progress" || raw === "completed") return raw;
+  if (
+    raw === "pending" ||
+    raw === "in_progress" ||
+    raw === "completed" ||
+    raw === "agent_failed"
+  ) {
+    return raw;
+  }
   return "active";
 }
 
@@ -294,6 +301,7 @@ export default async function TasksPage({
               { value: "pending", label: t("filters.statusPending") },
               { value: "in_progress", label: t("filters.statusInProgress") },
               { value: "completed", label: t("filters.statusCompleted") },
+              { value: "agent_failed", label: t("filters.statusAgentFailed") },
             ]}
           />
 
