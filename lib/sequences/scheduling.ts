@@ -109,8 +109,11 @@ function addBusinessDaysInTz(start: Date, n: number, allowed: number[], tz: stri
  *  1. Start from today (or next allowed weekday).
  *  2. Skip `scheduledOffsetBusinessDays` more allowed days.
  *  3. Force the wall-clock to `preferredHour`.
- *  4. If the resulting moment is already in the past (e.g. preferredHour=9
- *     but `now`=11 AM), skip to the next allowed day at `preferredHour`.
+ *  4. If the resulting moment is already in the past AND the offset is 0
+ *     (i.e. the caller asked for "today") AND `now` is still within
+ *     business hours on an allowed day, schedule for `now` immediately
+ *     instead of rolling over — the user clearly wants the task today.
+ *     Otherwise roll over to the next allowed day at `preferredHour`.
  *  5. If `setDueAt`, compute `dueAt` by adding `dueOffsetBusinessDays` from
  *     `scheduledFor`. If `dueAtAllDay`, snap to 23:59 of that day in
  *     contactTz ; else use `preferredHour`.
@@ -128,17 +131,37 @@ export function computeTaskSchedule(
 
   // 1 — start day : today if allowed, else next allowed.
   let dayUtc = now;
-  if (!s.allowedWeekdays.includes(weekdayInTz(dayUtc, contactTz))) {
+  const todayIsAllowed = s.allowedWeekdays.includes(weekdayInTz(dayUtc, contactTz));
+  if (!todayIsAllowed) {
     dayUtc = nextAllowedDay(dayUtc, s.allowedWeekdays, contactTz);
   }
   // 2 — offset.
   dayUtc = addBusinessDaysInTz(dayUtc, s.scheduledOffsetBusinessDays, s.allowedWeekdays, contactTz);
   // 3 — force preferred hour.
   let target = setWallClockInTz(dayUtc, s.preferredHour, 0, contactTz);
-  // 4 — if past, skip to next allowed day.
+  // 4 — past-target handling.
   if (target.getTime() < now.getTime()) {
-    dayUtc = nextAllowedDay(dayUtc, s.allowedWeekdays, contactTz);
-    target = setWallClockInTz(dayUtc, s.preferredHour, 0, contactTz);
+    // Best-effort same-day fallback : if the caller asked for "today"
+    // (offset 0, today is an allowed weekday) and we're still inside
+    // business hours, fire `now` rather than push to tomorrow. Mirrors
+    // the user-facing label "0 = today (or next business day) at
+    // preferred hour" — at 3pm Wednesday with preferredHour=9, the
+    // intent is clearly "today", not "tomorrow morning". Outside
+    // business hours we keep the rollover so cold emails don't land at
+    // 22h.
+    const nowHourInTz = toZonedTime(now, contactTz).getHours();
+    const insideBusinessHours =
+      nowHourInTz >= s.businessHours.start && nowHourInTz < s.businessHours.end;
+    if (
+      s.scheduledOffsetBusinessDays === 0 &&
+      todayIsAllowed &&
+      insideBusinessHours
+    ) {
+      target = now;
+    } else {
+      dayUtc = nextAllowedDay(dayUtc, s.allowedWeekdays, contactTz);
+      target = setWallClockInTz(dayUtc, s.preferredHour, 0, contactTz);
+    }
   }
 
   const scheduledFor = s.setScheduledFor ? target : null;

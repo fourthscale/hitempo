@@ -25,9 +25,34 @@ describe("computeTaskSchedule — defaults & basic", () => {
     expect(r.dueAtAllDay).toBe(false);
   });
 
-  it("Monday 11h Paris + defaults → scheduledFor Tuesday 9h Paris (past preferred today)", () => {
+  it("Monday 11h Paris + defaults → scheduledFor = now (today, inside business hours)", () => {
+    // Best-effort same-day : at 11h the user enrolling at offset=0 clearly
+    // wants the task today, not tomorrow morning. Business hours (9-18)
+    // contain 11h, so we fire at `now`.
     const now = new Date("2027-01-25T10:00:00Z"); // Mon 11:00 Paris
     const r = computeTaskSchedule(now, {}, "Europe/Paris");
+    expect(parisDate(r.scheduledFor!)).toBe("2027-01-25"); // Same day
+    expect(parisHM(r.scheduledFor!)).toBe("11:00"); // = now
+  });
+
+  it("Monday 19h Paris + defaults → scheduledFor Tuesday 9h Paris (past business hours)", () => {
+    // Outside business hours : rollover to next allowed day at preferredHour.
+    const now = new Date("2027-01-25T18:00:00Z"); // Mon 19:00 Paris
+    const r = computeTaskSchedule(now, {}, "Europe/Paris");
+    expect(parisDate(r.scheduledFor!)).toBe("2027-01-26"); // Tuesday
+    expect(parisHM(r.scheduledFor!)).toBe("09:00");
+  });
+
+  it("Monday 15h Paris + offset 1 → Tuesday 9h (offset ≠ 0 always pins to preferredHour)", () => {
+    // The same-day fallback only kicks in for offset=0. With offset=1
+    // the user is explicitly asking for "the next business day" so we
+    // pin to preferredHour as before.
+    const now = new Date("2027-01-25T14:00:00Z"); // Mon 15:00 Paris
+    const r = computeTaskSchedule(
+      now,
+      { scheduledOffsetBusinessDays: 1 },
+      "Europe/Paris",
+    );
     expect(parisDate(r.scheduledFor!)).toBe("2027-01-26"); // Tuesday
     expect(parisHM(r.scheduledFor!)).toBe("09:00");
   });
