@@ -75,7 +75,25 @@ export default async function EnrolmentDetailPage({
   const executedExecutions = executions
     .filter((e) => e.outcome === "executed")
     .sort((a, b) => a.executionCounter - b.executionCounter);
-  const executedStepIds = new Set(executedExecutions.map((e) => e.stepId));
+
+  // Step IDs are rotated every time the sequence is republished
+  // (`sequence_steps` rows are recreated, not updated). step_executions
+  // keeps the historical step_id ; `data.steps` shows the live IDs.
+  // To color the diagram correctly across publishes, resolve each
+  // execution to a *live* step by id first, then by stepOrder — same
+  // fallback strategy the engine uses (sequence-engine.ts).
+  const liveStepIdByOrder = new Map(data.steps.map((s) => [s.stepOrder, s.id]));
+  const liveStepIds = new Set(data.steps.map((s) => s.id));
+  const resolveLiveStepId = (exec: { stepId: string; stepOrder: number }): string | null => {
+    if (liveStepIds.has(exec.stepId)) return exec.stepId;
+    return liveStepIdByOrder.get(exec.stepOrder) ?? null;
+  };
+
+  const executedStepIds = new Set(
+    executedExecutions
+      .map((e) => resolveLiveStepId(e))
+      .filter((v): v is string => v != null),
+  );
   const isActive = enrolment.status === "active" || enrolment.status === "paused";
   const currentStep = isActive
     ? data.steps.find((s) => s.id === enrolment.currentStepId)
@@ -113,10 +131,15 @@ export default async function EnrolmentDetailPage({
 
   const stepStates: Record<string, "executed" | "awaiting" | "current"> = {};
   for (const exec of executedExecutions) {
-    stepStates[exec.stepId] = isExecutionFullyDone(exec) ? "executed" : "awaiting";
+    const liveId = resolveLiveStepId(exec);
+    if (!liveId) continue;
+    stepStates[liveId] = isExecutionFullyDone(exec) ? "executed" : "awaiting";
   }
   // Reclassify the in-progress wait step from "executed" → "current".
-  if (waitInProgress && lastExec) stepStates[lastExec.stepId] = "current";
+  if (waitInProgress && lastExec) {
+    const liveId = resolveLiveStepId(lastExec);
+    if (liveId) stepStates[liveId] = "current";
+  }
   // Only mark the cursor step as current when nothing earlier is still
   // pending — neither a wait running ahead of it, nor an unfinished task.
   if (
@@ -134,8 +157,11 @@ export default async function EnrolmentDetailPage({
   // `buildSequenceGraph` matches that against its edge ids.
   const TRIGGER_NODE_ID = "__trigger";
   const traversedEdges = new Set<string>();
-  if (executedExecutions[0]) {
-    traversedEdges.add(`${TRIGGER_NODE_ID}->${executedExecutions[0].stepId}`);
+  const firstLiveId = executedExecutions[0]
+    ? resolveLiveStepId(executedExecutions[0])
+    : null;
+  if (firstLiveId) {
+    traversedEdges.add(`${TRIGGER_NODE_ID}->${firstLiveId}`);
   } else if (currentStep) {
     // Edge case : current step parked but nothing executed yet (very first
     // tick before any step runs). The path from trigger to current is still
@@ -148,8 +174,11 @@ export default async function EnrolmentDetailPage({
   for (let i = 1; i < executedExecutions.length; i++) {
     const prev = executedExecutions[i - 1]!;
     const next = executedExecutions[i]!;
-    if (isExecutionFullyDone(prev)) {
-      traversedEdges.add(`${prev.stepId}->${next.stepId}`);
+    if (!isExecutionFullyDone(prev)) continue;
+    const prevLive = resolveLiveStepId(prev);
+    const nextLive = resolveLiveStepId(next);
+    if (prevLive && nextLive) {
+      traversedEdges.add(`${prevLive}->${nextLive}`);
     }
   }
   // Extend the green path to the cursor's step only when nothing in front
@@ -161,7 +190,8 @@ export default async function EnrolmentDetailPage({
     !waitingForTask
   ) {
     const last = executedExecutions[executedExecutions.length - 1]!;
-    traversedEdges.add(`${last.stepId}->${currentStep.id}`);
+    const lastLive = resolveLiveStepId(last);
+    if (lastLive) traversedEdges.add(`${lastLive}->${currentStep.id}`);
   }
   const triggerExecuted = executedExecutions.length > 0 || currentStep != null;
 
@@ -169,8 +199,12 @@ export default async function EnrolmentDetailPage({
   // render the actual duration on past wait rows ("Attente 2 jours") instead
   // of the generic action-type label.
   const stepById = new Map(data.steps.map((s) => [s.id, s]));
-  const readWaitConfig = (stepId: string) => {
-    const step = stepById.get(stepId);
+  // Resolve via id-first then stepOrder fallback — same drift-tolerant
+  // approach as `resolveLiveStepId` above (sequence_steps rows are
+  // recreated on republish).
+  const readWaitConfig = (exec: { stepId: string; stepOrder: number }) => {
+    const liveId = resolveLiveStepId(exec);
+    const step = liveId ? stepById.get(liveId) : undefined;
     if (!step || step.actionType !== "wait_delay") return null;
     const cfg = step.actionConfig as WaitDelayActionConfig;
     return { value: cfg.durationValue, unit: cfg.durationUnit };
@@ -207,7 +241,7 @@ export default async function EnrolmentDetailPage({
         id: `current:${e.id}`,
         stepOrder: e.stepOrder,
         actionType: e.actionType,
-        wait: readWaitConfig(e.stepId),
+        wait: readWaitConfig(e),
       };
     }
     return {
@@ -219,7 +253,7 @@ export default async function EnrolmentDetailPage({
       executedAt: e.executedAt,
       taskId: e.taskId,
       notes: e.notes,
-      wait: readWaitConfig(e.stepId),
+      wait: readWaitConfig(e),
     };
   });
   // Synthetic current row for the step the cursor points at — but only when
@@ -238,7 +272,9 @@ export default async function EnrolmentDetailPage({
       id: `current:${currentStep.id}`,
       stepOrder: currentStep.stepOrder,
       actionType: currentStep.actionType,
-      wait: readWaitConfig(currentStep.id),
+      // currentStep is a live step ; pass id-as-stepId so resolveLiveStepId
+      // hits the id-first branch and returns it unchanged.
+      wait: readWaitConfig({ stepId: currentStep.id, stepOrder: currentStep.stepOrder }),
     });
   }
 
