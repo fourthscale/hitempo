@@ -2,13 +2,15 @@
 
 import { useTransition } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Check, ExternalLink } from "lucide-react";
 import { confirmAiClassificationAction } from "@/lib/actions/interactions";
 import {
   InteractionOutcomeMenu,
   type InteractionOutcome,
 } from "@/components/app/interaction-outcome-menu";
+import { useUserTz } from "@/lib/i18n/tz-context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 
 export type PendingReviewRowProps = {
   interaction: {
@@ -34,6 +36,8 @@ export function PendingReviewRow({ interaction, hasSuggestedOutcome }: PendingRe
   const t = useTranslations("pages.inboxPendingReview");
   const tIntent = useTranslations("intentLabel");
   const tOutcome = useTranslations("interactionOutcome");
+  const locale = useLocale();
+  const userTimezone = useUserTz();
   const [pending, startTransition] = useTransition();
 
   const contactDisplay =
@@ -77,10 +81,11 @@ export function PendingReviewRow({ interaction, hasSuggestedOutcome }: PendingRe
           </Link>
         </div>
         <time className="text-xs text-muted-foreground">
-          {new Intl.DateTimeFormat(undefined, {
+          {formatDateInTz(interaction.occurredAt, locale, {
+            timeZone: userTimezone,
             dateStyle: "medium",
             timeStyle: "short",
-          }).format(interaction.occurredAt)}
+          })}
         </time>
       </header>
 

@@ -5,6 +5,7 @@ import {
   ChevronDown, LayoutList, LayoutGrid, Plus, User, Workflow, Bot,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { getTasksByOrg, countOverdueTasksByOrg, countTodayTasksByOrg, countPendingTasksByOrg, countCompletedTasksThisWeek } from "@/db/queries/tasks";
 import { getWeeklyInteractionStats } from "@/db/queries/interactions";
@@ -103,13 +104,14 @@ function taskTypeIcon(type: string) {
   }
 }
 
-function formatDueDate(dueAt: Date | null, locale: string): string | null {
+function formatDueDate(dueAt: Date | null, locale: string, userTimezone: string): string | null {
   if (!dueAt) return null;
-  return new Intl.DateTimeFormat(locale, {
+  return formatDateInTz(dueAt, locale, {
+    timeZone: userTimezone,
     weekday: "long",
     day: "numeric",
     month: "long",
-  }).format(dueAt);
+  });
 }
 
 function daysDiff(dueAt: Date, now: Date): number {
@@ -134,7 +136,7 @@ export default async function TasksPage({
   const period = parsePeriod(rawPeriod);
   const status = parseStatus(rawStatus);
 
-  const { activeOrganization, user } = await getActiveOrg();
+  const { activeOrganization, user, userTimezone } = await getActiveOrg();
   const orgId = activeOrganization.id;
   const gmailStatus = await GmailCredentialsServiceFactory.getInstance().getConnectionStatus(user.id);
   const locale = await getLocale();
@@ -354,6 +356,7 @@ export default async function TasksPage({
               task={task}
               now={now}
               locale={locale}
+              userTimezone={userTimezone}
               isOverdue={false}
               isCompleted
               tTaskType={tTaskType}
@@ -374,7 +377,7 @@ export default async function TasksPage({
             const isOverdue = group === "overdue";
             const isToday = group === "today";
             const dateSuffix = (isToday || isOverdue) ? "" :
-              group === "tomorrow" ? formatDueDate(addDays(startOfDay(now), group === "tomorrow" ? 1 : 0), locale) ?? "" : "";
+              group === "tomorrow" ? formatDueDate(addDays(startOfDay(now), group === "tomorrow" ? 1 : 0), locale, userTimezone) ?? "" : "";
 
             return (
               <section key={group}>
@@ -401,6 +404,7 @@ export default async function TasksPage({
                       task={task}
                       now={now}
                       locale={locale}
+                      userTimezone={userTimezone}
                       isOverdue={isOverdue}
                       isCompleted={false}
                       tTaskType={tTaskType}
@@ -435,6 +439,7 @@ async function TaskRow({
   task,
   now,
   locale,
+  userTimezone,
   isOverdue,
   isCompleted,
   tTaskType,
@@ -447,6 +452,7 @@ async function TaskRow({
   task: TaskWithContext;
   now: Date;
   locale: string;
+  userTimezone: string;
   isOverdue: boolean;
   isCompleted: boolean;
   tTaskType: Awaited<ReturnType<typeof getTranslations<"taskType">>>;
@@ -564,12 +570,12 @@ async function TaskRow({
 
           {isCompleted && task.completedAt && (
             <span className="text-xs text-emerald-600">
-              ✓ {new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(task.completedAt)}
+              ✓ {formatDateInTz(task.completedAt, locale, { timeZone: userTimezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
           {!isOverdue && !isCompleted && effectiveDate(task) && (
             <span className="text-xs text-muted-foreground">
-              · {new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(effectiveDate(task)!)}
+              · {formatDateInTz(effectiveDate(task)!, locale, { timeZone: userTimezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
         </div>

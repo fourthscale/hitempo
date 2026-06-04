@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Mail, RefreshCcw, Phone, CheckCircle2, TrendingUp, Flame, AlertCircle, MapPin, Calendar, Search, Inbox, Clock, Bot, Send, CalendarClock } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 import {
   getTasksDashboard,
   getThisWeekTasksDashboard,
@@ -50,7 +51,7 @@ function interactionOutcomeClasses(outcome: string | null) {
 }
 
 export default async function DashboardPage() {
-  const { user, activeOrganization } = await getActiveOrg();
+  const { user, activeOrganization, userTimezone } = await getActiveOrg();
   const locale = await getLocale();
   const t = await getTranslations("pages.dashboard");
   const tTasks = await getTranslations("pages.tasks");
@@ -117,12 +118,13 @@ export default async function DashboardPage() {
   const firstName = localPart.charAt(0).toUpperCase() + localPart.slice(1);
 
   const today = new Date();
-  const dateFormatted = new Intl.DateTimeFormat(locale, {
+  const dateFormatted = formatDateInTz(today, locale, {
+    timeZone: userTimezone,
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
-  }).format(today);
+  });
 
   // Response-rate detail: two lines — delta vs prior 30d, then the absolute volume
   // (X réponses / Y envois) so the user can sanity-check the rate against the
@@ -543,9 +545,7 @@ export default async function DashboardPage() {
                         )}
                       </div>
                       <div className="text-muted-foreground shrink-0">
-                        {new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(
-                          new Date(interaction.occurredAt),
-                        )}
+                        {formatDateInTz(interaction.occurredAt, locale, { timeZone: userTimezone, dateStyle: "short" })}
                       </div>
                     </div>
                   </li>

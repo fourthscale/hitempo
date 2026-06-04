@@ -6,6 +6,7 @@ import {
   revokePlatformAdminAction,
 } from "@/lib/actions/admin";
 import { getCurrentContext } from "@/lib/auth/context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 import { PageHeader } from "@/components/app/page-header";
 import { ConfirmForm } from "@/components/app/confirm-form";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -19,6 +20,7 @@ export default async function AdminPlatformAdminsPage() {
     getCurrentContext(),
     getLocale(),
   ]);
+  const userTimezone = ctx.membership?.timezone ?? ctx.organization?.timezone ?? "UTC";
   const t = await getTranslations("admin.platformAdmins");
   const tCols = await getTranslations("admin.platformAdmins.columns");
   const tPromote = await getTranslations("admin.platformAdmins.promote");
@@ -40,7 +42,7 @@ export default async function AdminPlatformAdminsPage() {
                 <div className="flex items-start justify-between gap-3 mb-1">
                   <span className="font-medium text-sm">{displayName}</span>
                   <span className="text-xs text-muted-foreground shrink-0">
-                    {new Date(a.createdAt).toLocaleDateString(locale)}
+                    {formatDateInTz(a.createdAt, locale, { timeZone: userTimezone, dateStyle: "medium" })}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
@@ -118,7 +120,7 @@ export default async function AdminPlatformAdminsPage() {
                     {a.grantedByEmail ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {new Date(a.createdAt).toLocaleDateString(locale)}
+                    {formatDateInTz(a.createdAt, locale, { timeZone: userTimezone, dateStyle: "medium" })}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex items-center gap-1">

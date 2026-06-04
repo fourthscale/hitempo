@@ -15,6 +15,8 @@ import { InviteMemberForm } from "@/components/app/invite-member-form";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
+import { getCurrentContext } from "@/lib/auth/context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 
 const ROLE_OPTIONS = ["owner", "admin", "commercial", "viewer"] as const;
 type Role = (typeof ROLE_OPTIONS)[number];
@@ -30,6 +32,8 @@ export default async function AdminOrgDetailPage({
   const { org, members } = result;
 
   const locale = await getLocale();
+  const { membership, organization } = await getCurrentContext();
+  const userTimezone = membership?.timezone ?? organization?.timezone ?? "UTC";
   const t = await getTranslations("admin.orgs");
   const tDetail = await getTranslations("admin.orgs.detail");
   const tInvite = await getTranslations("admin.orgs.detail.memberInvite");
@@ -76,7 +80,7 @@ export default async function AdminOrgDetailPage({
 
       {org.deletedAt && (
         <div className="mb-4 rounded-md border border-rose-300 bg-rose-50 px-4 py-2 text-sm text-rose-900">
-          {t("deletedBadge")} · {new Date(org.deletedAt).toLocaleString(locale)}
+          {t("deletedBadge")} · {formatDateInTz(org.deletedAt, locale, { timeZone: userTimezone, dateStyle: "medium", timeStyle: "short" })}
         </div>
       )}
 
@@ -92,7 +96,7 @@ export default async function AdminOrgDetailPage({
           />
           <InfoRow
             label={tDetail("infoLabels.created")}
-            value={new Date(org.createdAt).toLocaleString(locale)}
+            value={formatDateInTz(org.createdAt, locale, { timeZone: userTimezone, dateStyle: "medium", timeStyle: "short" })}
           />
         </dl>
       </Card>
@@ -140,7 +144,7 @@ export default async function AdminOrgDetailPage({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
-                      {new Date(m.joinedAt).toLocaleDateString(locale)}
+                      {formatDateInTz(m.joinedAt, locale, { timeZone: userTimezone, dateStyle: "medium" })}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-1">

@@ -9,6 +9,8 @@ import {
   type InteractionOutcome,
 } from "@/components/app/interaction-outcome-menu";
 import { getAttachmentDownloadUrlAction } from "@/lib/actions/message-attachments";
+import { useUserTz } from "@/lib/i18n/tz-context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 
 /**
  * Minimal shape the timeline needs. Anything richer is for the parent's
@@ -68,10 +70,12 @@ export function InteractionsTimeline({
   locale: string;
 }) {
   const [mode, setMode] = useState<"grouped" | "list">("grouped");
+  const userTimezone = useUserTz();
 
-  const formatter = useMemo(
-    () => new Intl.DateTimeFormat(locale, { dateStyle: "short" }),
-    [locale],
+  const formatDate = useMemo(
+    () => (d: Date | string) =>
+      formatDateInTz(d, locale, { timeZone: userTimezone, dateStyle: "short" }),
+    [locale, userTimezone],
   );
 
   if (interactions.length === 0) {
@@ -127,7 +131,7 @@ export function InteractionsTimeline({
                   <InteractionRow
                     interaction={interaction}
                     labels={labels}
-                    formatter={formatter}
+                    formatDate={formatDate}
                     hideOutcomeMenu={isReplyQualifiedOutbound(interaction)}
                     primary
                   />
@@ -143,7 +147,7 @@ export function InteractionsTimeline({
               <InteractionRow
                 interaction={group.primary}
                 labels={labels}
-                formatter={formatter}
+                formatDate={formatDate}
                 // Outcome menu is hidden on the outbound when a reply is
                 // linked — the reply is where the qualification lives.
                 hideOutcomeMenu={group.replies.length > 0}
@@ -156,7 +160,7 @@ export function InteractionsTimeline({
                       <InteractionRow
                         interaction={reply}
                         labels={labels}
-                        formatter={formatter}
+                        formatDate={formatDate}
                         hideOutcomeMenu={false}
                         primary={false}
                       />
@@ -179,13 +183,13 @@ export function InteractionsTimeline({
 function InteractionRow({
   interaction,
   labels,
-  formatter,
+  formatDate,
   hideOutcomeMenu,
   primary,
 }: {
   interaction: TimelineInteraction;
   labels: InteractionsTimelineLabels;
-  formatter: Intl.DateTimeFormat;
+  formatDate: (d: Date | string) => string;
   hideOutcomeMenu: boolean;
   primary: boolean;
 }) {
@@ -233,7 +237,7 @@ function InteractionRow({
         )}
       </div>
       <div className="text-xs text-muted-foreground shrink-0">
-        {formatter.format(new Date(interaction.occurredAt))}
+        {formatDate(interaction.occurredAt)}
       </div>
     </div>
   );

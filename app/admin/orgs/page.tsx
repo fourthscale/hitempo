@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 import { Plus } from "lucide-react";
 import { listOrgsForAdmin } from "@/lib/actions/admin";
 import { selectOrgAction } from "@/lib/auth/actions";
@@ -7,10 +7,15 @@ import { PageHeader } from "@/components/app/page-header";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
+import { getCurrentContext } from "@/lib/auth/context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 
 export default async function AdminOrgsPage() {
   const t = await getTranslations("admin.orgs");
   const orgs = await listOrgsForAdmin(false);
+  const locale = await getLocale();
+  const { membership, organization } = await getCurrentContext();
+  const userTimezone = membership?.timezone ?? organization?.timezone ?? "UTC";
 
   return (
     <div className="max-w-[1200px] mx-auto">
@@ -43,7 +48,7 @@ export default async function AdminOrgsPage() {
                   </Link>
                   <div className="flex items-center gap-1.5 shrink-0 text-xs text-muted-foreground">
                     <span className="px-1.5 py-0.5 rounded bg-secondary capitalize">{org.plan}</span>
-                    <span>{new Date(org.createdAt).toLocaleDateString()}</span>
+                    <span>{formatDateInTz(org.createdAt, locale, { timeZone: userTimezone, dateStyle: "medium" })}</span>
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground mb-3">{org.slug}</div>
@@ -87,7 +92,7 @@ export default async function AdminOrgsPage() {
                   <td className="px-4 py-3 text-muted-foreground">{org.slug}</td>
                   <td className="px-4 py-3 capitalize text-muted-foreground">{org.plan}</td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {new Date(org.createdAt).toLocaleDateString()}
+                    {formatDateInTz(org.createdAt, locale, { timeZone: userTimezone, dateStyle: "medium" })}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex items-center gap-2">

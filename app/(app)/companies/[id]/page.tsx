@@ -12,6 +12,7 @@ import {
   Building2,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 import { resolveCompanyTimezone } from "@/lib/i18n/timezones";
 import { getCompanyWithDetails, getGroupStats } from "@/db/queries/companies";
 import { getOrgMembersWithNames } from "@/db/queries/members";
@@ -43,10 +44,12 @@ import { cn } from "@/lib/utils";
 function ScoreBreakdownRows({
   breakdown,
   locale,
+  userTimezone,
   labels,
 }: {
   breakdown: ScoreBreakdown;
   locale: string;
+  userTimezone: string;
   labels: { standing: string; signal: string; engagement: string; tasks: string; contact: string; computedAt: string };
 }) {
   const rows = [
@@ -76,9 +79,7 @@ function ScoreBreakdownRows({
       ))}
       <p className="text-[10px] text-muted-foreground pt-1">
         {labels.computedAt}:{" "}
-        {new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(
-          new Date(breakdown.computedAt),
-        )}
+        {formatDateInTz(breakdown.computedAt, locale, { timeZone: userTimezone, dateStyle: "medium", timeStyle: "short" })}
       </p>
     </div>
   );
@@ -100,7 +101,7 @@ export default async function CompanyDetailPage({
   const { id } = await params;
   const { tab: rawTab } = await searchParams;
   const tab = parseTab(rawTab);
-  const { activeOrganization } = await getActiveOrg();
+  const { activeOrganization, userTimezone } = await getActiveOrg();
   const company = await getCompanyWithDetails(activeOrganization.id, id);
   if (!company) notFound();
 
@@ -242,7 +243,7 @@ export default async function CompanyDetailPage({
             {company.signalDetectedAt && (
               <span className="text-muted-foreground">
                 {" · "}
-                {new Date(company.signalDetectedAt).toLocaleDateString()}
+                {formatDateInTz(company.signalDetectedAt, locale, { timeZone: userTimezone, dateStyle: "medium" })}
               </span>
             )}
           </div>
@@ -391,7 +392,7 @@ export default async function CompanyDetailPage({
                 })()}
                 <InfoRow
                   label={t("info.addedAt")}
-                  value={new Date(company.createdAt).toLocaleDateString()}
+                  value={formatDateInTz(company.createdAt, locale, { timeZone: userTimezone, dateStyle: "medium" })}
                 />
                 <InfoRow
                   label={t("info.relationship")}
@@ -507,6 +508,7 @@ export default async function CompanyDetailPage({
                 <ScoreBreakdownRows
                   breakdown={company.scoreBreakdown as ScoreBreakdown}
                   locale={locale}
+                  userTimezone={userTimezone}
                   labels={{
                     standing:   t("scoreBreakdown.standing"),
                     signal:     t("scoreBreakdown.signal"),
@@ -541,12 +543,14 @@ export default async function CompanyDetailPage({
             <CompanyTasksCard
               companyId={company.id}
               orgId={activeOrganization.id}
+              userTimezone={userTimezone}
               limit={5}
             />
             <CompanyInteractionsCard
               companyId={company.id}
               companyName={company.name}
               orgId={activeOrganization.id}
+              userTimezone={userTimezone}
               limit={5}
             />
           </div>
@@ -557,6 +561,7 @@ export default async function CompanyDetailPage({
         <CompanyTasksCard
           companyId={company.id}
           orgId={activeOrganization.id}
+          userTimezone={userTimezone}
         />
       )}
 
@@ -565,6 +570,7 @@ export default async function CompanyDetailPage({
           companyId={company.id}
           companyName={company.name}
           orgId={activeOrganization.id}
+          userTimezone={userTimezone}
         />
       )}
     </div>
@@ -574,10 +580,12 @@ export default async function CompanyDetailPage({
 async function CompanyTasksCard({
   companyId,
   orgId,
+  userTimezone,
   limit,
 }: {
   companyId: string;
   orgId: string;
+  userTimezone: string;
   /** Cap on rendered rows. Omitted = no cap (used on the dedicated tab). */
   limit?: number;
 }) {
@@ -614,7 +622,7 @@ async function CompanyTasksCard({
               </Link>
               {task.dueAt && (
                 <span className="text-xs text-muted-foreground ml-1">
-                  · {new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(task.dueAt)}
+                  · {formatDateInTz(task.dueAt, locale, { timeZone: userTimezone, dateStyle: "short" })}
                 </span>
               )}
               {task.contact && (
@@ -634,11 +642,13 @@ async function CompanyInteractionsCard({
   companyId,
   companyName,
   orgId,
+  userTimezone,
   limit,
 }: {
   companyId: string;
   companyName: string;
   orgId: string;
+  userTimezone: string;
   /** Cap on rendered rows. Omitted = no cap (used on the dedicated tab). */
   limit?: number;
 }) {
@@ -707,9 +717,7 @@ async function CompanyInteractionsCard({
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground shrink-0">
-                  {new Intl.DateTimeFormat(locale, { dateStyle: "short" }).format(
-                    new Date(interaction.occurredAt),
-                  )}
+                  {formatDateInTz(interaction.occurredAt, locale, { timeZone: userTimezone, dateStyle: "short" })}
                 </div>
               </div>
             </li>

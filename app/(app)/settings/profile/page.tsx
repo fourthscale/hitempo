@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 import { PageHeader } from "@/components/app/page-header";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ export default async function ProfilePage({
   const { saved, error, gmail } = await searchParams;
   const gmailCreds = await GmailCredentialsServiceFactory.getInstance().getForUser(user.id);
 
+  const locale = await getLocale();
   const t = await getTranslations("pages.settings.profile");
   const tRoles = await getTranslations("admin.orgs.detail.roles");
   const tLocales = await getTranslations("admin.orgs.detail.memberInvite.localeOptions");
@@ -159,7 +161,7 @@ export default async function ProfilePage({
                 <div className="text-sm font-medium truncate">{gmailCreds.gmailAddress}</div>
                 <div className="text-xs text-muted-foreground">
                   {t("gmailConnectedSince", {
-                    date: new Date(gmailCreds.connectedAt).toLocaleDateString(),
+                    date: formatDateInTz(gmailCreds.connectedAt, locale, { timeZone: memberTimezone, dateStyle: "medium" }),
                   })}
                 </div>
               </div>

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ArrowLeft, Building2, Circle, User, Workflow } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 import { getDb } from "@/db/client";
 import { getEnrolmentDetail } from "@/db/queries/sequence-enrolments";
 import { getSequenceWithSteps } from "@/db/queries/sequences";
@@ -32,7 +33,7 @@ export default async function EnrolmentDetailPage({
   params: Promise<{ id: string; enrolmentId: string }>;
 }) {
   const { id, enrolmentId } = await params;
-  const { activeOrganization } = await getActiveOrg();
+  const { activeOrganization, userTimezone } = await getActiveOrg();
   const db = getDb();
 
   const enrolment = await getEnrolmentDetail(db, activeOrganization.id, enrolmentId);
@@ -283,13 +284,15 @@ export default async function EnrolmentDetailPage({
   // countdown on the row.
   const currentWaitResumeAt: Date | null = waitResumeAt;
 
-  const dateTime = new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const formatDateTime = (d: Date | string | null | undefined): string =>
+    formatDateInTz(d, locale, {
+      timeZone: userTimezone,
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -354,15 +357,15 @@ export default async function EnrolmentDetailPage({
         </Card>
         <Card className="p-4 space-y-1.5 text-sm">
           <p className="text-muted-foreground">
-            {t("enrolment.startedOn", { date: dateTime.format(enrolment.startedAt) })}
+            {t("enrolment.startedOn", { date: formatDateTime(enrolment.startedAt) })}
           </p>
           {enrolment.endedAt ? (
             <p className="text-muted-foreground">
-              {t("enrolment.endedOn", { date: dateTime.format(enrolment.endedAt) })}
+              {t("enrolment.endedOn", { date: formatDateTime(enrolment.endedAt) })}
             </p>
           ) : enrolment.nextDueAt ? (
             <p className="text-muted-foreground">
-              {t("enrolment.nextDue", { date: dateTime.format(enrolment.nextDueAt) })}
+              {t("enrolment.nextDue", { date: formatDateTime(enrolment.nextDueAt) })}
             </p>
           ) : (
             <p className="text-muted-foreground">{t("enrolment.noNextDue")}</p>
@@ -430,7 +433,7 @@ export default async function EnrolmentDetailPage({
                       {currentWaitResumeAt && row.actionType === "wait_delay" && (
                         <p className="text-xs text-foreground mt-1">
                           {t("enrolment.timeline.resumeAt", {
-                            date: dateTime.format(currentWaitResumeAt),
+                            date: formatDateTime(currentWaitResumeAt),
                           })}
                           {" · "}
                           <span className="text-rose-700">
@@ -462,7 +465,7 @@ export default async function EnrolmentDetailPage({
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{dateTime.format(row.executedAt)}</span>
+                      <span>{formatDateTime(row.executedAt)}</span>
                       <span>·</span>
                       <span>
                         {t("enrolment.timeline.stepLabel", { order: row.stepOrder + 1 })}

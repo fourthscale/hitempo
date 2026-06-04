@@ -32,6 +32,7 @@ import {
 } from "@/lib/messages/task-defaults";
 import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { resolveContactTimezone } from "@/lib/i18n/timezones";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 import { cn } from "@/lib/utils";
 
 const INTERACTION_TYPES = [
@@ -52,7 +53,7 @@ export default async function ContactDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { activeOrganization, user } = await getActiveOrg();
+  const { activeOrganization, user, userTimezone } = await getActiveOrg();
   const orgId = activeOrganization.id;
   const gmailStatus = await GmailCredentialsServiceFactory.getInstance().getConnectionStatus(user.id);
   const contact = await getContactById(orgId, id);
@@ -287,7 +288,7 @@ export default async function ContactDetailPage({
                   </Link>
                   {task.dueAt && (
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(task.dueAt)}
+                      {formatDateInTz(task.dueAt, locale, { timeZone: userTimezone, dateStyle: "medium" })}
                     </div>
                   )}
                 </div>

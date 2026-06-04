@@ -5,6 +5,7 @@ import {
   Mail, Phone, MapPin, RefreshCcw, Search, Calendar, User, AlertTriangle, Workflow, Bot,
 } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
+import { formatDateInTz } from "@/lib/i18n/format-date";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { getTaskDetail } from "@/db/queries/tasks";
 import { getInteractionsByTask } from "@/db/queries/interactions";
@@ -46,7 +47,7 @@ export default async function TaskDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { activeOrganization, user } = await getActiveOrg();
+  const { activeOrganization, user, userTimezone } = await getActiveOrg();
   const orgId = activeOrganization.id;
   const gmailStatus = await GmailCredentialsServiceFactory.getInstance().getConnectionStatus(user.id);
   const locale = await getLocale();
@@ -362,10 +363,11 @@ export default async function TaskDetailPage({
                 <dt className="text-muted-foreground shrink-0 w-24">{t("detail.dueAt")}</dt>
                 <dd className={cn(isOverdue ? "text-brand-amber font-medium" : "text-foreground")}>
                   {task.dueAt ? (
-                    new Intl.DateTimeFormat(locale, {
+                    formatDateInTz(task.dueAt, locale, {
+                      timeZone: userTimezone,
                       dateStyle: "medium",
                       timeStyle: "short",
-                    }).format(task.dueAt)
+                    })
                   ) : (
                     <span className="text-muted-foreground">{t("detail.noDueDate")}</span>
                   )}
@@ -428,7 +430,7 @@ export default async function TaskDetailPage({
               <div className="flex items-start gap-2">
                 <dt className="text-muted-foreground shrink-0 w-24">{t("detail.createdAt")}</dt>
                 <dd className="text-muted-foreground">
-                  {new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(task.createdAt)}
+                  {formatDateInTz(task.createdAt, locale, { timeZone: userTimezone, dateStyle: "medium" })}
                 </dd>
               </div>
             </dl>
