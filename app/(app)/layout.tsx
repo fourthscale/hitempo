@@ -4,35 +4,45 @@ import { Topbar } from "@/components/app/topbar";
 import { ImpersonationBanner } from "@/components/app/impersonation-banner";
 import { ActionErrorModal } from "@/components/app/action-error-modal";
 import { AppShell } from "@/components/app/app-shell";
+import { TzProvider } from "@/lib/i18n/tz-context";
 
 export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, membership, activeOrganization, allMemberships, isPlatformAdmin, isImpersonating } =
-    await getActiveOrg();
+  const {
+    user,
+    membership,
+    activeOrganization,
+    allMemberships,
+    isPlatformAdmin,
+    isImpersonating,
+    userTimezone,
+  } = await getActiveOrg();
 
   return (
-    <AppShell
-      sidebar={
-        <Sidebar
-          user={user}
-          organization={activeOrganization}
-          allOrgs={allMemberships.map((m) => ({ id: m.organizationId, name: m.organization.name }))}
-          memberRole={membership?.role ?? null}
-          isPlatformAdmin={isPlatformAdmin}
-        />
-      }
-    >
-      {isImpersonating && (
-        <ImpersonationBanner orgName={activeOrganization.name} />
-      )}
-      <Topbar />
-      <main className="flex-1 px-4 md:px-8 py-6 md:py-8 bg-background overflow-x-hidden">
-        {children}
-      </main>
-      <ActionErrorModal />
-    </AppShell>
+    <TzProvider userTimezone={userTimezone}>
+      <AppShell
+        sidebar={
+          <Sidebar
+            user={user}
+            organization={activeOrganization}
+            allOrgs={allMemberships.map((m) => ({ id: m.organizationId, name: m.organization.name }))}
+            memberRole={membership?.role ?? null}
+            isPlatformAdmin={isPlatformAdmin}
+          />
+        }
+      >
+        {isImpersonating && (
+          <ImpersonationBanner orgName={activeOrganization.name} />
+        )}
+        <Topbar />
+        <main className="flex-1 px-4 md:px-8 py-6 md:py-8 bg-background overflow-x-hidden">
+          {children}
+        </main>
+        <ActionErrorModal />
+      </AppShell>
+    </TzProvider>
   );
 }

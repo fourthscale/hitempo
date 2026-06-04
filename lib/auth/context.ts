@@ -165,6 +165,11 @@ export async function getActiveOrg() {
           allMemberships,
           ownOrganization: organization,
           activeOrganization: target,
+          // userTimezone : the admin's own member-tz when they have one,
+          // else the impersonated org's tz. Dates rendered for the admin
+          // (createdAt rows, audit columns) feel right in their working
+          // tz ; the impersonated org's tz is a sensible last-resort.
+          userTimezone: membership?.timezone ?? target.timezone,
           isPlatformAdmin: true as const,
           isImpersonating: organization?.id !== target.id,
         };
@@ -180,6 +185,11 @@ export async function getActiveOrg() {
       allMemberships,
       ownOrganization: organization,
       activeOrganization: organization,
+      // userTimezone : `member.timezone` is NOT NULL (default Europe/Paris)
+      // so `membership?.timezone` is always defined here. The `??`
+      // fallback to organization.timezone handles the impossible-but-typed
+      // case where membership is null (TypeScript can't narrow it here).
+      userTimezone: membership?.timezone ?? organization.timezone,
       isPlatformAdmin,
       isImpersonating: false,
     };
