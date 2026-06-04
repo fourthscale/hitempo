@@ -50,18 +50,26 @@ export function formatDateInTz(
   if (Number.isNaN(d.getTime())) return "";
 
   const { timeZone, ...rest } = options;
+  // Intl.DateTimeFormat rejects mixing `dateStyle`/`timeStyle` with
+  // individual options (`day`, `month`, `hour`, ...). The caller decides
+  // which mode they want ; we do NOT inject defaults so we don't trigger
+  // that conflict. If `rest` is empty, fall back to medium date + short
+  // time — typical "createdAt" / "occurredAt" display.
+  const hasAnyOption = Object.keys(rest).length > 0;
+  const baseOptions: Intl.DateTimeFormatOptions = hasAnyOption
+    ? rest
+    : { dateStyle: "medium", timeStyle: "short" };
   try {
     return new Intl.DateTimeFormat(locale, {
-      dateStyle: "medium",
-      timeStyle: "short",
-      ...rest,
+      ...baseOptions,
       timeZone: timeZone || "UTC",
     }).format(d);
   } catch {
     // Unknown timezone (typo in DB row, frozen runtime). Last-resort
-    // fallback : format in UTC with a marker so the developer sees it.
+    // fallback : format in UTC. We don't expect this in practice — the
+    // timezones in DB are validated against the runtime Intl set.
     try {
-      return new Intl.DateTimeFormat(locale, { ...rest, timeZone: "UTC" }).format(d);
+      return new Intl.DateTimeFormat(locale, { ...baseOptions, timeZone: "UTC" }).format(d);
     } catch {
       return d.toISOString();
     }
