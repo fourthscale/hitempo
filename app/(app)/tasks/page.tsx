@@ -575,7 +575,19 @@ async function TaskRow({
           )}
           {!isOverdue && !isCompleted && effectiveDate(task) && (
             <span className="text-xs text-muted-foreground">
-              · {formatDateInTz(effectiveDate(task)!, locale, { timeZone: userTimezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              · {(() => {
+                // All-day display only when the surfaced date is dueAt AND it's
+                // flagged whole-day. scheduledFor is always a precise moment so
+                // it keeps the time. Same when both are set : scheduledFor wins
+                // and carries the time.
+                const showAllDay = !task.scheduledFor && task.dueAt && task.dueAtAllDay;
+                return formatDateInTz(effectiveDate(task)!, locale, {
+                  timeZone: userTimezone,
+                  day: "numeric",
+                  month: "short",
+                  ...(showAllDay ? {} : { hour: "2-digit", minute: "2-digit" }),
+                });
+              })()}
             </span>
           )}
         </div>

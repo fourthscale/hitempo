@@ -358,21 +358,57 @@ export default async function TaskDetailPage({
             </h2>
             <dl className="space-y-3 text-sm">
 
-              {/* Due date */}
+              {/* Scheduled for — when the engine plans to surface the task.
+                  Always a precise moment (no all-day mode). */}
+              <div className="flex items-start gap-2">
+                <dt className="text-muted-foreground shrink-0 w-24">{t("detail.scheduledFor")}</dt>
+                <dd className="text-foreground">
+                  {task.scheduledFor ? (
+                    formatDateInTz(task.scheduledFor, locale, {
+                      timeZone: userTimezone,
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })
+                  ) : (
+                    <span className="text-muted-foreground">{t("detail.noScheduled")}</span>
+                  )}
+                </dd>
+              </div>
+
+              {/* Due date — hard deadline. Hide the time when the task is
+                  flagged whole-day (the UI tooltip on the form makes this
+                  contract explicit). */}
               <div className="flex items-start gap-2">
                 <dt className="text-muted-foreground shrink-0 w-24">{t("detail.dueAt")}</dt>
                 <dd className={cn(isOverdue ? "text-brand-amber font-medium" : "text-foreground")}>
                   {task.dueAt ? (
                     formatDateInTz(task.dueAt, locale, {
                       timeZone: userTimezone,
-                      dateStyle: "medium",
-                      timeStyle: "short",
+                      ...(task.dueAtAllDay
+                        ? { dateStyle: "medium" }
+                        : { dateStyle: "medium", timeStyle: "short" }),
                     })
                   ) : (
                     <span className="text-muted-foreground">{t("detail.noDueDate")}</span>
                   )}
                 </dd>
               </div>
+
+              {/* Auto-execution stamp — only shown for agent-driven tasks
+                  that have already attempted a send (succeeded or failed).
+                  Not rendered for human tasks (null column). */}
+              {task.autoExecutionAt && (
+                <div className="flex items-start gap-2">
+                  <dt className="text-muted-foreground shrink-0 w-24">{t("detail.autoExecutionAt")}</dt>
+                  <dd className="text-foreground">
+                    {formatDateInTz(task.autoExecutionAt, locale, {
+                      timeZone: userTimezone,
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </dd>
+                </div>
+              )}
 
               {/* Assignee */}
               {assigneeName && (
