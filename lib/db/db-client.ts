@@ -37,10 +37,15 @@ export class DbClient {
   /**
    * Pool whose connection URL targets the connection-pooler with RLS enabled.
    * This is the pool that 95% of queries in user-facing code should use.
+   *
+   * Connection-count tuning : `SUPABASE_POSTGRES_POOL_MAX_RLS` caps the per-
+   * instance connections (default postgres-js value = 10). Lower it when
+   * stuck on Supabase's session pooler free tier (15-slot global cap),
+   * higher when on transaction pooler / Pro plan.
    */
   public getRls(): Db {
     if (this.rls) return this.rls.db;
-    this.rls = openPool(this.rlsUrlVar);
+    this.rls = openPool(this.rlsUrlVar, "SUPABASE_POSTGRES_POOL_MAX_RLS", DEFAULT_POOL_MAX_RLS);
     return this.rls.db;
   }
 
@@ -48,10 +53,14 @@ export class DbClient {
    * Pool whose connection URL has service-role access (RLS bypassed). Only
    * trusted server-side jobs should use this — Inngest workers, admin
    * actions explicitly scoped, migrations. Never reachable from client code.
+   *
+   * Connection-count tuning : `SUPABASE_POSTGRES_POOL_MAX_ADMIN` caps this
+   * pool independently (default postgres-js value = 10). Worker jobs run
+   * mostly sequential queries so a small value (2-3) is usually enough.
    */
   public getAdmin(): Db {
     if (this.admin) return this.admin.db;
-    this.admin = openPool(this.adminUrlVar);
+    this.admin = openPool(this.adminUrlVar, "SUPABASE_POSTGRES_POOL_MAX_ADMIN", DEFAULT_POOL_MAX_ADMIN);
     return this.admin.db;
   }
 
@@ -72,11 +81,36 @@ export class DbClient {
   }
 }
 
-function openPool(envVar: string): Pool {
+// Defaults sized for Supabase's session pooler on the free tier (15-slot
+// global cap, no IPv4 transaction pooler). Override per env var when on a
+// Pro / IPv4 setup with a generous pool.
+const DEFAULT_POOL_MAX_RLS = 3;
+const DEFAULT_POOL_MAX_ADMIN = 2;
+const DEFAULT_POOL_IDLE_TIMEOUT_SEC = 20;
+
+function openPool(envVar: string, maxEnvVar: string, defaultMax: number): Pool {
   const url = process.env[envVar];
   if (!url) {
     throw new DbMissingUrlError(envVar);
   }
-  const raw = postgres(url, { prepare: false });
+  const raw = postgres(url, {
+    prepare: false,
+    max: readPositiveInt(maxEnvVar, defaultMax),
+    idle_timeout: readPositiveInt(
+      "SUPABASE_POSTGRES_POOL_IDLE_TIMEOUT_SEC",
+      DEFAULT_POOL_IDLE_TIMEOUT_SEC,
+    ),
+  });
   return { db: drizzle(raw, { schema }), raw };
+}
+
+/** Parse a positive integer env var, falling back to `defaultValue` when the
+ *  var is unset / empty / non-numeric. Keeps a typo in env config from
+ *  breaking the pool — it just behaves like default. */
+function readPositiveInt(envVar: string, defaultValue: number): number {
+  const raw = process.env[envVar];
+  if (!raw) return defaultValue;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 1) return defaultValue;
+  return n;
 }
