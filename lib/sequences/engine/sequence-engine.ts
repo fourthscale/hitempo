@@ -71,6 +71,12 @@ export class SequenceEngine {
   }
 
   async advanceEnrolment(enrolmentId: string): Promise<AdvanceOutcome> {
+    // Defensive (belt-and-braces — Inngest handler already guards) : refuse
+    // empty enrolmentId so a logic regression elsewhere can't blast the
+    // postgres driver with UNDEFINED_VALUE errors.
+    if (!enrolmentId) {
+      return { status: "skipped", reason: "invalid_enrolment_id" };
+    }
     const enrolment = await getEnrolmentForEngine(this.db, enrolmentId);
     if (!enrolment || enrolment.status !== "active") {
       return { status: "skipped", reason: "not_active" };

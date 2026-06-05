@@ -70,6 +70,17 @@ async function handleAdvance({
   step: import("inngest").GetStepTools<typeof inngest>;
 }) {
   const enrolmentId = event.data.enrolmentId;
+  // Defensive : refuse empty/undefined enrolmentId upfront. Without this,
+  // downstream queries pass `undefined` to a parameterized `where id = $1`
+  // and postgres-js raises `UNDEFINED_VALUE`. We've seen this happen on
+  // stale Inngest events queued from earlier code paths.
+  if (!enrolmentId || typeof enrolmentId !== "string") {
+    console.error(
+      "[sequences/handleAdvance] refusing to advance with empty enrolmentId",
+      { eventName: event && (event as { name?: string }).name },
+    );
+    return { status: "skipped", reason: "invalid_enrolment_id" } as const;
+  }
   return step.run("advance", async () => {
     return SequenceEngineFactory.getInstance().advanceEnrolment(enrolmentId);
   });
