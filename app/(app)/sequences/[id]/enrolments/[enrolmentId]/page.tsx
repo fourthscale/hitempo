@@ -233,7 +233,12 @@ export default async function EnrolmentDetailPage({
         actionType: string;
         wait: { value: number; unit: SequenceDelayUnit } | null;
       };
-  const timeline: TimelineRow[] = executions.map((e) => {
+  const timeline: TimelineRow[] = executions
+    // `merge` is a passthrough join node — it carries no user-meaningful
+    // action. The engine drains through it without parking, so it's
+    // misleading to surface it as a separate timeline event. Hide it.
+    .filter((e) => e.actionType !== "merge")
+    .map((e) => {
     // The "wait in progress" execution row is rendered as the current step
     // (red badge + countdown) instead of "executed" — see waitInProgress.
     if (e.id === waitInProgressExecutionId) {

@@ -291,11 +291,12 @@ export class SequenceEngine {
     // `awaitTaskTimeoutMs`, the engine schedules a fallback resume at that
     // horizon — useful for "give up after 2 weeks if the rep ignored the
     // task" patterns. Default (no timeout) is wait-forever.
+    const delayMs = result.delayMs ?? 0;
     const nextDueAt = result.awaitTaskCompletion
       ? result.awaitTaskTimeoutMs != null
         ? new Date(this.now().getTime() + result.awaitTaskTimeoutMs)
         : null
-      : new Date(this.now().getTime() + (result.delayMs ?? 0));
+      : new Date(this.now().getTime() + delayMs);
 
     await advanceEnrolment(this.db, enrolment.id, {
       currentStepId: nextStep.id,
@@ -303,6 +304,18 @@ export class SequenceEngine {
       nextDueAt,
       lastExecutionCounter: nextCounter,
     });
+
+    // Drain zero-delay, non-awaiting transitions in the same handler
+    // invocation instead of returning and waiting for the next cron tick
+    // (up to 15 min latency). Typical use case : the `merge` passthrough
+    // node — there's no point parking on it. Also covers `conditional_split`
+    // routing into a non-blocking step, etc.
+    //
+    // Bounded by `maxExecutionCount` (the safety_loop_cap check at the top
+    // of advanceEnrolment), so a pathological graph can't recurse forever.
+    if (!result.awaitTaskCompletion && delayMs === 0) {
+      return this.advanceEnrolment(enrolment.id);
+    }
 
     return { status: "executed", taskId: result.taskId ?? null, navigatedTo };
   }
