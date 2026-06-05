@@ -41,6 +41,16 @@ const KNOWN_CODES = [
   "not_found",
   "invalid_timezone",
   "invalid_work_pattern",
+  // Sequence-side codes. Without these the modal silently swallows the
+  // error and the user sees nothing — exactly the bug surfaced on
+  // re-enroll attempts.
+  "sequence_not_found",
+  "sequence_locked",
+  "sequence_draft_invalid",
+  "sequence_no_draft",
+  "enrolment_not_found",
+  "contact_not_eligible",
+  "step_attachment_rejected",
 ] as const;
 type KnownCode = (typeof KNOWN_CODES)[number];
 
@@ -57,6 +67,7 @@ export function ActionErrorModal() {
   const code = search.get("action_error");
   const email = search.get("email") ?? undefined;
   const entity = search.get("entity") ?? undefined;
+  const reason = search.get("reason") ?? undefined;
 
   // `open` is derived directly from the URL — no `useState` to keep in sync.
   // Dismiss = strip the query params via `router.replace`, which triggers a
@@ -75,13 +86,25 @@ export function ActionErrorModal() {
   if (!open) return null;
 
   // Pick the localized message. `already_member` takes an email param ;
-  // `not_found` takes an entity-kind param ; everything else uses a fixed key.
+  // `not_found` takes an entity-kind param ; `contact_not_eligible` takes a
+  // `reason` (cooldown / active_enrolment_on_contact / etc) ; everything
+  // else uses a fixed key.
   const message = (() => {
     if (code === "already_member") {
       return email ? t("already_member", { email }) : t("already_member_generic");
     }
     if (code === "not_found") {
       return entity ? t(`not_found_${entity}` as never) : t("not_found_generic");
+    }
+    if (code === "contact_not_eligible" && reason) {
+      // Specific reason — falls back to the generic key if the i18n key
+      // for that reason hasn't been added yet.
+      const specific = `contact_not_eligible_${reason}`;
+      try {
+        return t(specific as never);
+      } catch {
+        return t(code);
+      }
     }
     return t(code);
   })();

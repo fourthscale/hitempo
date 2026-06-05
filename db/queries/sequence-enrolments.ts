@@ -292,7 +292,12 @@ export async function companyHasActiveEnrolment(
   return (row?.n ?? 0) > 0;
 }
 
-/** When the contact most recently completed an enrolment, or null. */
+/** When the contact most recently **completed** an enrolment (any
+ *  completed_* status), or null. Stopped enrolments (`stopped_manual` /
+ *  `stopped_opted_out`) deliberately do NOT count — cooldown is about
+ *  pacing successful outreach, not about freezing a contact after the
+ *  user manually stopped a sequence (typically because they want to try
+ *  a different one). */
 export async function mostRecentCompletedEnrolmentAt(
   db: DbOrTx,
   orgId: string,
@@ -305,6 +310,7 @@ export async function mostRecentCompletedEnrolmentAt(
       and(
         eq(sequenceEnrolments.organizationId, orgId),
         eq(sequenceEnrolments.contactId, contactId),
+        sql`${sequenceEnrolments.status} in ('completed_exhausted','completed_success','completed_cascaded')`,
         sql`${sequenceEnrolments.endedAt} is not null`,
       ),
     )
