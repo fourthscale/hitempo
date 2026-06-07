@@ -547,6 +547,18 @@ export const tasks = pgTable(
     autoExecutionError: text("auto_execution_error"),
     autoExecutionAt: timestamp("auto_execution_at", { withTimezone: true }),
 
+    // Sprint 15 — email threading context resolved at task creation by the
+    // sequence engine. Filled when the source `send_email` step's
+    // `threadingMode` asks to reply to a previous thread ; all three stay
+    // null for fresh-thread sends and non-email tasks. The send-side path
+    // (agent executor + manual dialogs) reads these and passes them to the
+    // Gmail API + MIME builder — no sequence knowledge needed downstream.
+    // `subject` mirrors the thread's reference subject so the send picks
+    // it up with "Re: " prefix without an extra join on messages.
+    gmailThreadId: text("gmail_thread_id"),
+    gmailReplyToMessageId: text("gmail_reply_to_message_id"),
+    subject: text("subject"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1079,10 +1091,24 @@ export const sequenceStepExecutions = pgTable(
     taskId:     uuid("task_id"),
     outcome:    text("outcome").notNull(), // 'executed' | 'skipped_filter' | 'skipped_condition'
     notes:      text("notes"),
+
+    // Sprint 15 — email thread metadata captured AFTER the send completes
+    // (Agent executor / manual dialog updates this row post-send). Lets the
+    // next send_email step in the enrolment resolve "what thread are we in"
+    // with one indexed lookup. Null on non-email executions and on email
+    // steps that haven't sent yet (status pending).
+    gmailThreadId:  text("gmail_thread_id"),
+    gmailMessageId: text("gmail_message_id"),
+    subject:        text("subject"),
   },
   (t) => ({
     byEnrolment: index("idx_seq_executions_enrolment").on(t.enrolmentId),
     uniqCounter: uniqueIndex("uniq_seq_executions_counter").on(t.enrolmentId, t.executionCounter),
+    // Sprint 15 — partial index for the "find the latest thread in this
+    // enrolment" lookup used at task creation by the threading resolver.
+    byThread: index("idx_seq_executions_thread")
+      .on(t.enrolmentId, t.executedAt)
+      .where(sql`gmail_thread_id is not null`),
   }),
 );
 
