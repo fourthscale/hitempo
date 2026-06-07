@@ -25,6 +25,8 @@ import {
   NoFreeSlotError,
   type TaskTypeKey,
 } from "../task-slot-finder";
+import { ThreadingResolver, type ThreadContext } from "./threading-resolver";
+import type { ThreadingMode } from "../types";
 
 /**
  * Production implementation of the executor side-effect contract, bound to the
@@ -41,10 +43,12 @@ import {
 export class EngineExecutorServices implements SequenceExecutorServices {
   private readonly db: Db;
   private readonly now: () => Date;
+  private readonly threadingResolver: ThreadingResolver;
 
   constructor(deps: { db: Db; now?: () => Date }) {
     this.db = deps.db;
     this.now = deps.now ?? (() => new Date());
+    this.threadingResolver = new ThreadingResolver(this.db);
   }
 
   async createTask(input: {
@@ -57,6 +61,12 @@ export class EngineExecutorServices implements SequenceExecutorServices {
     title: string;
     description: string | null;
     scheduling?: TaskScheduling;
+    /** Sprint 15 — pre-resolved Gmail thread context. See
+     *  SequenceExecutorServices.createTask doc. */
+    gmailThreadId?: string | null;
+    gmailReplyToMessageId?: string | null;
+    subject?: string | null;
+    mailReferences?: string | null;
   }): Promise<{ taskId: string; scheduledFor: Date | null }> {
     // 1. Resolve TZ cascades + assignee work pattern + quotas.
     const { contactTz, assigneeMember } = await loadSchedulingContext(
@@ -128,6 +138,10 @@ export class EngineExecutorServices implements SequenceExecutorServices {
       dueAtAllDay,
       estimatedDurationMinutes:
         merged.estimatedDurationMinutes ?? DEFAULT_SCHEDULING.estimatedDurationMinutes,
+      gmailThreadId: input.gmailThreadId ?? null,
+      gmailReplyToMessageId: input.gmailReplyToMessageId ?? null,
+      subject: input.subject ?? null,
+      mailReferences: input.mailReferences ?? null,
     });
     return { taskId: row.id, scheduledFor };
   }
@@ -238,6 +252,15 @@ export class EngineExecutorServices implements SequenceExecutorServices {
         err,
       );
     }
+  }
+
+  async resolveThreadContext(input: {
+    organizationId: string;
+    contactId: string;
+    enrolmentId: string;
+    mode: ThreadingMode;
+  }): Promise<ThreadContext | null> {
+    return this.threadingResolver.resolve(input);
   }
 
   async updateContact(input: {

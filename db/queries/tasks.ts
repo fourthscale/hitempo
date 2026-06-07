@@ -577,6 +577,16 @@ export async function insertTaskForEnrolment(
     dueAtAllDay?: boolean;
     /** Effective slot duration in minutes (defaulted from step scheduling). */
     estimatedDurationMinutes?: number | null;
+    /** Sprint 15 — pre-resolved Gmail thread context for the send-side
+     *  (agent executor + manual dialogs). All three travel together :
+     *  thread id + the message id we'll reply to + the previous subject
+     *  (used to build a "Re: ..." subject without an extra join). */
+    gmailThreadId?: string | null;
+    gmailReplyToMessageId?: string | null;
+    subject?: string | null;
+    /** Sprint 15 — full RFC 5322 References chain (space-separated message
+     *  ids with angle brackets, oldest → newest, includes parent at end). */
+    mailReferences?: string | null;
   },
 ) {
   const [row] = await db
@@ -596,6 +606,10 @@ export async function insertTaskForEnrolment(
       companyId: data.companyId ?? null,
       contactId: data.contactId ?? null,
       status: "pending",
+      gmailThreadId: data.gmailThreadId ?? null,
+      gmailReplyToMessageId: data.gmailReplyToMessageId ?? null,
+      subject: data.subject ?? null,
+      mailReferences: data.mailReferences ?? null,
     })
     .returning({ id: tasks.id });
   if (!row) throw new Error("insertTaskForEnrolment: no row returned");

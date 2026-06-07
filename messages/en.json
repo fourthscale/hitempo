@@ -1308,7 +1308,18 @@
           "predicate": "Condition",
           "property": "Property",
           "setStatus": "Set status",
-          "setRole": "Set role"
+          "setRole": "Set role",
+          "threadingMode": "Reply mode"
+        },
+        "threadingModes": {
+          "new_thread": "New thread",
+          "last_email_step": "Reply to last email",
+          "entry_email_step": "Reply to first email",
+          "last_answered_step": "Reply where the contact answered"
+        },
+        "threading": {
+          "lockedFirstStep": "The first email step always starts a fresh thread — no previous email to reply to.",
+          "subjectInherited": "Subject inherited from the previous thread (Re: …)."
         },
         "taskTypes": {
           "email": "Email",

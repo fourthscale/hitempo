@@ -269,7 +269,8 @@ describe("buildOutboundMessagePrompt — snapshot (one canonical case)", () => {
       - Pas de mention de prix
       - Signature : Matt Thévenoz
       - Ne jamais inventer un proof point absent de la liste ci-dessus
-      - Ne jamais répéter une phrase mot pour mot d'un message précédent"
+      - Ne jamais répéter une phrase mot pour mot d'un message précédent
+      - INTERDIT : aucun tiret cadratin "—" (em-dash), aucun tiret demi-cadratin "–" (en-dash). Utiliser virgule, point, deux-points, parenthèses ou point-virgule à la place."
     `);
 
     expect(userPrompt).toMatchInlineSnapshot(`

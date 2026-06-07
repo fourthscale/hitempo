@@ -127,6 +127,42 @@ export type TaskAssignment = {
 export type MessageMode = "ai" | "defined";
 
 /**
+ * Sprint 15 — email threading mode for `send_email` step config. Drives
+ * whether the engine resolves a previous Gmail thread to reply into,
+ * and which one. See docs/features/15-sequences-email-threading.md.
+ *
+ *  - `new_thread`         : default. Send as a fresh Gmail thread (no
+ *                            In-Reply-To/References headers, no "Re:").
+ *  - `last_email_step`    : reply to the most recent prior send_email
+ *                            step's thread (linear cold-outreach follow-up).
+ *  - `entry_email_step`   : reply to the very first send_email step's
+ *                            thread (anchors every follow-up to the
+ *                            entry pitch).
+ *  - `last_answered_step` : reply to the thread of the step that
+ *                            prompted the most recent inbound reply.
+ *                            Falls back to `last_email_step` when no
+ *                            inbound reply has been received yet.
+ *
+ * The engine resolves the target thread at task creation
+ * (`ThreadingResolver`) and stamps the task's
+ * `gmail_thread_id` / `gmail_reply_to_message_id` / `subject` fields. The
+ * send-side (agent executor + manual dialogs) reads these off the task
+ * directly — no sequence knowledge at send time.
+ */
+export type ThreadingMode =
+  | "new_thread"
+  | "last_email_step"
+  | "entry_email_step"
+  | "last_answered_step";
+
+export const THREADING_MODES: readonly ThreadingMode[] = [
+  "new_thread",
+  "last_email_step",
+  "entry_email_step",
+  "last_answered_step",
+] as const;
+
+/**
  * Sprint 12 — Files pre-attached at sequence step level. When the sale
  * opens the GenerateMessageDialog for a task created by this step, these
  * files are pre-loaded as attachments. Stored in Supabase Storage under
@@ -175,6 +211,14 @@ export type SendMessageActionConfig = {
    * pre-attachments.
    */
   attachments?: SequenceStepAttachmentRef[];
+  /**
+   * Sprint 15 — email threading mode. Drives whether the engine resolves
+   * a previous Gmail thread to reply into at task creation, and which
+   * one. Defaults to `new_thread` when omitted. The editor locks the
+   * first send_email step in the graph to `new_thread` (no prior thread
+   * to reply to). Only meaningful when `channel === "email"`.
+   */
+  threadingMode?: ThreadingMode;
 };
 
 /** phone_call — a manual call task, no message. */

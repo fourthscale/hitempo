@@ -26,6 +26,22 @@ export type GmailSendInput = {
    *  follow-ups). The first send leaves this undefined and lets Gmail
    *  create a new thread. */
   replyToThreadId?: string;
+  /**
+   * Sprint 15 — Gmail RFC 5322 Message-ID of the message we're replying
+   * to. Injected as the `In-Reply-To` and (V1) `References` MIME header
+   * so the recipient's client renders this email as a real reply in the
+   * same conversation. Required by the threading flow ; ignored when
+   * `replyToThreadId` is omitted.
+   */
+  inReplyToMessageId?: string;
+  /**
+   * Sprint 15 — full RFC 5322 References chain. Space-separated message-ids
+   * (with angle brackets), oldest → newest, INCLUDING the parent at the end.
+   * Forwarded verbatim to the MIME builder so the recipient's client can
+   * splice the message into the right conversation when there are 2+ hops.
+   * Falls back to a single-id References header when omitted.
+   */
+  references?: string;
   /** Optional PDF attachments. Caller is responsible for enforcing size
    *  and type limits (see lib/gmail/attachment-limits.ts) — this layer
    *  trusts the bytes it's handed and only encodes them into MIME. */
@@ -65,6 +81,8 @@ export class GmailService {
       subject: input.subject,
       body: input.body,
       attachments: input.attachments,
+      inReplyToMessageId: input.inReplyToMessageId,
+      references: input.references,
     };
     const raw = MimeMessageBuilder.forInput(mimeInput).build(mimeInput);
 

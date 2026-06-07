@@ -502,6 +502,7 @@ export function SequenceEditor({
             <div className="w-80 shrink-0 rounded-lg border border-border bg-card">
               <SequenceStepDetailPanel
                 step={selectedStep}
+                draft={draft}
                 sequenceId={sequenceId}
                 otherSequences={otherSequences}
                 orgMembers={orgMembers}

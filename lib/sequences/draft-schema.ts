@@ -159,6 +159,11 @@ const sendMessageConfigSchema = z.object({
   awaitTaskTimeoutDays: awaitTaskTimeoutDaysSchema,
   /** Sprint 12 — pre-attached files. Empty / omitted = no attachments. */
   attachments: z.array(stepAttachmentSchema).optional(),
+  /** Sprint 15 — email threading mode. Defaults to `new_thread` when
+   *  omitted. The editor locks the first send_email step to `new_thread`. */
+  threadingMode: z
+    .enum(["new_thread", "last_email_step", "entry_email_step", "last_answered_step"])
+    .optional(),
 });
 
 const phoneCallConfigSchema = z.object({

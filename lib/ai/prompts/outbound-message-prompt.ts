@@ -58,6 +58,13 @@ export type OutboundMessageContext = {
   locale: MessageLocale;
   /** Optional user note injected verbatim ("plus court", "mentionne la rénovation"). */
   orientation?: string;
+  /**
+   * Sprint 15 — true when the engine has resolved this message to land
+   * inside an existing Gmail thread. The prompt drops the "Subject: ..."
+   * line requirement and reframes the body as a natural follow-up to the
+   * previous outreach (the recipient already has full context above).
+   */
+  isThreadFollowUp?: boolean;
 };
 
 export function buildOutboundMessagePrompt(ctx: OutboundMessageContext): {
@@ -92,12 +99,20 @@ function buildFrench(ctx: OutboundMessageContext) {
     "",
     `Contraintes de format pour ce message :`,
     ctx.channel === "email"
-      ? [
-          `- Email : 80 à 150 mots dans le corps`,
-          `- Première ligne EXACTEMENT au format : "Objet: <ton objet>"`,
-          `- Ligne vide après l'objet`,
-          `- Puis le corps du message`,
-        ].join("\n")
+      ? ctx.isThreadFollowUp
+        ? [
+            `- Email : suivi dans un fil de conversation existant`,
+            `- 60 à 120 mots dans le corps (plus court que le premier email)`,
+            `- NE PAS écrire de ligne "Objet:" — l'objet sera automatiquement préfixé par "Re: " sur le sujet du fil précédent`,
+            `- Commence directement par le corps, formulé comme une relance naturelle ("Pour rebondir sur mon dernier message…", "Petit rappel concernant…", etc.)`,
+            `- Le destinataire a déjà tout le contexte plus haut dans le fil : ne pas répéter le pitch initial`,
+          ].join("\n")
+        : [
+            `- Email : 80 à 150 mots dans le corps`,
+            `- Première ligne EXACTEMENT au format : "Objet: <ton objet>"`,
+            `- Ligne vide après l'objet`,
+            `- Puis le corps du message`,
+          ].join("\n")
       : `- LinkedIn DM : max 300 caractères, pas d'objet, pas de salutation formelle`,
     `- Langue : français`,
     `- Pas de mention de prix`,
@@ -170,9 +185,15 @@ function buildFrench(ctx: OutboundMessageContext) {
     `Rédige uniquement le message final, sans préambule ni commentaire.`,
   );
   if (ctx.channel === "email") {
-    userSections.push(
-      `Format : "Objet: <ton objet>" sur la première ligne, ligne vide, puis le corps.`,
-    );
+    if (ctx.isThreadFollowUp) {
+      userSections.push(
+        `Format : corps SEUL (pas de ligne "Objet:"), formulé comme une relance dans le fil existant.`,
+      );
+    } else {
+      userSections.push(
+        `Format : "Objet: <ton objet>" sur la première ligne, ligne vide, puis le corps.`,
+      );
+    }
   }
 
   return {
@@ -206,12 +227,20 @@ function buildEnglish(ctx: OutboundMessageContext) {
     "",
     `Format constraints for this message:`,
     ctx.channel === "email"
-      ? [
-          `- Email: 80 to 150 words in the body`,
-          `- First line EXACTLY in the format: "Subject: <your subject>"`,
-          `- Empty line after the subject`,
-          `- Then the body of the message`,
-        ].join("\n")
+      ? ctx.isThreadFollowUp
+        ? [
+            `- Email: follow-up inside an existing conversation thread`,
+            `- 60 to 120 words in the body (shorter than the first email)`,
+            `- DO NOT write a "Subject:" line — the subject will be auto-prefixed with "Re: " on the previous thread subject`,
+            `- Start directly with the body, framed as a natural follow-up ("Following up on my last message…", "Quick reminder regarding…", etc.)`,
+            `- The recipient already has the full context above in the thread : do NOT repeat the initial pitch`,
+          ].join("\n")
+        : [
+            `- Email: 80 to 150 words in the body`,
+            `- First line EXACTLY in the format: "Subject: <your subject>"`,
+            `- Empty line after the subject`,
+            `- Then the body of the message`,
+          ].join("\n")
       : `- LinkedIn DM: 300 characters max, no subject, no formal greeting`,
     `- Language: English`,
     `- No price mention`,
@@ -283,9 +312,15 @@ function buildEnglish(ctx: OutboundMessageContext) {
     `Write only the final message, with no preamble or commentary.`,
   );
   if (ctx.channel === "email") {
-    userSections.push(
-      `Format: "Subject: <your subject>" on the first line, empty line, then the body.`,
-    );
+    if (ctx.isThreadFollowUp) {
+      userSections.push(
+        `Format: body ONLY (no "Subject:" line), framed as a follow-up inside the existing thread.`,
+      );
+    } else {
+      userSections.push(
+        `Format: "Subject: <your subject>" on the first line, empty line, then the body.`,
+      );
+    }
   }
 
   return {

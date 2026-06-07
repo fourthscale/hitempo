@@ -55,6 +55,7 @@ function mockServices(over: Partial<SequenceExecutorServices> = {}): SequenceExe
     updateContact: vi.fn().mockResolvedValue(undefined),
     getSenderName: vi.fn().mockResolvedValue(null),
     scheduleAgentAutoExecute: vi.fn().mockResolvedValue(undefined),
+    resolveThreadContext: vi.fn().mockResolvedValue(null),
     ...over,
   };
 }

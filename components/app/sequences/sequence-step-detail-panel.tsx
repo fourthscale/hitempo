@@ -10,18 +10,20 @@ import { LocalizedStringInput } from "./localized-string-input";
 import { ConditionBuilder } from "./condition-builder";
 import { StepAttachmentsField } from "./step-attachments-field";
 import { emptyGroup, type ConditionGroup } from "@/lib/sequences/conditions";
-import type { DraftStep } from "@/lib/sequences/draft-schema";
-import type {
-  SendMessageActionConfig,
-  PhoneCallActionConfig,
-  WaitDelayActionConfig,
-  UpdateContactActionConfig,
-  ConditionalSplitActionConfig,
-  ConditionalSwitchActionConfig,
-  EnrollInSequenceActionConfig,
-  TaskAssignment,
-  LocalizedString,
-  SequenceStepAttachmentRef,
+import type { DraftDefinition, DraftStep } from "@/lib/sequences/draft-schema";
+import {
+  THREADING_MODES,
+  type SendMessageActionConfig,
+  type PhoneCallActionConfig,
+  type WaitDelayActionConfig,
+  type UpdateContactActionConfig,
+  type ConditionalSplitActionConfig,
+  type ConditionalSwitchActionConfig,
+  type EnrollInSequenceActionConfig,
+  type TaskAssignment,
+  type LocalizedString,
+  type SequenceStepAttachmentRef,
+  type ThreadingMode,
 } from "@/lib/sequences/types";
 import type { TaskScheduling } from "@/lib/sequences/scheduling";
 import { DEFAULT_SCHEDULING } from "@/lib/sequences/scheduling";
@@ -42,8 +44,63 @@ const CONTACT_ROLES = ["decision_maker", "influencer", "user", "prescriber", "as
 const selectCls =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
+/**
+ * Sprint 15 — walks the draft graph from the entry step and returns true
+ * when `stepId` is reached without encountering any other `send_email`
+ * predecessor along any path. Used by the editor to lock the first
+ * email step's threading mode to `new_thread` (there's no previous
+ * thread to reply into).
+ *
+ * The traversal is BFS over `next_step_ids` (default / yes / no / cases)
+ * — paths that fork through a conditional split count as separate
+ * predecessors. We bail early if we hit `stepId` on a path that already
+ * passed through a `send_email`.
+ */
+function isFirstSendEmailStep(draft: DraftDefinition, stepId: string): boolean {
+  if (!draft.entryStepId) return true;
+  const byId = new Map(draft.steps.map((s) => [s.id, s] as const));
+  const target = byId.get(stepId);
+  if (!target || target.actionType !== "send_email") return true;
+  // BFS: each frontier entry tracks "did this path already pass a send_email".
+  const visited = new Set<string>();
+  type Frame = { id: string; sawSend: boolean };
+  const queue: Frame[] = [{ id: draft.entryStepId, sawSend: false }];
+  while (queue.length > 0) {
+    const f = queue.shift()!;
+    // Visit-with-flag dedup : the same node reached with `sawSend=true`
+    // is a different state than `sawSend=false` ; we'd lose the
+    // "already saw email" signal otherwise.
+    const key = `${f.id}#${f.sawSend ? "1" : "0"}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    if (f.id === stepId) {
+      // Reached the target via a path that already had a prior send_email
+      // → not the first.
+      if (f.sawSend) return false;
+      // Otherwise keep exploring : another path might still find a
+      // prior send_email reaching the same target.
+      continue;
+    }
+    const node = byId.get(f.id);
+    if (!node) continue;
+    const nextSaw = f.sawSend || node.actionType === "send_email";
+    const next = node.nextStepIds;
+    if (!next) continue;
+    const targets: string[] = [];
+    if (next.default) targets.push(next.default);
+    if (next.yes) targets.push(next.yes);
+    if (next.no) targets.push(next.no);
+    if (next.cases) targets.push(...Object.values(next.cases));
+    for (const t of targets) {
+      if (byId.has(t)) queue.push({ id: t, sawSend: nextSaw });
+    }
+  }
+  return true;
+}
+
 export function SequenceStepDetailPanel({
   step,
+  draft,
   sequenceId,
   otherSequences,
   orgMembers,
@@ -53,6 +110,10 @@ export function SequenceStepDetailPanel({
   canDelete,
 }: {
   step: DraftStep;
+  /** Sprint 15 — the full draft is needed to decide whether this is the
+   *  first `send_email` step (no upstream prior send_email → threading
+   *  locked to `new_thread`). */
+  draft: DraftDefinition;
   /** Sprint 12 — needed by the attachments field to scope storage upload. */
   sequenceId: string;
   otherSequences: { id: string; name: string }[];
@@ -126,8 +187,57 @@ export function SequenceStepDetailPanel({
       {/* ----- Message (email / linkedin) ----- */}
       {isMessage && (() => {
         const cfg = step.actionConfig as Partial<SendMessageActionConfig>;
+        // Sprint 15 — threading is only meaningful on email and only
+        // when there's at least one prior `send_email` step upstream.
+        // The first email step in the graph (no upstream send_email)
+        // is locked to `new_thread` with an explanatory tooltip.
+        const isEmail = step.actionType === "send_email";
+        const isFirstEmail = isEmail && isFirstSendEmailStep(draft, step.id);
+        const effectiveThreadingMode: ThreadingMode = isEmail
+          ? isFirstEmail
+            ? "new_thread"
+            : (cfg.threadingMode ?? "new_thread")
+          : "new_thread";
+        const threadingActive = isEmail && effectiveThreadingMode !== "new_thread";
         return (
           <>
+            {/* Threading mode — at the top so the user picks the
+                conversation context BEFORE writing/picking the body
+                (it changes whether the subject UI is even relevant). */}
+            {isEmail && (
+              <div className="space-y-1.5">
+                <Label>{t("editor.fields.threadingMode")}</Label>
+                <select
+                  className={selectCls}
+                  value={effectiveThreadingMode}
+                  disabled={isFirstEmail}
+                  title={
+                    isFirstEmail
+                      ? t("editor.threading.lockedFirstStep")
+                      : undefined
+                  }
+                  onChange={(e) =>
+                    patchConfig({ threadingMode: e.target.value as ThreadingMode })
+                  }
+                >
+                  {THREADING_MODES.map((m) => (
+                    <option key={m} value={m}>
+                      {t(`editor.threadingModes.${m}`)}
+                    </option>
+                  ))}
+                </select>
+                {isFirstEmail && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("editor.threading.lockedFirstStep")}
+                  </p>
+                )}
+                {threadingActive && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {t("editor.threading.subjectInherited")}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>{t("editor.fields.mode")}</Label>
               <div className="flex gap-2">
@@ -178,12 +288,19 @@ export function SequenceStepDetailPanel({
               </>
             ) : (
               <>
-                <LocalizedStringInput
-                  label={t("editor.fields.subject")}
-                  value={cfg.subject}
-                  onChange={(v) => patchConfig({ subject: v })}
-                  templating
-                />
+                {/* Sprint 15 — when threading is active, the subject sent
+                    will be `Re: <previous thread subject>` (resolved by
+                    the engine + agent / dialog). Hiding the subject field
+                    here avoids confusion ("what I type isn't what's
+                    sent"). The body keeps its template editor. */}
+                {!threadingActive && (
+                  <LocalizedStringInput
+                    label={t("editor.fields.subject")}
+                    value={cfg.subject}
+                    onChange={(v) => patchConfig({ subject: v })}
+                    templating
+                  />
+                )}
                 <LocalizedStringInput
                   label={t("editor.fields.body")}
                   value={cfg.body}

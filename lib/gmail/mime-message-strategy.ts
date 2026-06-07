@@ -28,7 +28,64 @@ export type MimeMessageInput = {
   subject: string;
   body: string;
   attachments?: MimeAttachment[];
+  /**
+   * Sprint 15 — when set, the builder injects standard threading headers
+   * so the recipient's client renders the message as a real reply :
+   *   - `In-Reply-To: <message-id>`
+   *   - `References: <chain>` if `references` is set, else `<message-id>`
+   * The angle brackets are added by the builder if missing.
+   *
+   * Subject prefixing with "Re: " is NOT handled here — the caller is
+   * responsible for that, so the same builder remains usable for non-
+   * threaded sends.
+   */
+  inReplyToMessageId?: string;
+  /**
+   * Sprint 15 — full RFC 5322 References chain (space-separated message-ids
+   * with angle brackets, oldest → newest, includes the parent at the end).
+   * Emitted verbatim as the `References:` header. When omitted but
+   * `inReplyToMessageId` is set, the builder falls back to a single-id
+   * References header (immediate parent only) — defensive for call sites
+   * that haven't been updated to pass the chain.
+   */
+  references?: string;
 };
+
+/**
+ * Sprint 15 — pure helper, exported for tests. Adds the "Re: " prefix to
+ * the subject unless it already starts with one (case-insensitive,
+ * tolerant of optional whitespace after the colon).
+ */
+export function prefixRe(subject: string): string {
+  return /^re:\s*/i.test(subject) ? subject : `Re: ${subject}`;
+}
+
+/**
+ * Sprint 15 — normalise a Gmail RFC 5322 Message-ID for use in the
+ * `In-Reply-To` / `References` headers. Gmail returns the raw id without
+ * angle brackets in some API surfaces and with brackets in others ;
+ * normalise to the bracketed form expected by RFC 2822.
+ */
+function bracketMessageId(messageId: string): string {
+  const trimmed = messageId.trim();
+  if (trimmed.startsWith("<") && trimmed.endsWith(">")) return trimmed;
+  return `<${trimmed}>`;
+}
+
+function buildThreadingHeaders(
+  inReplyToMessageId?: string,
+  references?: string,
+): string[] {
+  if (!inReplyToMessageId) return [];
+  const id = bracketMessageId(inReplyToMessageId);
+  // Prefer the full chain when the caller supplied it ; fall back to the
+  // parent id alone otherwise. Trim defensively — an empty/whitespace
+  // string from a misconfigured caller would produce `References: ` with
+  // no value, which some MTAs reject.
+  const refs =
+    references && references.trim().length > 0 ? references.trim() : id;
+  return [`In-Reply-To: ${id}`, `References: ${refs}`];
+}
 
 export interface MimeMessageStrategy {
   /** Returns the URL-safe-base64 encoded RFC 2822 message ready for the
@@ -91,6 +148,7 @@ export class TextOnlyMimeStrategy implements MimeMessageStrategy {
       `From: ${input.from}`,
       `To: ${input.to}`,
       buildSubjectHeader(input.subject),
+      ...buildThreadingHeaders(input.inReplyToMessageId, input.references),
       "MIME-Version: 1.0",
       "Content-Type: text/plain; charset=UTF-8",
       "Content-Transfer-Encoding: base64",
@@ -126,6 +184,7 @@ export class MultipartMixedMimeStrategy implements MimeMessageStrategy {
       `From: ${input.from}`,
       `To: ${input.to}`,
       buildSubjectHeader(input.subject),
+      ...buildThreadingHeaders(input.inReplyToMessageId, input.references),
       "MIME-Version: 1.0",
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
     ].join("\r\n");

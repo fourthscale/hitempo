@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { tasks } from "@/db/schema";
+import { sequenceStepExecutions, tasks } from "@/db/schema";
 import { getContactById } from "@/db/queries/contacts";
 import { getCompanyById } from "@/db/queries/companies";
 import { getMessageContextResolutionForTask } from "@/db/queries/sequences";
@@ -21,7 +21,7 @@ import type { SequenceStepAttachmentRef } from "@/lib/sequences/types";
 import type { MessageGenerationOrchestrator } from "@/lib/messages/message-generation-orchestrator";
 import type { GmailService } from "@/lib/gmail/gmail-service";
 import type { AttachmentStorageService } from "@/lib/gmail/attachment-storage-service";
-import type { MimeAttachment } from "@/lib/gmail/mime-message-strategy";
+import { prefixRe, type MimeAttachment } from "@/lib/gmail/mime-message-strategy";
 import { GmailCredentialsNotFoundError, GmailApiError } from "@/lib/gmail/gmail-errors";
 import { insertMessage } from "@/db/queries/messages";
 import { insertMessageAttachment } from "@/db/queries/message-attachments";
@@ -124,6 +124,10 @@ export class AgentMessageExecutor {
         status: true,
         autoExecutionStatus: true,
         sequenceEnrolmentId: true,
+        gmailThreadId: true,
+        gmailReplyToMessageId: true,
+        subject: true,
+        mailReferences: true,
       },
     });
     if (!task) throw new Error(`Task ${taskId} not found`);
@@ -218,6 +222,9 @@ export class AgentMessageExecutor {
         orientation: this.resolveOrientation(stepCfg.orientation, locale),
         sender: { firstName: sender.firstName, lastName: sender.lastName },
         sequenceEnrolmentId: ctx.sequenceEnrolmentId,
+        // Sprint 15 — when the engine has stamped a thread on the task,
+        // the prompt switches to "body-only follow-up" mode.
+        isThreadFollowUp: Boolean(task.gmailThreadId && task.gmailReplyToMessageId),
       });
       subject = generated.subject ?? "";
       body = generated.body;
@@ -232,14 +239,30 @@ export class AgentMessageExecutor {
     );
 
     // 6. Send via Gmail using the assignee's OAuth credentials.
+    //
+    // Sprint 15 — threading. When the task carries a pre-resolved Gmail
+    // thread context (engine stamped `gmail_thread_id` /
+    // `gmail_reply_to_message_id` / `subject` at task creation), force a
+    // `Re: <prev>` subject (overriding whatever AI/template produced) and
+    // pass the thread id + In-Reply-To message id through to Gmail. With
+    // both null we send as a fresh thread (the legacy path).
+    const isThreaded = Boolean(
+      task.gmailThreadId && task.gmailReplyToMessageId,
+    );
+    const effectiveSubject = isThreaded
+      ? prefixRe(task.subject ?? subject ?? "")
+      : subject || (locale === "fr" ? "(sans objet)" : "(no subject)");
     let sendResult;
     try {
       sendResult = await this.gmail.send({
         userId: task.assigneeId,
         to: contact.email,
-        subject: subject || (locale === "fr" ? "(sans objet)" : "(no subject)"),
+        subject: effectiveSubject,
         body,
         attachments: stepAttachments.length > 0 ? stepAttachments : undefined,
+        replyToThreadId: task.gmailThreadId ?? undefined,
+        inReplyToMessageId: task.gmailReplyToMessageId ?? undefined,
+        references: task.mailReferences ?? undefined,
       });
     } catch (err) {
       if (err instanceof GmailCredentialsNotFoundError) {
@@ -256,11 +279,12 @@ export class AgentMessageExecutor {
     // 7. Persist message + log interaction + archive attachments + complete
     //    task + advance sequence. Mirrors `persistSentMessage` in the action
     //    layer but runs on the admin db (`this.db`).
+    const finalSubject = isThreaded ? effectiveSubject : subject;
     const fullContent =
-      channel === "email" && subject
-        ? `${locale === "fr" ? "Objet" : "Subject"}: ${subject}\n\n${body}`
+      channel === "email" && finalSubject
+        ? `${locale === "fr" ? "Objet" : "Subject"}: ${finalSubject}\n\n${body}`
         : body;
-    const summary = subject || body.slice(0, 120).trim() || null;
+    const summary = finalSubject || body.slice(0, 120).trim() || null;
 
     const inserted = await insertMessage(
       task.organizationId,
@@ -328,6 +352,18 @@ export class AgentMessageExecutor {
       this.db,
     );
     if (!interaction) throw new Error("Failed to log interaction");
+
+    // Sprint 15 — capture the just-sent thread / message id back onto
+    // the step_execution row so future steps in this enrolment can
+    // resolve "what thread are we in" via the indexed lookup. Best
+    // effort : missing row (audit drift) or update failure is logged
+    // but doesn't roll back the send.
+    void this.captureThreadOnStepExecution({
+      taskId,
+      threadId: sendResult.threadId,
+      gmailMessageId: sendResult.messageId,
+      subject: finalSubject,
+    });
 
     // Complete the task + kick the engine.
     await completeTask(task.organizationId, taskId, task.assigneeId, this.db);
@@ -480,6 +516,35 @@ export class AgentMessageExecutor {
       return { firstName: name.firstName, lastName: name.lastName };
     } catch {
       return { firstName: "", lastName: "" };
+    }
+  }
+
+  /**
+   * Sprint 15 — write the Gmail thread metadata back onto the
+   * `sequence_step_executions` row that owns this task. The threading
+   * resolver reads this column to answer "what thread are we in" on the
+   * next send_email step.
+   */
+  private async captureThreadOnStepExecution(input: {
+    taskId: string;
+    threadId: string;
+    gmailMessageId: string;
+    subject: string;
+  }): Promise<void> {
+    try {
+      await this.db
+        .update(sequenceStepExecutions)
+        .set({
+          gmailThreadId: input.threadId,
+          gmailMessageId: input.gmailMessageId,
+          subject: input.subject || null,
+        })
+        .where(eq(sequenceStepExecutions.taskId, input.taskId));
+    } catch (err) {
+      console.error(
+        "[AgentMessageExecutor] capture thread on step_execution failed (non-fatal)",
+        err,
+      );
     }
   }
 

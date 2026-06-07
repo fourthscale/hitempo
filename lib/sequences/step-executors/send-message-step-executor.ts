@@ -1,5 +1,5 @@
 import type { SequenceStepExecutor, StepExecutionContext, StepExecutionResult } from "../step-executor";
-import type { SendMessageActionConfig } from "../types";
+import type { SendMessageActionConfig, ThreadingMode } from "../types";
 import { resolveLocalizedString } from "../locale-resolver";
 import { localeCtx, narrowMessageLocale, resolveAssignee } from "./shared";
 import { renderTemplate, type TemplateFacts } from "@/lib/messages/template-render";
@@ -42,6 +42,26 @@ export class SendMessageStepExecutor implements SequenceStepExecutor {
       description = [subject ? `${subject}` : "", body].filter(Boolean).join("\n\n") || null;
     }
 
+    // Sprint 15 — resolve the Gmail thread context BEFORE creating the
+    // task so we can stamp `gmail_thread_id` / `gmail_reply_to_message_id`
+    // / `subject` on it. Only meaningful for email (LinkedIn has no
+    // threading) and only when the step's `threadingMode` asks for it.
+    const threadingMode: ThreadingMode =
+      this.actionType === "send_email"
+        ? (config.threadingMode ?? "new_thread")
+        : "new_thread";
+    let threadContext: Awaited<ReturnType<typeof ctx.services.resolveThreadContext>> = null;
+    if (this.actionType === "send_email" && threadingMode !== "new_thread") {
+      threadContext = await ctx.services.resolveThreadContext({
+        organizationId: ctx.enrolment.organizationId,
+        contactId: ctx.enrolment.contactId,
+        enrolmentId: ctx.enrolment.id,
+        mode: threadingMode,
+      });
+      // resolver already logs a warning on internal fallback ;
+      // a null result here means "no prior thread at all" → send fresh.
+    }
+
     const { taskId, scheduledFor } = await ctx.services.createTask({
       organizationId: ctx.enrolment.organizationId,
       companyId: ctx.enrolment.companyId,
@@ -52,6 +72,10 @@ export class SendMessageStepExecutor implements SequenceStepExecutor {
       title,
       description,
       scheduling: config.scheduling,
+      gmailThreadId: threadContext?.threadId ?? null,
+      gmailReplyToMessageId: threadContext?.replyToMessageId ?? null,
+      subject: threadContext?.subject ?? null,
+      mailReferences: threadContext?.references ?? null,
     });
 
     // Sprint 12 phase 4 — when the step's assignment.actor is "agent" AND

@@ -558,6 +558,13 @@ export const tasks = pgTable(
     gmailThreadId: text("gmail_thread_id"),
     gmailReplyToMessageId: text("gmail_reply_to_message_id"),
     subject: text("subject"),
+    // Sprint 15 — full RFC 5322 References chain (space-separated message-ids
+    // with angle brackets, oldest → newest, INCLUDING the parent at the end).
+    // NULL on fresh-thread sends and non-email tasks. The send-side path emits
+    // this verbatim in the `References:` header ; without it Gmail/Outlook may
+    // not splice the message into the original conversation when there are 2+
+    // hops in the thread.
+    mailReferences: text("mail_references"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

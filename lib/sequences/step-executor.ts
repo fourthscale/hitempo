@@ -7,6 +7,7 @@ import type {
   SequenceEnrolmentCtx,
   SequenceStepCtx,
   SequencePredicate,
+  ThreadingMode,
 } from "./types";
 import type { MessageChannel, MessageIntent } from "@/lib/messages/types";
 import type { TaskScheduling } from "./scheduling";
@@ -33,6 +34,26 @@ export interface SequenceExecutorServices {
     description: string | null;
     /** Per-step scheduling config (heures TZ contact, quotas, etc.). */
     scheduling?: TaskScheduling;
+    /**
+     * Sprint 15 — pre-resolved Gmail thread context (set by the
+     * SendMessageStepExecutor when the step's `threadingMode` asked to
+     * reply to a previous thread). All three travel together :
+     *   - `gmailThreadId`         : the thread Gmail should reuse.
+     *   - `gmailReplyToMessageId` : the message id we'll reply to (for the
+     *                                In-Reply-To / References headers).
+     *   - `subject`               : the previous subject so the sender can
+     *                                build a "Re: <prev>" without joining
+     *                                back on `messages`.
+     *   - `mailReferences`        : full RFC 5322 References chain (space-
+     *                                separated, oldest → newest, includes
+     *                                parent at end). Emitted verbatim in
+     *                                the MIME `References:` header.
+     * Stays null on fresh-thread sends and on non-email tasks.
+     */
+    gmailThreadId?: string | null;
+    gmailReplyToMessageId?: string | null;
+    subject?: string | null;
+    mailReferences?: string | null;
   }): Promise<{
     taskId: string;
     /** Resolved scheduledFor (after TZ + work-pattern + anti-conflict
@@ -104,6 +125,29 @@ export interface SequenceExecutorServices {
     taskId: string;
     scheduledFor: Date | null;
   }): Promise<void>;
+
+  /**
+   * Sprint 15 — resolves the Gmail thread context the next `send_email`
+   * task should reply into, based on the step's `threadingMode`. Returns
+   * null when no previous thread exists (legitimate for `new_thread`, or
+   * defensive fallback for the other modes when the prior step_executions
+   * row carries no thread id).
+   *
+   * The send-side (agent executor + manual dialogs) reads the stamped
+   * fields straight off the task — they don't call this method.
+   */
+  resolveThreadContext(input: {
+    organizationId: string;
+    contactId: string;
+    enrolmentId: string;
+    mode: ThreadingMode;
+  }): Promise<{
+    threadId: string;
+    replyToMessageId: string;
+    subject: string;
+    /** Sprint 15 — full RFC 5322 References chain (oldest → newest). */
+    references: string;
+  } | null>;
 }
 
 /**

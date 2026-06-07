@@ -1308,7 +1308,18 @@
           "predicate": "Condition",
           "property": "Propriété",
           "setStatus": "Définir le statut",
-          "setRole": "Définir le rôle"
+          "setRole": "Définir le rôle",
+          "threadingMode": "Mode de réponse"
+        },
+        "threadingModes": {
+          "new_thread": "Nouveau thread",
+          "last_email_step": "Reply au dernier email",
+          "entry_email_step": "Reply au 1er email",
+          "last_answered_step": "Reply au thread où le contact a répondu"
+        },
+        "threading": {
+          "lockedFirstStep": "Le premier email démarre toujours un nouveau thread — pas d'email précédent à reply.",
+          "subjectInherited": "L'objet sera repris du thread précédent (Re: …)."
         },
         "taskTypes": {
           "email": "Email",

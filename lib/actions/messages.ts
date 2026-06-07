@@ -10,6 +10,8 @@ import { completeTask } from "@/db/queries/tasks";
 import { promoteContactStatus } from "@/lib/contacts/contact-status-promoter";
 import { emitSequenceTaskCompleted } from "@/lib/sequences/engine/emit-task-completed";
 import { getContactById } from "@/db/queries/contacts";
+import { and, eq } from "drizzle-orm";
+import { sequenceStepExecutions, tasks as tasksTable } from "@/db/schema";
 import { insertMessage } from "@/db/queries/messages";
 import { insertMessageAttachment } from "@/db/queries/message-attachments";
 import { MessageGenerationOrchestratorFactory } from "@/lib/messages/message-generation-orchestrator-factory";
@@ -32,7 +34,7 @@ import { LlmGenerationServiceFactory } from "@/lib/ai/llm-generation-service-fac
 import { GmailServiceFactory } from "@/lib/gmail/gmail-service-factory";
 import { GmailCredentialsNotFoundError, GmailApiError } from "@/lib/gmail/gmail-errors";
 import { getAttachmentStorageService } from "@/lib/gmail/attachment-storage-service";
-import type { MimeAttachment } from "@/lib/gmail/mime-message-strategy";
+import { prefixRe, type MimeAttachment } from "@/lib/gmail/mime-message-strategy";
 import {
   ALLOWED_ATTACHMENT_MIME_TYPES,
   MAX_ATTACHMENTS_PER_MESSAGE,
@@ -144,6 +146,17 @@ export async function generateMessageAction(
   let sequenceEnrolmentId: string | null = null;
   let stepOrientation: string | null = null;
   let stepAttachments: SequenceStepAttachmentRef[] = [];
+  // Sprint 15 — when the source step's `threadingMode !== "new_thread"`
+  // the engine pre-stamps the task with a Gmail thread context. We
+  // detect "is this a follow-up in an existing thread" by looking at
+  // the task's stamped `gmail_thread_id` / `gmail_reply_to_message_id`,
+  // and pass the flag to the orchestrator so the LLM prompt drops the
+  // "Subject:" line + reframes as a follow-up.
+  let isThreadFollowUp = false;
+  if (taskId) {
+    const threadCtx = await loadTaskThreadContext(activeOrganization.id, taskId);
+    isThreadFollowUp = Boolean(threadCtx?.threadId && threadCtx.replyToMessageId);
+  }
   if (taskId) {
     const ctx = await getMessageContextResolutionForTask(getDb(), taskId);
     if (ctx) {
@@ -215,6 +228,7 @@ export async function generateMessageAction(
     orientation: effectiveOrientation,
     sender,
     sequenceEnrolmentId,
+    isThreadFollowUp,
   });
 
   // 4. Revalidate the surfaces that show messages.
@@ -772,12 +786,30 @@ export async function logSentInteractionAction(
   const { activeOrganization, user } = await getActiveOrg();
 
   const { subject, body } = splitSubjectAndBody(data.content, data.locale);
-  const summary = subject || body.slice(0, 120).trim() || null;
+
+  // Sprint 15 — when the originating task is threaded (engine pre-stamped
+  // a Gmail thread on it), the mail the contact actually saw carried a
+  // `Re: <prev>` subject. Mirror that on the timeline entry so the
+  // history view matches what landed in the recipient's inbox even when
+  // the user sent the mail through an external channel.
+  const taskThreadCtx = await loadTaskThreadContext(
+    activeOrganization.id,
+    data.taskId && data.taskId !== "" ? data.taskId : null,
+  );
+  const isThreaded = Boolean(taskThreadCtx?.threadId && taskThreadCtx.replyToMessageId);
+  const effectiveSubject = isThreaded
+    ? prefixRe(taskThreadCtx?.subject || subject || "")
+    : subject;
+  const persistedContent =
+    isThreaded && channel === "email"
+      ? buildEmailContent(effectiveSubject, body, data.locale)
+      : data.content;
+  const summary = effectiveSubject || body.slice(0, 120).trim() || null;
 
   const result = await persistSentMessage({
     orgId: activeOrganization.id,
     userId: user.id,
-    data,
+    data: { ...data, content: persistedContent },
     channel,
     intent,
     summary,
@@ -850,6 +882,19 @@ export async function sendMessageViaGmailAction(
 
   const { subject, body } = splitSubjectAndBody(data.content, data.locale);
 
+  // Sprint 15 — when the message comes from a sequence-driven task that
+  // the engine pre-stamped with a Gmail thread context, override the
+  // subject (force `Re: <prev>`) and pass the thread / In-Reply-To
+  // through to GmailService. Lookup is by org+taskId on the RLS pool.
+  const taskThreadCtx = await loadTaskThreadContext(
+    activeOrganization.id,
+    data.taskId && data.taskId !== "" ? data.taskId : null,
+  );
+  const isThreaded = Boolean(taskThreadCtx?.threadId && taskThreadCtx.replyToMessageId);
+  const effectiveSubject = isThreaded
+    ? prefixRe(taskThreadCtx?.subject || subject || "")
+    : subject || (data.locale === "fr" ? "(sans objet)" : "(no subject)");
+
   // 1. Gmail send — attachments travel in the multipart MIME built by
   //    GmailService. Failure here means we never persist anything in the
   //    DB and nothing landed in Storage (we only push to Storage after
@@ -859,9 +904,15 @@ export async function sendMessageViaGmailAction(
     sendResult = await GmailServiceFactory.getInstance().send({
       userId: user.id,
       to: contact.email,
-      subject: subject || (data.locale === "fr" ? "(sans objet)" : "(no subject)"),
+      subject: effectiveSubject,
       body,
       attachments: attachments.length > 0 ? attachments : undefined,
+      replyToThreadId: taskThreadCtx?.threadId ?? undefined,
+      inReplyToMessageId: taskThreadCtx?.replyToMessageId ?? undefined,
+      references:
+        taskThreadCtx?.references && taskThreadCtx.references.length > 0
+          ? taskThreadCtx.references
+          : undefined,
     });
   } catch (err) {
     if (err instanceof GmailCredentialsNotFoundError) {
@@ -876,17 +927,37 @@ export async function sendMessageViaGmailAction(
   // 2. Now that Gmail accepted the send, persist the message row + log the
   //    outbound interaction + archive attachments + complete the task (all
   //    inside persistSentMessage).
-  const summary = subject || body.slice(0, 120).trim() || null;
+  //
+  // Sprint 15 — when threading is active, the content stored on
+  // `messages` mirrors the actual `Re: <prev>` subject we sent, not the
+  // pre-threading one the dialog had in `data.content`. Keeps the
+  // history view consistent with what landed in the recipient's inbox.
+  const persistedContent = isThreaded
+    ? buildEmailContent(effectiveSubject, body, data.locale)
+    : data.content;
+  const summary = (isThreaded ? effectiveSubject : subject) || body.slice(0, 120).trim() || null;
   const persisted = await persistSentMessage({
     orgId: activeOrganization.id,
     userId: user.id,
-    data,
+    data: { ...data, content: persistedContent },
     channel,
     intent,
     gmail: { threadId: sendResult.threadId, messageId: sendResult.messageId },
     summary,
     attachments,
   });
+
+  // Sprint 15 — capture the just-sent thread back onto the source
+  // step_execution so the next send_email step in the enrolment can
+  // resolve "what thread are we in" by a single indexed lookup.
+  if (data.taskId && data.taskId !== "") {
+    void captureThreadOnStepExecution({
+      taskId: data.taskId,
+      threadId: sendResult.threadId,
+      gmailMessageId: sendResult.messageId,
+      subject: isThreaded ? effectiveSubject : subject,
+    });
+  }
 
   revalidatePath(`/contacts/${data.contactId}`);
   revalidatePath(`/companies/${data.companyId}`);
@@ -902,6 +973,89 @@ export async function sendMessageViaGmailAction(
     fromAddress: sendResult.fromAddress,
     toAddress: contact.email,
   };
+}
+
+/**
+ * Sprint 15 — loads the pre-resolved Gmail thread context the engine
+ * stamped on a sequence-driven task (see `SendMessageStepExecutor` +
+ * `ThreadingResolver`). Returns `null` when no task id was provided, the
+ * task doesn't exist in this org, or the engine stamped it for a fresh
+ * thread (no previous send_email step yet).
+ *
+ * Runs on the RLS pool — the org check is implicit, but we still
+ * explicitly filter by org for defense in depth.
+ */
+async function loadTaskThreadContext(
+  orgId: string,
+  taskId: string | null,
+): Promise<{
+  threadId: string;
+  replyToMessageId: string;
+  subject: string;
+  references: string;
+} | null> {
+  if (!taskId) return null;
+  const row = await getDb()
+    .select({
+      gmailThreadId: tasksTable.gmailThreadId,
+      gmailReplyToMessageId: tasksTable.gmailReplyToMessageId,
+      subject: tasksTable.subject,
+      mailReferences: tasksTable.mailReferences,
+    })
+    .from(tasksTable)
+    .where(and(eq(tasksTable.id, taskId), eq(tasksTable.organizationId, orgId)))
+    .limit(1);
+  const r = row[0];
+  if (!r || !r.gmailThreadId || !r.gmailReplyToMessageId) return null;
+  return {
+    threadId: r.gmailThreadId,
+    replyToMessageId: r.gmailReplyToMessageId,
+    subject: r.subject ?? "",
+    references: r.mailReferences ?? "",
+  };
+}
+
+/**
+ * Sprint 15 — write Gmail thread metadata back onto the
+ * `sequence_step_executions` row that owns this task. The next
+ * `send_email` step in the enrolment reads from this column to resolve
+ * its threading context. Best-effort : failure is logged and swallowed
+ * (the Gmail send already succeeded).
+ */
+async function captureThreadOnStepExecution(input: {
+  taskId: string;
+  threadId: string;
+  gmailMessageId: string;
+  subject: string;
+}): Promise<void> {
+  try {
+    await getDb()
+      .update(sequenceStepExecutions)
+      .set({
+        gmailThreadId: input.threadId,
+        gmailMessageId: input.gmailMessageId,
+        subject: input.subject || null,
+      })
+      .where(eq(sequenceStepExecutions.taskId, input.taskId));
+  } catch (err) {
+    console.error(
+      "[sendMessageViaGmailAction] capture thread on step_execution failed (non-fatal)",
+      err,
+    );
+  }
+}
+
+/**
+ * Sprint 15 — reassembles the canonical `Subject: <s>\n\n<body>` (or
+ * `Objet: <s>\n\n<body>` in FR) content stored on `messages.content`
+ * when we had to override the subject (threading forced `Re: <prev>`).
+ * Mirrors the format the dialog originally posts so timeline display
+ * stays consistent.
+ */
+function buildEmailContent(subject: string, body: string, locale: string): string {
+  if (!subject) return body;
+  const prefix = locale === "fr" ? "Objet" : "Subject";
+  return `${prefix}: ${subject}\n\n${body}`;
 }
 
 /**

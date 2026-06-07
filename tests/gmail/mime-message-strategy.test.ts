@@ -4,6 +4,7 @@ import {
   MimeMessageBuilder,
   MultipartMixedMimeStrategy,
   TextOnlyMimeStrategy,
+  prefixRe,
 } from "@/lib/gmail/mime-message-strategy";
 
 /**
@@ -136,5 +137,140 @@ describe("MultipartMixedMimeStrategy", () => {
         body: "y",
       }),
     ).toThrow(/use TextOnlyMimeStrategy/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sprint 15 — threading helpers
+// ---------------------------------------------------------------------------
+
+describe("prefixRe", () => {
+  it("adds Re: when the subject doesn't already carry one", () => {
+    expect(prefixRe("Bonjour")).toBe("Re: Bonjour");
+  });
+
+  it("leaves an existing Re: prefix as-is (case-insensitive)", () => {
+    expect(prefixRe("Re: Bonjour")).toBe("Re: Bonjour");
+    expect(prefixRe("RE: Bonjour")).toBe("RE: Bonjour");
+    expect(prefixRe("re:Bonjour")).toBe("re:Bonjour");
+  });
+});
+
+describe("MimeMessageBuilder threading headers", () => {
+  it("injects In-Reply-To + References + bracketed message id on TextOnly", () => {
+    const s = new TextOnlyMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Re: Bonjour",
+        body: "Petit suivi.",
+        inReplyToMessageId: "abc123@mail.gmail.com",
+      }),
+    );
+    expect(out).toContain("In-Reply-To: <abc123@mail.gmail.com>");
+    expect(out).toContain("References: <abc123@mail.gmail.com>");
+  });
+
+  it("preserves angle brackets when already present", () => {
+    const s = new TextOnlyMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Re: Bonjour",
+        body: "Suivi.",
+        inReplyToMessageId: "<xyz@mail.gmail.com>",
+      }),
+    );
+    expect(out).toContain("In-Reply-To: <xyz@mail.gmail.com>");
+    // Make sure we don't double-bracket.
+    expect(out).not.toContain("<<xyz@mail.gmail.com>>");
+  });
+
+  it("omits threading headers when inReplyToMessageId is absent", () => {
+    const s = new TextOnlyMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Bonjour",
+        body: "Premier contact.",
+      }),
+    );
+    expect(out).not.toContain("In-Reply-To:");
+    expect(out).not.toContain("References:");
+  });
+
+  it("also injects threading headers on the multipart strategy", () => {
+    const s = new MultipartMixedMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Re: Bonjour",
+        body: "Avec PJ.",
+        inReplyToMessageId: "msg-1@mail.gmail.com",
+        attachments: [
+          { filename: "a.pdf", mimeType: "application/pdf", content: Buffer.from("pdf") },
+        ],
+      }),
+    );
+    expect(out).toContain("In-Reply-To: <msg-1@mail.gmail.com>");
+    expect(out).toContain("References: <msg-1@mail.gmail.com>");
+  });
+
+  it("emits the full References chain when `references` is provided", () => {
+    const s = new TextOnlyMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Re: Bonjour",
+        body: "Suivi #3.",
+        inReplyToMessageId: "m3@mail.gmail.com",
+        references: "<m1@mail.gmail.com> <m2@mail.gmail.com> <m3@mail.gmail.com>",
+      }),
+    );
+    // In-Reply-To stays the immediate parent only.
+    expect(out).toContain("In-Reply-To: <m3@mail.gmail.com>");
+    // References carries the full ancestry chain verbatim.
+    expect(out).toContain(
+      "References: <m1@mail.gmail.com> <m2@mail.gmail.com> <m3@mail.gmail.com>",
+    );
+  });
+
+  it("falls back to single-id References when `references` is empty/whitespace", () => {
+    const s = new TextOnlyMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Re: Bonjour",
+        body: "Suivi.",
+        inReplyToMessageId: "m1@mail.gmail.com",
+        references: "   ",
+      }),
+    );
+    expect(out).toContain("References: <m1@mail.gmail.com>");
+  });
+
+  it("emits the full chain through the multipart strategy too", () => {
+    const s = new MultipartMixedMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Re: Bonjour",
+        body: "Avec PJ.",
+        inReplyToMessageId: "m2@mail.gmail.com",
+        references: "<m1@mail.gmail.com> <m2@mail.gmail.com>",
+        attachments: [
+          { filename: "a.pdf", mimeType: "application/pdf", content: Buffer.from("pdf") },
+        ],
+      }),
+    );
+    expect(out).toContain("In-Reply-To: <m2@mail.gmail.com>");
+    expect(out).toContain("References: <m1@mail.gmail.com> <m2@mail.gmail.com>");
   });
 });

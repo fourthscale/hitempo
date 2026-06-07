@@ -49,6 +49,14 @@ export type OrchestratorInput = {
    * override. Omit to load the full company history (legacy default).
    */
   sequenceEnrolmentId?: string | null;
+  /**
+   * Sprint 15 — true when the message will be sent into an existing
+   * Gmail thread (the engine resolved a `threadingMode !== "new_thread"`
+   * on the source step). The prompt builder switches to "follow-up
+   * body only" mode : skip the "Subject: ..." line, generate a body
+   * that reads naturally as a reply to the previous outreach.
+   */
+  isThreadFollowUp?: boolean;
 };
 
 export type OrchestratorResult = {
@@ -167,6 +175,7 @@ export class MessageGenerationOrchestrator {
       channel: input.channel,
       locale: input.locale,
       orientation: input.orientation ?? undefined,
+      isThreadFollowUp: input.isThreadFollowUp ?? false,
     });
 
     // 5. Call the LLM via the Facade (auto-logs to llm_usage).
