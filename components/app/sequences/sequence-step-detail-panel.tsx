@@ -10,6 +10,7 @@ import { LocalizedStringInput } from "./localized-string-input";
 import { ConditionBuilder } from "./condition-builder";
 import { StepAttachmentsField } from "./step-attachments-field";
 import { emptyGroup, type ConditionGroup } from "@/lib/sequences/conditions";
+import { isFirstSendEmailStep } from "@/lib/sequences/is-first-send-email-step";
 import type { DraftDefinition, DraftStep } from "@/lib/sequences/draft-schema";
 import {
   THREADING_MODES,
@@ -44,59 +45,9 @@ const CONTACT_ROLES = ["decision_maker", "influencer", "user", "prescriber", "as
 const selectCls =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
-/**
- * Sprint 15 — walks the draft graph from the entry step and returns true
- * when `stepId` is reached without encountering any other `send_email`
- * predecessor along any path. Used by the editor to lock the first
- * email step's threading mode to `new_thread` (there's no previous
- * thread to reply into).
- *
- * The traversal is BFS over `next_step_ids` (default / yes / no / cases)
- * — paths that fork through a conditional split count as separate
- * predecessors. We bail early if we hit `stepId` on a path that already
- * passed through a `send_email`.
- */
-function isFirstSendEmailStep(draft: DraftDefinition, stepId: string): boolean {
-  if (!draft.entryStepId) return true;
-  const byId = new Map(draft.steps.map((s) => [s.id, s] as const));
-  const target = byId.get(stepId);
-  if (!target || target.actionType !== "send_email") return true;
-  // BFS: each frontier entry tracks "did this path already pass a send_email".
-  const visited = new Set<string>();
-  type Frame = { id: string; sawSend: boolean };
-  const queue: Frame[] = [{ id: draft.entryStepId, sawSend: false }];
-  while (queue.length > 0) {
-    const f = queue.shift()!;
-    // Visit-with-flag dedup : the same node reached with `sawSend=true`
-    // is a different state than `sawSend=false` ; we'd lose the
-    // "already saw email" signal otherwise.
-    const key = `${f.id}#${f.sawSend ? "1" : "0"}`;
-    if (visited.has(key)) continue;
-    visited.add(key);
-    if (f.id === stepId) {
-      // Reached the target via a path that already had a prior send_email
-      // → not the first.
-      if (f.sawSend) return false;
-      // Otherwise keep exploring : another path might still find a
-      // prior send_email reaching the same target.
-      continue;
-    }
-    const node = byId.get(f.id);
-    if (!node) continue;
-    const nextSaw = f.sawSend || node.actionType === "send_email";
-    const next = node.nextStepIds;
-    if (!next) continue;
-    const targets: string[] = [];
-    if (next.default) targets.push(next.default);
-    if (next.yes) targets.push(next.yes);
-    if (next.no) targets.push(next.no);
-    if (next.cases) targets.push(...Object.values(next.cases));
-    for (const t of targets) {
-      if (byId.has(t)) queue.push({ id: t, sawSend: nextSaw });
-    }
-  }
-  return true;
-}
+// `isFirstSendEmailStep` is extracted to `lib/sequences/is-first-send-email-step.ts`
+// so the conditional_split + multi-path edge cases can be unit-tested.
+// See that file's docstring + the matching tests for the semantics.
 
 export function SequenceStepDetailPanel({
   step,
