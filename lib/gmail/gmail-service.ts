@@ -1,6 +1,5 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
 import {
   GmailCredentialsService,
   type DecryptedGmailCredentials,
@@ -10,6 +9,7 @@ import { GmailApiError } from "./gmail-errors";
 import { MimeMessageBuilder, type MimeAttachment } from "./mime-message-strategy";
 
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
+const GMAIL_GET_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
 
 /**
  * Buffer used by the refresh path : we refresh proactively when the access
@@ -51,13 +51,19 @@ export type GmailSendInput = {
 
 export type GmailSendResult = {
   threadId: string;
-  /** RFC 5322 Message-ID we stamped on the outgoing message (`<uuid@domain>`).
-   *  This is what the recipient's mail client sees in the `Message-ID:`
-   *  header — and what subsequent follow-ups MUST reference in their
-   *  `In-Reply-To:` / `References:` headers for threading to work in the
-   *  recipient's inbox. NOT to be confused with Gmail's internal short
-   *  message id (returned in the send response as `json.id`) which we no
-   *  longer expose because it's useless for cross-client threading. */
+  /** RFC 5322 Message-ID Gmail assigned to the outgoing message
+   *  (`<CABc...@mail.gmail.com>` style). Fetched via a follow-up
+   *  `messages.get` call right after the send because Gmail rewrites
+   *  any caller-supplied Message-ID server-side. This is what the
+   *  recipient's mail client actually sees in `Message-ID:` — and what
+   *  follow-up sends MUST reference in `In-Reply-To` / `References`
+   *  for cross-account threading to work. NOT to be confused with
+   *  Gmail's internal short id (`json.id` from the send response),
+   *  which is per-account and useless for threading.
+   *
+   *  On failure of the canonical fetch, this falls back to the
+   *  internal short id — threading will be broken on that follow-up
+   *  but the row is still populated (failure mode logged client-side). */
   messageId: string;
   fromAddress: string;
 };
@@ -81,22 +87,6 @@ export class GmailService {
     const creds = await this.credentials.requireForUser(input.userId);
     const accessToken = await this.ensureFreshAccessToken(creds);
 
-    // Sprint 15 bugfix — generate the RFC 5322 Message-ID ourselves so we
-    // know the EXACT value the recipient's `Message-ID:` header will carry.
-    // Gmail's `messages.send` response returns its own internal short id
-    // (`json.id`) which is NOT what ends up in the outgoing Message-ID
-    // header — using `json.id` as the In-Reply-To target on a follow-up
-    // breaks threading (the recipient's Gmail can't match the reference
-    // to any real message). Caller-supplied Message-IDs are respected by
-    // Gmail and not rewritten ; using our own UUID gives us a stable
-    // canonical id we can persist and reference forever.
-    //
-    // Domain part = sender's gmail address domain (typically gmail.com
-    // or the workspace domain). RFC 2822 requires <local@domain> ;
-    // Gmail accepts any well-formed value.
-    const domain = creds.gmailAddress.split("@")[1] || "hitempo.app";
-    const selfMessageId = `<${randomUUID()}@${domain}>`;
-
     const mimeInput = {
       from: creds.gmailAddress,
       to: input.to,
@@ -105,7 +95,6 @@ export class GmailService {
       attachments: input.attachments,
       inReplyToMessageId: input.inReplyToMessageId,
       references: input.references,
-      selfMessageId,
     };
     const raw = MimeMessageBuilder.forInput(mimeInput).build(mimeInput);
 
@@ -131,16 +120,61 @@ export class GmailService {
     // Fire-and-forget : missing last_used_at update isn't worth surfacing.
     void this.credentials.markUsed(input.userId).catch(() => undefined);
 
+    // Sprint 15 bugfix — Gmail rewrites the outgoing `Message-ID:` header
+    // server-side (to its own `CABc...@mail.gmail.com` format), even when
+    // we provide one in the raw MIME. The value the recipient sees is NOT
+    // what we sent. Two prior attempts to stamp our own Message-ID via the
+    // MIME builder failed silently because Gmail just replaces it. We
+    // confirmed this by inspecting the raw headers of a received email.
+    //
+    // The only reliable way to capture the canonical Message-ID is to
+    // fetch the message back via `messages.get` (metadata-only — cheap,
+    // ~50 ms one-shot call) and read the actual `Message-ID:` header from
+    // the response. We persist THAT, so the next step's threading resolver
+    // builds `In-Reply-To` / `References` headers the recipient can
+    // actually match.
+    //
+    // Requires `gmail.readonly` (or `gmail.metadata`) scope ; we already
+    // request both `gmail.send` and `gmail.readonly`, so no scope change.
+    const canonicalMessageId = await this.fetchCanonicalMessageId(accessToken, json.id);
+
     return {
       threadId: json.threadId,
-      // Return the RFC 5322 Message-ID we just stamped, NOT Gmail's
-      // internal id. Persisted as `gmail_message_id` on step_executions —
-      // the next step's threading resolver reads this to build
-      // In-Reply-To + References headers that the recipient's mail client
-      // can actually match.
-      messageId: selfMessageId,
+      messageId: canonicalMessageId ?? json.id, // fall back to the internal id ;
+      // threading will be broken in that case but the row still has a value.
       fromAddress: creds.gmailAddress,
     };
+  }
+
+  /**
+   * Sprint 15 — fetch the RFC 5322 `Message-ID:` header Gmail assigned to a
+   * message we just sent. Returns null on any failure ; the caller falls
+   * back to Gmail's internal short id (threading won't work but the row
+   * isn't lost).
+   */
+  private async fetchCanonicalMessageId(
+    accessToken: string,
+    gmailInternalId: string,
+  ): Promise<string | null> {
+    try {
+      const url = `${GMAIL_GET_URL}/${gmailInternalId}?format=metadata&metadataHeaders=Message-ID`;
+      const res = await fetch(url, {
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as {
+        payload?: { headers?: Array<{ name?: string; value?: string }> };
+      };
+      const headers = json.payload?.headers ?? [];
+      // Gmail returns the header name case-preserved as `Message-Id` (or
+      // sometimes `Message-ID`) — match case-insensitively.
+      const header = headers.find(
+        (h) => typeof h.name === "string" && h.name.toLowerCase() === "message-id",
+      );
+      return header?.value ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**
