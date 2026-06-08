@@ -140,6 +140,13 @@ export function buildSequenceGraph(
         data: { label: t("stepType.merge") } as Record<string, unknown>,
       };
     }
+    // Sprint 15 — surface the agent-auto-execution flag on send_email
+     //  / send_linkedin / phone_call steps so the node can show the same
+     //  "Agent Auto Execution" badge users see on tasks. Read defensively :
+     //  actionConfig is typed as Record<string, unknown> in the draft schema.
+    const assignmentActor = (step.actionConfig as { assignment?: { actor?: string } } | null)
+      ?.assignment?.actor;
+    const isAgentAuto = assignmentActor === "agent";
     const data: SequenceStepNodeData = {
       actionType: step.actionType,
       typeLabel: t(`stepType.${step.actionType}`),
@@ -147,6 +154,7 @@ export function buildSequenceGraph(
       conditionBadge: step.condition ? t(`editor.conditions.${step.condition.type}`) : null,
       isEntry: step.id === draft.entryStepId,
       runState: stepStates?.[step.id],
+      isAgentAuto,
     };
     return {
       id: step.id,

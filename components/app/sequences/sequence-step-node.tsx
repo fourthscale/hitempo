@@ -2,7 +2,8 @@
 
 import { useContext } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Mail, Phone, Send, Clock, GitBranch, Split, UserCog, Workflow, GitMerge, GripVertical } from "lucide-react";
+import { Mail, Phone, Send, Clock, GitBranch, Split, UserCog, Workflow, GitMerge, GripVertical, Bot } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { isMovableStep } from "@/lib/sequences/draft-edit";
 import type { SequenceStepActionType } from "@/lib/sequences/types";
@@ -39,6 +40,12 @@ export type SequenceStepNodeData = {
   conditionBadge?: string | null;
   isEntry: boolean;
   runState?: SequenceStepRunState;
+  /** Sprint 15 — true when the step's assignment.actor === "agent" : the
+   *  task created by this step will be auto-executed by the agent (no
+   *  human in the loop). Mirrors the "Agent Auto Execution" badge shown
+   *  on tasks so the editor / read-only view surfaces the same signal
+   *  visually at the step level. */
+  isAgentAuto?: boolean;
 };
 
 /**
@@ -48,6 +55,7 @@ export type SequenceStepNodeData = {
  */
 export function SequenceStepNode({ id, data }: NodeProps) {
   const d = data as unknown as SequenceStepNodeData;
+  const t = useTranslations("pages.tasks");
   const Icon = ICONS[d.actionType] ?? Mail;
   const ctx = useContext(SequenceFlowContext);
   const draggable = !ctx.readOnly && isMovableStep(d.actionType);
@@ -112,6 +120,15 @@ export function SequenceStepNode({ id, data }: NodeProps) {
           {d.conditionBadge && (
             <span className="mt-1 inline-block rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
               {d.conditionBadge}
+            </span>
+          )}
+          {d.isAgentAuto && (
+            // Matches the badge rendered on tasks (see app/(app)/tasks/page.tsx
+            // around the `agentAutoExecBadge` key) so the same visual signal
+            // appears at both step-config time and runtime task display.
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-800">
+              <Bot className="h-3 w-3" />
+              {t("agentAutoExecBadge")}
             </span>
           )}
         </div>
