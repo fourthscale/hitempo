@@ -4,6 +4,7 @@ import "@xyflow/react/dist/style.css";
 
 import { useMemo } from "react";
 import { ReactFlow, Background, Controls } from "@xyflow/react";
+import { anchorTopOnInit } from "./anchor-top-viewport";
 import { useTranslations } from "next-intl";
 import type { DraftDefinition } from "@/lib/sequences/draft-schema";
 import { SequenceStepNode } from "./sequence-step-node";
@@ -94,6 +95,7 @@ export function SequenceFlowView({
           nodesConnectable={false}
           elementsSelectable={false}
           fitView
+          onInit={anchorTopOnInit}
           proOptions={{ hideAttribution: true }}
         >
           <Background />

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ReactFlow, Background, Controls } from "@xyflow/react";
+import { anchorTopOnInit } from "./anchor-top-viewport";
 import {
   Mail,
   Phone,
@@ -448,6 +449,7 @@ export function SequenceEditor({
               nodesConnectable={false}
               elementsSelectable
               fitView
+              onInit={anchorTopOnInit}
               onNodeClick={(_e, node) => {
                 if (node.id !== TRIGGER_ID && !node.id.startsWith("__end")) setSelectedId(node.id);
               }}
