@@ -274,3 +274,63 @@ describe("MimeMessageBuilder threading headers", () => {
     expect(out).toContain("References: <m1@mail.gmail.com> <m2@mail.gmail.com>");
   });
 });
+
+describe("MimeMessageBuilder self Message-ID header", () => {
+  it("emits a Message-ID header when selfMessageId is provided (TextOnly)", () => {
+    const s = new TextOnlyMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Bonjour",
+        body: "Salut.",
+        selfMessageId: "<uuid-1@acme.com>",
+      }),
+    );
+    expect(out).toContain("Message-ID: <uuid-1@acme.com>");
+  });
+
+  it("emits a Message-ID header on the multipart strategy too", () => {
+    const s = new MultipartMixedMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Bonjour",
+        body: "Salut.",
+        selfMessageId: "<uuid-2@acme.com>",
+        attachments: [
+          { filename: "a.pdf", mimeType: "application/pdf", content: Buffer.from("pdf") },
+        ],
+      }),
+    );
+    expect(out).toContain("Message-ID: <uuid-2@acme.com>");
+  });
+
+  it("adds angle brackets when selfMessageId is unwrapped", () => {
+    const s = new TextOnlyMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Bonjour",
+        body: "Salut.",
+        selfMessageId: "uuid-3@acme.com",
+      }),
+    );
+    expect(out).toContain("Message-ID: <uuid-3@acme.com>");
+  });
+
+  it("omits the Message-ID header entirely when selfMessageId is absent", () => {
+    const s = new TextOnlyMimeStrategy();
+    const out = decode(
+      s.build({
+        from: "rep@acme.com",
+        to: "lead@hotel.fr",
+        subject: "Bonjour",
+        body: "Salut.",
+      }),
+    );
+    expect(out).not.toContain("Message-ID:");
+  });
+});

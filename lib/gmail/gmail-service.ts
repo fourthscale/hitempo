@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import {
   GmailCredentialsService,
   type DecryptedGmailCredentials,
@@ -50,8 +51,13 @@ export type GmailSendInput = {
 
 export type GmailSendResult = {
   threadId: string;
-  /** Gmail's internal message id — used to dedupe and to fetch the thread
-   *  later from the reply-polling job. */
+  /** RFC 5322 Message-ID we stamped on the outgoing message (`<uuid@domain>`).
+   *  This is what the recipient's mail client sees in the `Message-ID:`
+   *  header — and what subsequent follow-ups MUST reference in their
+   *  `In-Reply-To:` / `References:` headers for threading to work in the
+   *  recipient's inbox. NOT to be confused with Gmail's internal short
+   *  message id (returned in the send response as `json.id`) which we no
+   *  longer expose because it's useless for cross-client threading. */
   messageId: string;
   fromAddress: string;
 };
@@ -75,6 +81,22 @@ export class GmailService {
     const creds = await this.credentials.requireForUser(input.userId);
     const accessToken = await this.ensureFreshAccessToken(creds);
 
+    // Sprint 15 bugfix — generate the RFC 5322 Message-ID ourselves so we
+    // know the EXACT value the recipient's `Message-ID:` header will carry.
+    // Gmail's `messages.send` response returns its own internal short id
+    // (`json.id`) which is NOT what ends up in the outgoing Message-ID
+    // header — using `json.id` as the In-Reply-To target on a follow-up
+    // breaks threading (the recipient's Gmail can't match the reference
+    // to any real message). Caller-supplied Message-IDs are respected by
+    // Gmail and not rewritten ; using our own UUID gives us a stable
+    // canonical id we can persist and reference forever.
+    //
+    // Domain part = sender's gmail address domain (typically gmail.com
+    // or the workspace domain). RFC 2822 requires <local@domain> ;
+    // Gmail accepts any well-formed value.
+    const domain = creds.gmailAddress.split("@")[1] || "hitempo.app";
+    const selfMessageId = `<${randomUUID()}@${domain}>`;
+
     const mimeInput = {
       from: creds.gmailAddress,
       to: input.to,
@@ -83,6 +105,7 @@ export class GmailService {
       attachments: input.attachments,
       inReplyToMessageId: input.inReplyToMessageId,
       references: input.references,
+      selfMessageId,
     };
     const raw = MimeMessageBuilder.forInput(mimeInput).build(mimeInput);
 
@@ -110,7 +133,12 @@ export class GmailService {
 
     return {
       threadId: json.threadId,
-      messageId: json.id,
+      // Return the RFC 5322 Message-ID we just stamped, NOT Gmail's
+      // internal id. Persisted as `gmail_message_id` on step_executions —
+      // the next step's threading resolver reads this to build
+      // In-Reply-To + References headers that the recipient's mail client
+      // can actually match.
+      messageId: selfMessageId,
       fromAddress: creds.gmailAddress,
     };
   }

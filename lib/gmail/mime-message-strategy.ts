@@ -49,6 +49,24 @@ export type MimeMessageInput = {
    * that haven't been updated to pass the chain.
    */
   references?: string;
+  /**
+   * Sprint 15 (bugfix) — RFC 5322 `Message-ID` to stamp on THIS outgoing
+   * message (with angle brackets, e.g. `<uuid@hitempo.app>`). Gmail's API
+   * `messages.send` returns its own internal id (`json.id`) which is NOT
+   * the same value as what ends up in the `Message-ID:` header chez le
+   * destinataire — referencing that internal id in a later `In-Reply-To`
+   * breaks threading silently (subject prefixed `Re:` but no actual thread
+   * grouping in Gmail). By providing our own Message-ID here, we control
+   * both sides : the header we emit AND the value we'll persist as
+   * `gmail_message_id` for follow-ups to reference back. Gmail respects
+   * a caller-supplied Message-ID and never rewrites it.
+   *
+   * Strongly recommended for any send that may be referenced later
+   * (sequence steps). When omitted, the message has no explicit
+   * Message-ID header — Gmail generates one server-side and we can't
+   * recover it cleanly from the send response.
+   */
+  selfMessageId?: string;
 };
 
 /**
@@ -70,6 +88,16 @@ function bracketMessageId(messageId: string): string {
   const trimmed = messageId.trim();
   if (trimmed.startsWith("<") && trimmed.endsWith(">")) return trimmed;
   return `<${trimmed}>`;
+}
+
+/** Sprint 15 — emit the `Message-ID:` header for THIS outgoing message
+ *  when the caller supplies a `selfMessageId`. Empty array (= no header)
+ *  when omitted ; Gmail falls back to server-generated. See
+ *  `MimeMessageInput.selfMessageId` for why caller-supplied is required
+ *  for sequence threading. */
+function buildSelfMessageIdHeader(selfMessageId?: string): string[] {
+  if (!selfMessageId) return [];
+  return [`Message-ID: ${bracketMessageId(selfMessageId)}`];
 }
 
 function buildThreadingHeaders(
@@ -148,6 +176,7 @@ export class TextOnlyMimeStrategy implements MimeMessageStrategy {
       `From: ${input.from}`,
       `To: ${input.to}`,
       buildSubjectHeader(input.subject),
+      ...buildSelfMessageIdHeader(input.selfMessageId),
       ...buildThreadingHeaders(input.inReplyToMessageId, input.references),
       "MIME-Version: 1.0",
       "Content-Type: text/plain; charset=UTF-8",
@@ -184,6 +213,7 @@ export class MultipartMixedMimeStrategy implements MimeMessageStrategy {
       `From: ${input.from}`,
       `To: ${input.to}`,
       buildSubjectHeader(input.subject),
+      ...buildSelfMessageIdHeader(input.selfMessageId),
       ...buildThreadingHeaders(input.inReplyToMessageId, input.references),
       "MIME-Version: 1.0",
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
