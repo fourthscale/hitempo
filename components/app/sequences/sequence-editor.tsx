@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ReactFlow, Background, Controls } from "@xyflow/react";
-import { anchorTopOnInit } from "./anchor-top-viewport";
+import { useAnchorTopViewport } from "./anchor-top-viewport";
 import {
   Mail,
   Phone,
@@ -212,6 +212,7 @@ export function SequenceEditor({
   );
 
   const { nodes, edgePoints, edgeLaneX } = useSequenceLayout(baseNodes, baseEdges);
+  const anchorTop = useAnchorTopViewport(nodes);
   // Attach routing points + the branch lane X so edges render consistently.
   const edges = useMemo(
     () =>
@@ -449,7 +450,7 @@ export function SequenceEditor({
               nodesConnectable={false}
               elementsSelectable
               fitView
-              onInit={anchorTopOnInit}
+              onInit={anchorTop.onInit}
               onNodeClick={(_e, node) => {
                 if (node.id !== TRIGGER_ID && !node.id.startsWith("__end")) setSelectedId(node.id);
               }}
