@@ -482,6 +482,7 @@ export default async function TaskDetailPage({
               contactId={task.contact?.id ?? null}
               generate={generateCtx}
               isAgentPending={task.autoExecutionStatus === "pending"}
+              isAgentFailed={task.autoExecutionStatus === "failed"}
               labels={{
                 statusSection: t("actions.statusSection"),
                 pending: t("actions.pending"),
@@ -494,6 +495,7 @@ export default async function TaskDetailPage({
                 delete: t("actions.delete"),
                 deleteConfirm: t("detail.deleteConfirm"),
                 takeOverAgent: t("actions.takeOverAgent"),
+                retryAgent: t("actions.retryAgent"),
               }}
             />
           </Card>

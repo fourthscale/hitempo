@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, count, desc, eq, inArray, isNull, lt, lte, gte, or, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
-import { companies, contacts, tasks, sequenceStepExecutions, sequenceSteps, sites } from "@/db/schema";
+import { companies, contacts, tasks, sequenceEnrolments, sequenceStepExecutions, sequenceSteps, sites } from "@/db/schema";
 
 export type TaskWithContext = Awaited<ReturnType<typeof getTasksByOrg>>[number];
 
@@ -88,23 +88,74 @@ async function loadSourceStepInfoForTasks(
 ): Promise<Map<string, { stepOrder: number; mode: "ai" | "defined" | null }>> {
   const map = new Map<string, { stepOrder: number; mode: "ai" | "defined" | null }>();
   if (taskIds.length === 0) return map;
-  // Join sequence_step_executions → sequence_steps to read `action_config.mode`.
-  // Steps that aren't send_email / send_linkedin have no mode → null.
-  const rows = await getDb()
+
+  // Pull the step_executions rows first (no join). step_executions is a
+  // SOFT reference to sequence_steps — a republish recreates the steps
+  // under fresh UUIDs, so a strict join would silently drop tasks whose
+  // step row has drifted (the "Step N/M" badge would disappear and the
+  // task dialog would route to the wrong UI). Same drift the engine and
+  // diagram already work around with an id-first / step_order fallback.
+  const executions = await getDb()
     .select({
       taskId: sequenceStepExecutions.taskId,
+      enrolmentId: sequenceStepExecutions.enrolmentId,
+      stepId: sequenceStepExecutions.stepId,
       stepOrder: sequenceStepExecutions.stepOrder,
-      actionConfig: sequenceSteps.actionConfig,
     })
     .from(sequenceStepExecutions)
-    .innerJoin(sequenceSteps, eq(sequenceSteps.id, sequenceStepExecutions.stepId))
     .where(inArray(sequenceStepExecutions.taskId, taskIds));
-  for (const r of rows) {
-    if (!r.taskId) continue;
-    const rawMode = (r.actionConfig as { mode?: unknown } | null)?.mode;
+
+  if (executions.length === 0) return map;
+
+  // Resolve each execution's live step. Try id first ; fall back to
+  // (sequence_id, step_order) when the id no longer exists.
+  const stepIds = [...new Set(executions.map((e) => e.stepId))];
+  const byId = new Map<string, { actionConfig: unknown }>();
+  if (stepIds.length > 0) {
+    const rows = await getDb()
+      .select({ id: sequenceSteps.id, actionConfig: sequenceSteps.actionConfig })
+      .from(sequenceSteps)
+      .where(inArray(sequenceSteps.id, stepIds));
+    for (const r of rows) byId.set(r.id, { actionConfig: r.actionConfig });
+  }
+
+  // Fallback batch : for executions whose stepId didn't resolve, look up
+  // by (sequence_id, step_order). One query per distinct enrolment is
+  // fine in practice (a single page renders ~10 tasks max).
+  const missing = executions.filter((e) => !byId.has(e.stepId));
+  const fallbackByExec = new Map<string, { actionConfig: unknown }>();
+  if (missing.length > 0) {
+    const enrolmentIds = [...new Set(missing.map((e) => e.enrolmentId))];
+    const enrolments = await getDb()
+      .select({ id: sequenceEnrolments.id, sequenceId: sequenceEnrolments.sequenceId })
+      .from(sequenceEnrolments)
+      .where(inArray(sequenceEnrolments.id, enrolmentIds));
+    const sequenceIdByEnrolment = new Map(enrolments.map((e) => [e.id, e.sequenceId]));
+
+    for (const exec of missing) {
+      const sequenceId = sequenceIdByEnrolment.get(exec.enrolmentId);
+      if (!sequenceId) continue;
+      const [stepRow] = await getDb()
+        .select({ actionConfig: sequenceSteps.actionConfig })
+        .from(sequenceSteps)
+        .where(
+          and(
+            eq(sequenceSteps.sequenceId, sequenceId),
+            eq(sequenceSteps.stepOrder, exec.stepOrder),
+          ),
+        )
+        .limit(1);
+      if (stepRow) fallbackByExec.set(exec.stepId, { actionConfig: stepRow.actionConfig });
+    }
+  }
+
+  for (const exec of executions) {
+    if (!exec.taskId) continue;
+    const step = byId.get(exec.stepId) ?? fallbackByExec.get(exec.stepId);
+    const rawMode = (step?.actionConfig as { mode?: unknown } | null)?.mode;
     const mode: "ai" | "defined" | null =
       rawMode === "ai" || rawMode === "defined" ? rawMode : null;
-    map.set(r.taskId, { stepOrder: r.stepOrder, mode });
+    map.set(exec.taskId, { stepOrder: exec.stepOrder, mode });
   }
   return map;
 }

@@ -751,7 +751,8 @@
         "logInteraction": "Log interaction",
         "edit": "Edit",
         "delete": "Delete",
-        "takeOverAgent": "Take over"
+        "takeOverAgent": "Take over",
+        "retryAgent": "Relaunch agent"
       },
       "empty": "Nothing here. Enjoy the quiet.",
       "emptyGroup": "No tasks in this period.",

@@ -185,6 +185,76 @@ async function _takeOverAgentTaskAction(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+/**
+ * "Relancer l'agent" — re-arm a `failed` agent task so the auto-executor
+ * picks it up again. Resets `auto_execution_status` to "pending",
+ * clears the previous error, and re-emits `sequences/task.auto-execute`
+ * so the Inngest handler kicks in immediately (no need to wait for a
+ * cron tick). The handler honours `auto_execution_at` via its
+ * sleepUntil, so scheduling-window logic stays intact.
+ *
+ * Guard rails :
+ *   - the task must currently be `failed` (other statuses are no-ops to
+ *     avoid double-sending a pending / in-flight task) ;
+ *   - the task must still be `pending` overall (a human-completed task
+ *     no longer needs the agent) ;
+ *   - the executor itself re-checks status under its own load (see
+ *     agent-message-executor.ts) — so a race with a still-in-flight
+ *     previous attempt won't double-send.
+ */
+const retryAgentTaskSchema = z.object({
+  taskId: z.string().uuid(),
+});
+
+async function _retryAgentTaskAction(formData: FormData) {
+  const parsed = retryAgentTaskSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new InvalidInputError(parsed.error);
+  const { activeOrganization } = await getActiveOrg();
+
+  // Update only if the task is currently a failed agent task — defensive
+  // filter prevents racing with a manual take-over or a fresh agent run.
+  const [updated] = await getDb()
+    .update(tasks)
+    .set({
+      autoExecutionStatus: "pending",
+      autoExecutionError: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(tasks.id, parsed.data.taskId),
+        eq(tasks.organizationId, activeOrganization.id),
+        eq(tasks.autoExecutionStatus, "failed"),
+        eq(tasks.status, "pending"),
+      ),
+    )
+    .returning({ id: tasks.id, autoExecutionAt: tasks.autoExecutionAt });
+
+  if (updated) {
+    // Re-emit immediately so the user doesn't have to wait for the next
+    // cron tick. The handler sleeps until `autoExecutionAt` itself, so
+    // we just forward whatever was already scheduled (or null for ASAP).
+    const { inngest } = await import("@/lib/inngest/client");
+    const { EVENT_TASK_AUTO_EXECUTE } = await import(
+      "@/lib/sequences/engine/events"
+    );
+    await inngest.send({
+      name: EVENT_TASK_AUTO_EXECUTE,
+      data: {
+        organizationId: activeOrganization.id,
+        taskId: parsed.data.taskId,
+        scheduledFor: updated.autoExecutionAt
+          ? updated.autoExecutionAt.toISOString()
+          : null,
+      },
+    });
+  }
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${parsed.data.taskId}`);
+  revalidatePath("/dashboard");
+}
+
 async function _deleteTaskAction(formData: FormData) {
   const taskId = z.string().uuid().safeParse(formData.get("taskId"));
   if (!taskId.success) throw new InvalidInputError(taskId.error);
@@ -213,3 +283,4 @@ export const updateTaskAction = withActionError(_updateTaskAction);
 export const updateTaskStatusAction = withActionError(_updateTaskStatusAction);
 export const deleteTaskAction = withActionError(_deleteTaskAction);
 export const takeOverAgentTaskAction = withActionError(_takeOverAgentTaskAction);
+export const retryAgentTaskAction = withActionError(_retryAgentTaskAction);

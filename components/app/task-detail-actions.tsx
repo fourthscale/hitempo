@@ -4,13 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Circle, Clock, CheckCircle2, MessageSquarePlus, Sparkles, Pencil, Trash2, Send, Hand,
+  Circle, Clock, CheckCircle2, MessageSquarePlus, Sparkles, Pencil, Trash2, Send, Hand, RotateCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TaskInteractionDialog } from "@/components/app/task-interaction-dialog";
 import { GenerateMessageDialog } from "@/components/app/generate-message-dialog";
 import { SendDefinedMessageDialog } from "@/components/app/send-defined-message-dialog";
-import { updateTaskStatusAction, deleteTaskAction, takeOverAgentTaskAction } from "@/lib/actions/tasks";
+import { updateTaskStatusAction, deleteTaskAction, takeOverAgentTaskAction, retryAgentTaskAction } from "@/lib/actions/tasks";
 import { cn } from "@/lib/utils";
 import type { TaskGenerateContext } from "@/components/app/task-row-actions";
 
@@ -30,6 +30,7 @@ export function TaskDetailActions({
   contactId,
   generate,
   isAgentPending = false,
+  isAgentFailed = false,
   labels,
 }: {
   taskId: string;
@@ -43,6 +44,11 @@ export function TaskDetailActions({
    *  pipeline. Status changes, generate-message and other operations
    *  don't make sense while the system owns the task. */
   isAgentPending?: boolean;
+  /** Sprint 14 — task is `auto_execution_status = "failed"`. We
+   *  surface a "Retry agent" CTA alongside the regular action panel
+   *  so the user can either re-launch the agent (preferred for
+   *  transient infra blips) or fall back to manual handling. */
+  isAgentFailed?: boolean;
   labels: {
     statusSection: string;
     pending: string;
@@ -55,6 +61,7 @@ export function TaskDetailActions({
     delete: string;
     deleteConfirm: string;
     takeOverAgent: string;
+    retryAgent: string;
   };
 }) {
   const router = useRouter();
@@ -82,6 +89,13 @@ export function TaskDetailActions({
     const fd = new FormData();
     fd.append("taskId", taskId);
     await takeOverAgentTaskAction(fd);
+    router.refresh();
+  }
+
+  async function handleRetryAgent() {
+    const fd = new FormData();
+    fd.append("taskId", taskId);
+    await retryAgentTaskAction(fd);
     router.refresh();
   }
 
@@ -157,6 +171,33 @@ export function TaskDetailActions({
         </div>
       ) : (
       <div className="space-y-3">
+        {/* Sprint 14 — failed agent task : a pair of CTAs at the top so
+            the user can either re-launch the agent or take over and
+            handle it manually. The rest of the action panel stays
+            available below (status change, generate, edit, delete). */}
+        {isAgentFailed && (
+          <div className="flex flex-col gap-1.5">
+            <Button
+              variant="default"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={handleRetryAgent}
+            >
+              <RotateCw className="h-4 w-4" />
+              {labels.retryAgent}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={handleTakeOver}
+            >
+              <Hand className="h-4 w-4" />
+              {labels.takeOverAgent}
+            </Button>
+          </div>
+        )}
+
         {/* Inline status buttons */}
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">

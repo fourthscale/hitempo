@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   MoreHorizontal, Pencil, Trash2, Circle, Clock, CheckCircle2,
-  MessageSquarePlus, Sparkles, Send, Hand, Bot,
+  MessageSquarePlus, Sparkles, Send, Hand, Bot, RotateCw,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -16,7 +16,7 @@ import {
 import { TaskInteractionDialog } from "@/components/app/task-interaction-dialog";
 import { GenerateMessageDialog } from "@/components/app/generate-message-dialog";
 import { SendDefinedMessageDialog } from "@/components/app/send-defined-message-dialog";
-import { updateTaskStatusAction, deleteTaskAction, takeOverAgentTaskAction } from "@/lib/actions/tasks";
+import { updateTaskStatusAction, deleteTaskAction, takeOverAgentTaskAction, retryAgentTaskAction } from "@/lib/actions/tasks";
 import type { BrandBriefStatus } from "@/db/queries/brand";
 import type { ChannelIntent, MessageLocale } from "@/lib/messages/types";
 
@@ -80,6 +80,7 @@ export function TaskRowActions({
    * flag so the sale handles it manually.
    */
   isAgentPending = false,
+  isAgentFailed = false,
   labels,
 }: {
   taskId: string;
@@ -90,6 +91,10 @@ export function TaskRowActions({
   /** Present iff the task is message-eligible and has a contact. */
   generate?: TaskGenerateContext;
   isAgentPending?: boolean;
+  /** Sprint 14 — true when `auto_execution_status === "failed"`. Adds a
+   *  "Retry agent" item at the top of the dropdown so the user can
+   *  re-launch the agent without having to take over first. */
+  isAgentFailed?: boolean;
   labels: {
     statusSection: string;
     pending: string;
@@ -101,6 +106,7 @@ export function TaskRowActions({
     edit: string;
     delete: string;
     takeOverAgent: string;
+    retryAgent: string;
   };
 }) {
   const router = useRouter();
@@ -130,6 +136,13 @@ export function TaskRowActions({
     const fd = new FormData();
     fd.append("taskId", taskId);
     await takeOverAgentTaskAction(fd);
+    router.refresh();
+  }
+
+  async function handleRetryAgent() {
+    const fd = new FormData();
+    fd.append("taskId", taskId);
+    await retryAgentTaskAction(fd);
     router.refresh();
   }
 
@@ -207,6 +220,22 @@ export function TaskRowActions({
             </DropdownMenuItem>
           ) : (
             <>
+          {/* Sprint 14 — failed agent : surface "Retry agent" at the top,
+              followed by the regular action items so the user can also
+              fall back to manual handling without taking over first. */}
+          {isAgentFailed && (
+            <>
+              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={handleRetryAgent}>
+                <RotateCw className="h-3.5 w-3.5 text-sky-600" />
+                {labels.retryAgent}
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={handleTakeOver}>
+                <Hand className="h-3.5 w-3.5 text-sky-600" />
+                {labels.takeOverAgent}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <div className="px-2 py-1.5 text-xs text-muted-foreground">
             {labels.statusSection}
           </div>

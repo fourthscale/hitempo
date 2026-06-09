@@ -246,25 +246,77 @@ export async function getMessageContextResolutionForTask(
    */
   stepActionConfig: Record<string, unknown> | null;
 } | null> {
-  const [row] = await db
+  // First : pull the step_execution row (no joins). step_executions is
+  // a soft reference to sequence_steps — we have to resolve manually so
+  // we can fall back by step_order when the step row's id has drifted
+  // after a sequence republish (same drift as the engine handles in
+  // sequence-engine.ts:96-98 and the diagram resolver in the enrolment
+  // page). Without the fallback, agent auto-execution dies with
+  // "Source step config not found" the moment anyone publishes the
+  // sequence between enrolment and task execution.
+  const [exec] = await db
     .select({
       enrolmentId: sequenceStepExecutions.enrolmentId,
-      sequenceScope: sequences.messageContextScope,
-      stepScope: sequenceSteps.messageContextScope,
-      stepActionConfig: sequenceSteps.actionConfig,
+      stepId: sequenceStepExecutions.stepId,
+      stepOrder: sequenceStepExecutions.stepOrder,
     })
     .from(sequenceStepExecutions)
-    .innerJoin(sequenceSteps, eq(sequenceSteps.id, sequenceStepExecutions.stepId))
-    .innerJoin(sequences, eq(sequences.id, sequenceSteps.sequenceId))
     .where(eq(sequenceStepExecutions.taskId, taskId))
     .limit(1);
-  if (!row) return null;
+  if (!exec) return null;
+
+  // Need the enrolment's sequence_id for the fallback lookup + the
+  // sequence-level scope. Single small query.
+  const [enrolmentRow] = await db
+    .select({ sequenceId: sequenceEnrolments.sequenceId })
+    .from(sequenceEnrolments)
+    .where(eq(sequenceEnrolments.id, exec.enrolmentId))
+    .limit(1);
+  if (!enrolmentRow) return null;
+
+  // Resolve the live step : id first (still around → no republish since
+  // enrolment), then fall back to step_order within the same sequence
+  // (republish recreated the rows under fresh UUIDs).
+  let stepRow = await db
+    .select({
+      messageContextScope: sequenceSteps.messageContextScope,
+      actionConfig: sequenceSteps.actionConfig,
+    })
+    .from(sequenceSteps)
+    .where(eq(sequenceSteps.id, exec.stepId))
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  if (!stepRow) {
+    stepRow = await db
+      .select({
+        messageContextScope: sequenceSteps.messageContextScope,
+        actionConfig: sequenceSteps.actionConfig,
+      })
+      .from(sequenceSteps)
+      .where(
+        and(
+          eq(sequenceSteps.sequenceId, enrolmentRow.sequenceId),
+          eq(sequenceSteps.stepOrder, exec.stepOrder),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0]);
+  }
+  if (!stepRow) return null;
+
+  const [sequenceRow] = await db
+    .select({ messageContextScope: sequences.messageContextScope })
+    .from(sequences)
+    .where(eq(sequences.id, enrolmentRow.sequenceId))
+    .limit(1);
+
   return {
-    sequenceEnrolmentId: row.enrolmentId,
-    sequenceScope: row.sequenceScope,
-    stepScope: row.stepScope,
+    sequenceEnrolmentId: exec.enrolmentId,
+    sequenceScope: sequenceRow?.messageContextScope ?? null,
+    stepScope: stepRow.messageContextScope,
     stepActionConfig:
-      (row.stepActionConfig as Record<string, unknown> | null) ?? null,
+      (stepRow.actionConfig as Record<string, unknown> | null) ?? null,
   };
 }
 

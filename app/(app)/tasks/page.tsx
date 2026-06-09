@@ -695,6 +695,7 @@ async function TaskRow({
         contactId={task.contact?.id ?? null}
         generate={generateCtx}
         isAgentPending={task.autoExecutionStatus === "pending"}
+        isAgentFailed={task.autoExecutionStatus === "failed"}
         labels={{
           statusSection: t("actions.statusSection"),
           pending: t("actions.pending"),
@@ -706,6 +707,7 @@ async function TaskRow({
           edit: t("actions.edit"),
           delete: t("actions.delete"),
           takeOverAgent: t("actions.takeOverAgent"),
+          retryAgent: t("actions.retryAgent"),
         }}
       />
     </div>

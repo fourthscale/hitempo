@@ -751,7 +751,8 @@
         "logInteraction": "Enregistrer une interaction",
         "edit": "Modifier",
         "delete": "Supprimer",
-        "takeOverAgent": "Reprendre la main"
+        "takeOverAgent": "Reprendre la main",
+        "retryAgent": "Relancer l'agent"
       },
       "empty": "Rien ici. Profites-en.",
       "emptyGroup": "Aucune tâche sur cette période.",
