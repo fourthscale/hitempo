@@ -32,6 +32,7 @@ Briefs are written one at a time, just before starting that sprint. Each brief i
 Outstanding before closing MVP:
 - Browser smoke test with L&G real CSV data (≥ 100 rows, all-in-one mode)
 - Sentry integration (deferred — add when needed)
+- **Switch Gmail OAuth app to Workspace `Internal` user type** so refresh tokens stop expiring every 7 days during L&G dogfood. External + OAuth Verification (CASA audit, 3-month wall-clock) is required before the second customer if they're outside L&G's workspace domain. Details in `10-gmail-integration.md` → "OAuth verification + token lifecycle".
 
 ## How to use these briefs
 

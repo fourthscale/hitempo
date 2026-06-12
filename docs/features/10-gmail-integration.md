@@ -238,6 +238,69 @@ Replies are written into the existing `interactions` table with `direction = 'in
 
 All additive, all pushed to local + cloud.
 
+### OAuth verification + token lifecycle (pre-production)
+
+While the Google Cloud OAuth app stays in **Publishing status =
+"Testing"**, refresh tokens issued to users **expire after 7 days**.
+Symptom : every Monday the Gmail integration silently dies, the user
+sees "reconnect Gmail" on next send. This is a documented Google
+behavior, not a bug in our code.
+
+Once the app is moved to **"In production"** (status "Published"),
+refresh tokens stop expiring on a fixed clock. They still get revoked
+on : user-initiated revoke, password change (some Workspace policies),
+6 months of total inactivity, scope changes, or > 50 refresh tokens
+issued for the same (client_id, user) pair.
+
+**Gotcha** : our scopes (`gmail.send` + `gmail.readonly`) are classified
+as **restricted scopes** by Google. Moving the app from External /
+Testing to External / Production requires going through Google's
+**OAuth Verification** — security review form, demo video of the
+end-to-end consent flow, privacy policy URL + branding, and for true
+restricted scopes a **CASA audit** by a Google-approved third party
+(Bishop Fox / Leviathan / NCC Group). Timeline : 4–12 weeks depending
+on queue + how clean the privacy policy + homepage are.
+
+#### Paths forward (in order of how much work they save)
+
+1. **Workspace Internal app — recommended for L&G dogfood** (current
+   single-customer state). If L&G has a Google Workspace, recreate the
+   OAuth client with **User type = Internal** instead of External.
+   Internal apps :
+   - skip OAuth Verification entirely,
+   - have no 7-day refresh-token expiry,
+   - skip the "unverified app" warning screen,
+   - are restricted to the workspace's own domain (`*@leonandgeorge.com`).
+
+   Trade-off : the app cannot grant tokens to users outside L&G's
+   workspace. Fine while L&G is the only customer ; blocking the
+   second customer onboarding.
+
+2. **External + Verification — required for multi-tenant SaaS.** When
+   the second customer signs and they're not L&G domain users, switch
+   user type back to External and launch the verification process. Plan
+   a ~3 month buffer between "second-customer LOI signed" and "second
+   customer can connect Gmail" — start the verification before the LOI
+   if possible.
+
+3. **External + Unverified + Testing.** Status quo. Acceptable while
+   L&G is sole dogfood and they're OK reconnecting weekly. **Not
+   acceptable post-dogfood** — refresh-token churn breaks sequences
+   silently mid-flight.
+
+#### Action items
+
+- **Now (L&G dogfood)** : switch the OAuth client to user type
+  **Internal**. Stops the weekly reconnects, costs ~30 min of Google
+  Cloud Console config. Validate by issuing a fresh token and confirming
+  it survives a week.
+- **Before second customer** : start External + OAuth Verification. Add
+  privacy policy URL, branding, demo video. Budget : 3 months wall-clock,
+  but most of it is Google's queue, not our work.
+- **Before > 20 connected users** : reconsider Gmail Push via Pub/Sub
+  (see deferred V1+ items below) — independent decision but related
+  because Pub/Sub also lives under the same Cloud project.
+
 ### Things explicitly deferred to V1+
 
 - **Gmail Push via Cloud Pub/Sub** — real-time webhooks instead of
