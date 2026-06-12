@@ -6,9 +6,9 @@ import { Logo } from "./logo";
 import { OrgSwitcher } from "./org-switcher";
 import { signOutAction } from "@/lib/auth/actions";
 import { LogOut, ArrowLeftRight, ShieldCheck } from "lucide-react";
-import { countCompaniesByOrg } from "@/db/queries/companies";
-import { countContactsByOrg } from "@/db/queries/contacts";
-import { countPendingTasksByOrg } from "@/db/queries/tasks";
+import { countCompaniesByOrg, countCompaniesOwnedBy } from "@/db/queries/companies";
+import { countContactsByOrg, countContactsOwnedBy } from "@/db/queries/contacts";
+import { countPendingTasksSplitByOrg } from "@/db/queries/tasks";
 import { countPendingReviewByOrg } from "@/db/queries/interactions";
 
 type Organization = {
@@ -55,20 +55,44 @@ export async function Sidebar({
   const tRoles = await getTranslations("admin.orgs.detail.roles");
 
   // Real counters when we have an active org; skip otherwise (pure platform admin).
-  const [companiesCount, contactsCount, tasksCount, pendingReviewCount] = organization
+  const [
+    companiesTotal,
+    companiesOwned,
+    contactsTotal,
+    contactsOwned,
+    tasksSplit,
+    pendingReviewCount,
+  ] = organization
     ? await Promise.all([
         countCompaniesByOrg(organization.id),
+        countCompaniesOwnedBy(organization.id, user.id),
         countContactsByOrg(organization.id),
-        countPendingTasksByOrg(organization.id, user.id),
+        countContactsOwnedBy(organization.id, user.id),
+        countPendingTasksSplitByOrg(organization.id, user.id),
         countPendingReviewByOrg(organization.id),
       ])
-    : [0, 0, 0, 0];
+    : [0, 0, 0, 0, { user: 0, agent: 0 }, 0];
 
   const items: NavItem[] = [
     { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
-    { href: "/companies", label: t("companies"), icon: "companies", count: companiesCount },
-    { href: "/contacts", label: t("contacts"), icon: "contacts", count: contactsCount },
-    { href: "/tasks", label: t("tasks"), icon: "tasks", count: tasksCount },
+    {
+      href: "/companies",
+      label: t("companies"),
+      icon: "companies",
+      ownership: { owned: companiesOwned, total: companiesTotal },
+    },
+    {
+      href: "/contacts",
+      label: t("contacts"),
+      icon: "contacts",
+      ownership: { owned: contactsOwned, total: contactsTotal },
+    },
+    {
+      href: "/tasks",
+      label: t("tasks"),
+      icon: "tasks",
+      taskSplit: tasksSplit,
+    },
     {
       href: "/inbox/pending-review",
       label: t("inboxPendingReview"),

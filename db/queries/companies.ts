@@ -31,11 +31,56 @@ export type CompanyListRow = Awaited<ReturnType<typeof listCompaniesByOrg>>[numb
   } | null;
 };
 
-export async function listCompaniesByOrgEnriched(orgId: string): Promise<CompanyListRow[]> {
+/** Special sentinel for the `ownerId` filter meaning "owner_id IS NULL". */
+export const UNASSIGNED_COMPANY_OWNER = "unassigned" as const;
+/** Same idea for industry / signal — the user may want to surface
+ *  companies where the field is empty as a category in itself. */
+export const UNASSIGNED_INDUSTRY = "unassigned" as const;
+export const NO_SIGNAL = "none" as const;
+
+export async function listCompaniesByOrgEnriched(
+  orgId: string,
+  filters?: {
+    /** UUID of a member, `"unassigned"` to match NULL owner_id, or
+     *  undefined to skip the filter. */
+    ownerId?: string;
+    /** Exact industry value, `"unassigned"` for NULL, or undefined. */
+    industry?: string;
+    /** Exact signal_type value, `"none"` for NULL, or undefined. */
+    signal?: string;
+    /** Exact status value, or undefined. No "unassigned" because
+     *  `status` is NOT NULL on the schema (defaults to "to_qualify"). */
+    status?: string;
+  },
+): Promise<CompanyListRow[]> {
   const db = getDb();
 
+  const ownerFilter = !filters?.ownerId
+    ? undefined
+    : filters.ownerId === UNASSIGNED_COMPANY_OWNER
+      ? isNull(companies.ownerId)
+      : eq(companies.ownerId, filters.ownerId);
+  const industryFilter = !filters?.industry
+    ? undefined
+    : filters.industry === UNASSIGNED_INDUSTRY
+      ? isNull(companies.industry)
+      : eq(companies.industry, filters.industry);
+  const signalFilter = !filters?.signal
+    ? undefined
+    : filters.signal === NO_SIGNAL
+      ? isNull(companies.signalType)
+      : eq(companies.signalType, filters.signal);
+  const statusFilter = filters?.status ? eq(companies.status, filters.status) : undefined;
+
   const cos = await db.query.companies.findMany({
-    where: and(eq(companies.organizationId, orgId), isNull(companies.deletedAt)),
+    where: and(
+      eq(companies.organizationId, orgId),
+      isNull(companies.deletedAt),
+      ownerFilter,
+      industryFilter,
+      signalFilter,
+      statusFilter,
+    ),
     orderBy: [desc(companies.score), sql`${companies.signalDetectedAt} DESC NULLS LAST`, asc(companies.name)],
     limit: 200,
   });
@@ -72,6 +117,61 @@ export async function countCompaniesByOrg(orgId: string): Promise<number> {
     .select({ c: count() })
     .from(companies)
     .where(and(eq(companies.organizationId, orgId), isNull(companies.deletedAt)));
+  return row?.c ?? 0;
+}
+
+/** Distinct non-empty `industry` values present in the org. Powers the
+ *  Industry filter dropdown on /companies. Sorted alphabetically.
+ *  `industry` is a free-text column — orgs that haven't standardised
+ *  their data will see typo variants in the list ; that's a feature
+ *  (users can spot and clean them) rather than a bug. */
+export async function listCompanyIndustriesByOrg(orgId: string): Promise<string[]> {
+  const rows = await getDb()
+    .selectDistinct({ industry: companies.industry })
+    .from(companies)
+    .where(
+      and(
+        eq(companies.organizationId, orgId),
+        isNull(companies.deletedAt),
+        sql`${companies.industry} is not null and ${companies.industry} <> ''`,
+      ),
+    )
+    .orderBy(asc(companies.industry));
+  return rows.map((r) => r.industry).filter((v): v is string => v != null);
+}
+
+/** Distinct non-empty `signal_type` values present in the org. */
+export async function listCompanySignalsByOrg(orgId: string): Promise<string[]> {
+  const rows = await getDb()
+    .selectDistinct({ signalType: companies.signalType })
+    .from(companies)
+    .where(
+      and(
+        eq(companies.organizationId, orgId),
+        isNull(companies.deletedAt),
+        sql`${companies.signalType} is not null and ${companies.signalType} <> ''`,
+      ),
+    )
+    .orderBy(asc(companies.signalType));
+  return rows.map((r) => r.signalType).filter((v): v is string => v != null);
+}
+
+/** Sidebar split-counter : companies owned by a specific user inside the
+ *  active org. NULL owner_id (= unassigned) doesn't count. */
+export async function countCompaniesOwnedBy(
+  orgId: string,
+  userId: string,
+): Promise<number> {
+  const [row] = await getDb()
+    .select({ c: count() })
+    .from(companies)
+    .where(
+      and(
+        eq(companies.organizationId, orgId),
+        isNull(companies.deletedAt),
+        eq(companies.ownerId, userId),
+      ),
+    );
   return row?.c ?? 0;
 }
 

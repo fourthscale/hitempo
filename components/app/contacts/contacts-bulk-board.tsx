@@ -11,6 +11,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { resolveContactDisplayName } from "@/lib/contacts/contact-kind";
 import { bulkEnrollContactsAction } from "@/lib/actions/sequences";
 import { cn } from "@/lib/utils";
+import { chipSelectClass } from "@/components/app/filter-chip-class";
 
 import { CONTACT_STATUSES } from "@/lib/contacts/contact-status";
 
@@ -28,6 +29,13 @@ export type ContactsBulkRow = {
   };
   companyId: string;
   companyName: string;
+  /** Effective owner = contact.owner_id ?? company.owner_id, computed
+   *  server-side so the filter and the UI stay in sync. */
+  effectiveOwnerId: string | null;
+  /** True when the owner was inherited from the company (the contact
+   *  itself has no owner_id). Used to render a subtle "(inherited)"
+   *  hint next to the name. */
+  ownerInherited: boolean;
 };
 
 /**
@@ -43,15 +51,23 @@ export function ContactsBulkBoard({
   rows,
   companies,
   sequences,
+  members,
+  currentUserId,
   selectedCompanyId,
   selectedStatus,
+  selectedOwnerId,
   flash,
 }: {
   rows: ContactsBulkRow[];
   companies: { id: string; name: string }[];
   sequences: { id: string; name: string }[];
+  members: { userId: string; displayName: string }[];
+  currentUserId: string;
   selectedCompanyId: string | null;
   selectedStatus: string | null;
+  /** null = "all" (no filter) ; "unassigned" = no effective owner ;
+   *  uuid = a specific member. */
+  selectedOwnerId: string | null;
   flash: { enrolled: number; skipped: number } | null;
 }) {
   const t = useTranslations("pages.contacts");
@@ -104,6 +120,43 @@ export function ContactsBulkBoard({
     router.push(next.toString() ? `${pathname}?${next.toString()}` : pathname);
   }
 
+  /** Owner filter has its own setter because the URL convention is
+   *  inverted vs the other filters : an absent param means "me" (the
+   *  product default), so the "show me" choice DELETES the param
+   *  instead of setting one. "all" / "unassigned" / uuid → set. */
+  function updateOwner(value: "" | "all" | "unassigned" | string) {
+    const next = new URLSearchParams(search.toString());
+    if (value === "" || value === currentUserId) {
+      next.delete("owner");
+    } else {
+      next.set("owner", value);
+    }
+    setSelected(new Set());
+    next.delete("bulk_enrolled");
+    next.delete("bulk_skipped");
+    router.push(next.toString() ? `${pathname}?${next.toString()}` : pathname);
+  }
+
+  // Map for owner display name resolution in the rendered rows.
+  const memberById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const x of members) m.set(x.userId, x.displayName);
+    return m;
+  }, [members]);
+
+  // Value displayed in the owner <select>. `null` here means "Tous"
+  // (the explicit no-filter choice) and maps to the "all" option value.
+  const ownerSelectValue =
+    selectedOwnerId == null ? "all" : selectedOwnerId;
+  // Current member's display name for the "Xxx (moi)" option. Falls
+  // back gracefully when the auth user isn't an org member (platform
+  // admin viewing another org, etc.) — we hide the "me" option entirely
+  // in that case rather than fabricating a label.
+  const currentMemberName = useMemo(
+    () => members.find((m) => m.userId === currentUserId)?.displayName ?? null,
+    [members, currentUserId],
+  );
+
   function clearFlash() {
     const next = new URLSearchParams(search.toString());
     next.delete("bulk_enrolled");
@@ -126,11 +179,36 @@ export function ContactsBulkBoard({
         </div>
       )}
 
-      {/* Filters — chip-style selects matching the visual pattern used on the
-          /companies page (label-as-placeholder, no separate label tag). Each
-          change navigates immediately ; `value` (not `defaultValue`) so the
-          chip mirrors the URL state after navigation. */}
+      {/* Filters — chip-style selects. Order matches /companies for cross-page
+          consistency : Owner first (default = current user, the most
+          structuring filter), then the domain filters. Each change navigates
+          immediately ; `value` (not `defaultValue`) so the chip mirrors the
+          URL state after navigation. */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
+        {/* Owner — "Tous (organisation)" → current user "(moi)" → every other
+            member alphabetically → Non attribué. */}
+        <select
+          name="owner"
+          value={ownerSelectValue}
+          onChange={(e) => updateOwner(e.target.value)}
+          aria-label={t("bulk.filterOwner")}
+          className={chipSelectClass(selectedOwnerId != null)}
+        >
+          <option value="all">{t("bulk.ownerAll")}</option>
+          {currentMemberName && (
+            <option value={currentUserId}>
+              {t("bulk.ownerMeOption", { name: currentMemberName })}
+            </option>
+          )}
+          {members
+            .filter((m) => m.userId !== currentUserId)
+            .map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.displayName}
+              </option>
+            ))}
+          <option value="unassigned">{t("bulk.ownerUnassigned")}</option>
+        </select>
         <select
           name="companyId"
           value={selectedCompanyId ?? ""}
@@ -192,7 +270,7 @@ export function ContactsBulkBoard({
       <Card className="p-0 overflow-hidden">
         {/* Mobile / tablet portrait : cards with checkbox */}
         <ul className="lg:hidden divide-y divide-border">
-          {rows.map(({ contact, companyName, companyId }) => {
+          {rows.map(({ contact, companyName, companyId, effectiveOwnerId, ownerInherited }) => {
             const checked = selected.has(contact.id);
             return (
               <li key={contact.id} className={cn("px-4 py-3 flex items-start gap-3", checked && "bg-brand-teal/5")}>
@@ -231,6 +309,14 @@ export function ContactsBulkBoard({
                     <span className="px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
                       {tStatus(contact.status as Parameters<typeof tStatus>[0])}
                     </span>
+                    {effectiveOwnerId && (
+                      <span className="text-muted-foreground truncate">
+                        · {memberById.get(effectiveOwnerId) ?? t("bulk.ownerUnknown")}
+                        {ownerInherited && (
+                          <span className="opacity-60"> {t("bulk.ownerInheritedShort")}</span>
+                        )}
+                      </span>
+                    )}
                     {contact.email && (
                       <span className="text-muted-foreground truncate">· {contact.email}</span>
                     )}
@@ -264,6 +350,7 @@ export function ContactsBulkBoard({
                 </th>
                 <th className="px-4 py-3 font-medium">{t("columns.name")}</th>
                 <th className="px-4 py-3 font-medium">{t("columns.company")}</th>
+                <th className="px-4 py-3 font-medium">{t("columns.owner")}</th>
                 <th className="px-4 py-3 font-medium">{t("columns.role")}</th>
                 <th className="px-4 py-3 font-medium">{t("columns.email")}</th>
                 <th className="px-4 py-3 font-medium">{t("columns.relevance")}</th>
@@ -271,7 +358,7 @@ export function ContactsBulkBoard({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map(({ contact, companyName, companyId }) => {
+              {rows.map(({ contact, companyName, companyId, effectiveOwnerId, ownerInherited }) => {
                 const checked = selected.has(contact.id);
                 return (
                   <tr key={contact.id} className={cn("hover:bg-secondary/30", checked && "bg-brand-teal/5")}>
@@ -296,6 +383,18 @@ export function ContactsBulkBoard({
                       <Link href={`/companies/${companyId}`} className="text-muted-foreground hover:text-brand-teal">
                         {companyName}
                       </Link>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {effectiveOwnerId ? (
+                        <span title={ownerInherited ? t("bulk.ownerInheritedTooltip") : undefined}>
+                          {memberById.get(effectiveOwnerId) ?? t("bulk.ownerUnknown")}
+                          {ownerInherited && (
+                            <span className="ml-1 opacity-60">{t("bulk.ownerInheritedShort")}</span>
+                          )}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {contact.role
@@ -390,16 +489,3 @@ function SequencePickerDialog({
   );
 }
 
-/**
- * Visual style matching the disabled placeholder chips on /companies — small
- * pill with a thin border. Bolder text + accent border when a value is
- * actually selected, so the user can spot active filters at a glance.
- */
-function chipSelectClass(active: boolean): string {
-  return cn(
-    "inline-flex items-center gap-1.5 h-8 pl-3 pr-2 rounded-md border bg-background text-xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring",
-    active
-      ? "border-brand-teal text-foreground font-medium"
-      : "border-border text-muted-foreground hover:text-foreground",
-  );
-}

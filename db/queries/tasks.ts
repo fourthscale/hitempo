@@ -467,6 +467,40 @@ export async function countPendingTasksByOrg(orgId: string, assigneeId?: string)
 }
 
 /**
+ * Sidebar split-counter for tasks : returns both the human-owned and the
+ * agent-pipeline pending tasks assigned to `userId`, in a single round
+ * trip (FILTER + count). Both counts respect the same status filter
+ * (pending / in_progress) as `countPendingTasksByOrg`.
+ *
+ * Agent count is "assigned to me AND currently in the agent pipeline" :
+ *   `auto_execution_status IS NOT NULL` covers pending / in-flight /
+ *   failed (a failed agent task is still on the user's plate — they
+ *   can retry or take over).
+ */
+export async function countPendingTasksSplitByOrg(
+  orgId: string,
+  userId: string,
+): Promise<{ user: number; agent: number }> {
+  const [row] = await getDb()
+    .select({
+      user: sql<number>`count(*) filter (where ${tasks.autoExecutionStatus} is null)`,
+      agent: sql<number>`count(*) filter (where ${tasks.autoExecutionStatus} is not null)`,
+    })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.organizationId, orgId),
+        or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
+        eq(tasks.assigneeId, userId),
+      ),
+    );
+  return {
+    user: Number(row?.user ?? 0),
+    agent: Number(row?.agent ?? 0),
+  };
+}
+
+/**
  * Sprint 12 phase 5 — shared helper that returns the [start, end]
  * timestamps for "this week" (Monday 00:00 → Sunday 23:59:59) and
  * "next week" (Monday + 7 → Sunday + 7) relative to a given moment.

@@ -491,12 +491,26 @@
         "microZone": "Micro-zone",
         "name": "Nom",
         "industry": "Secteur",
+        "owner": "Propriétaire",
         "score": "Score",
         "signal": "Signal",
         "contactPrio": "Contact prio",
         "status": "Statut",
         "nextAction": "Prochaine action"
       },
+      "filters": {
+        "owner": "Propriétaire",
+        "ownerAll": "Tous (organisation)",
+        "ownerMeOption": "{name} (moi)",
+        "ownerUnassigned": "Non attribué",
+        "ownerUnknown": "Utilisateur inconnu",
+        "industry": "Secteur",
+        "industryUnassigned": "Sans secteur",
+        "signal": "Signal",
+        "signalNone": "Sans signal",
+        "status": "Statut"
+      },
+      "noResultsForFilters": "Aucune entreprise ne correspond aux filtres.",
       "actions": {
         "call": "Appeler",
         "task": "Tâche",
@@ -647,6 +661,7 @@
       "columns": {
         "name": "Nom",
         "company": "Entreprise",
+        "owner": "Propriétaire",
         "role": "Rôle",
         "email": "Email",
         "relevance": "Pertinence",
@@ -655,6 +670,13 @@
       "bulk": {
         "filterCompany": "Entreprise",
         "filterStatus": "Statut",
+        "filterOwner": "Propriétaire",
+        "ownerAll": "Tous (organisation)",
+        "ownerMeOption": "{name} (moi)",
+        "ownerUnassigned": "Non attribué",
+        "ownerUnknown": "Utilisateur inconnu",
+        "ownerInheritedShort": "(hérité)",
+        "ownerInheritedTooltip": "Hérité de l'entreprise",
         "allCompanies": "Toutes les entreprises",
         "allStatuses": "Tous les statuts",
         "selectedCount": "{count, plural, =0 {Aucune sélection} one {1 sélectionné} other {# sélectionnés}}",

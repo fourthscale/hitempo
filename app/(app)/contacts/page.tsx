@@ -5,8 +5,10 @@ import { getActiveOrg } from "@/lib/auth/context";
 import {
   listContactsByOrg,
   listCompaniesWithContactsForOrg,
+  UNASSIGNED_OWNER,
 } from "@/db/queries/contacts";
 import { getActiveSequencesForTargeting } from "@/db/queries/sequences";
+import { getOrgMembersWithNames } from "@/db/queries/members";
 import { getDb } from "@/db/client";
 import { CONTACT_STATUSES } from "@/lib/contacts/contact-status";
 import { PageHeader } from "@/components/app/page-header";
@@ -40,6 +42,7 @@ export default async function ContactsPage({
   searchParams: Promise<{
     companyId?: string;
     status?: string;
+    owner?: string;
     bulk_enrolled?: string;
     bulk_skipped?: string;
   }>;
@@ -50,13 +53,37 @@ export default async function ContactsPage({
   const flashEnrolled = clampInt(params.bulk_enrolled);
   const flashSkipped = clampInt(params.bulk_skipped);
 
-  const { activeOrganization } = await getActiveOrg();
+  const { activeOrganization, user } = await getActiveOrg();
   const orgId = activeOrganization.id;
+
+  // Members list is needed both for the dropdown AND to decide what
+  // "default" means : only members get "default = me", platform admins
+  // browsing an org they don't belong to fall back to "all" (otherwise
+  // the page lands on an empty list with no obvious way out).
+  const members = await getOrgMembersWithNames(orgId);
+  const isMember = members.some((m) => m.userId === user.id);
+
+  // Owner filter resolution :
+  //   - no `owner` param        → default to the logged-in user when
+  //                               they are an org member ; "all" when
+  //                               they are not (platform admin)
+  //   - `owner=all`             → no filter, show everyone's contacts
+  //   - `owner=unassigned`      → contacts with no effective owner
+  //   - `owner=<uuid>`          → that specific member
+  const rawOwner = params.owner;
+  const defaultOwnerId = isMember ? user.id : null;
+  const selectedOwnerId: string | null =
+    rawOwner === "all"
+      ? null
+      : rawOwner === UNASSIGNED_OWNER
+        ? UNASSIGNED_OWNER
+        : (clampUuid(rawOwner) ?? defaultOwnerId);
 
   const [rows, companies, sequences] = await Promise.all([
     listContactsByOrg(orgId, {
       companyId: selectedCompanyId ?? undefined,
       status: selectedStatus ?? undefined,
+      ownerId: selectedOwnerId ?? undefined,
     }),
     listCompaniesWithContactsForOrg(orgId),
     getActiveSequencesForTargeting(getDb(), orgId),
@@ -65,7 +92,17 @@ export default async function ContactsPage({
   const t = await getTranslations("pages.contacts");
   const tNav = await getTranslations("nav");
 
-  const hasFilter = selectedCompanyId != null || selectedStatus != null;
+  // Owner default = current user, so a non-null `selectedOwnerId` here
+  // is the norm, not an explicit user-set filter. Treat it as "filter
+  // active" for the EmptyState gating below : if the user has 0 contacts
+  // owned, the board must still render so they can switch to "Tous" /
+  // pick someone else / inspect Non attribué. EmptyState is reserved for
+  // the case where the org genuinely has 0 contacts (selectedOwnerId
+  // === null = explicit "Tous", no other filter, 0 rows).
+  const hasFilter =
+    selectedCompanyId != null ||
+    selectedStatus != null ||
+    selectedOwnerId != null;
   const flash =
     flashEnrolled != null || flashSkipped != null
       ? { enrolled: flashEnrolled ?? 0, skipped: flashSkipped ?? 0 }
@@ -104,7 +141,7 @@ export default async function ContactsPage({
         </Card>
       ) : (
         <ContactsBulkBoard
-          rows={rows.map(({ contact, companyName, companyId }) => ({
+          rows={rows.map(({ contact, companyName, companyId, effectiveOwnerId }) => ({
             contact: {
               id: contact.id,
               kind: contact.kind,
@@ -118,11 +155,18 @@ export default async function ContactsPage({
             },
             companyId,
             companyName,
+            effectiveOwnerId,
+            // Owner inherited from the company (not set on the contact
+            // itself) — drives the "(inherited)" hint in the UI.
+            ownerInherited: contact.ownerId == null && effectiveOwnerId != null,
           }))}
           companies={companies}
           sequences={sequences.map((s) => ({ id: s.id, name: s.name }))}
+          members={members.map((m) => ({ userId: m.userId, displayName: m.displayName }))}
+          currentUserId={user.id}
           selectedCompanyId={selectedCompanyId}
           selectedStatus={selectedStatus}
+          selectedOwnerId={selectedOwnerId}
           flash={flash}
         />
       )}
