@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { Mail, RefreshCcw, Phone, CheckCircle2, TrendingUp, Flame, AlertCircle, MapPin, Calendar, Search, Inbox, Clock, Bot, Send, CalendarClock } from "lucide-react";
+import { Mail, Phone, CheckCircle2, TrendingUp, Flame, AlertCircle, MapPin, Calendar, Search, Inbox, Clock, Bot, Send, CalendarClock } from "lucide-react";
 import { getActiveOrg } from "@/lib/auth/context";
 import { formatDateInTz } from "@/lib/i18n/format-date";
 import {
@@ -275,7 +275,6 @@ export default async function DashboardPage() {
                       <Link href={`/tasks/${task.id}`} className={cn("font-semibold hover:text-brand-teal hover:underline", isOverdue ? "text-brand-amber" : "text-foreground")}>
                         {typeLabel} — {task.title}
                       </Link>
-                      {task.type === "follow_up" && (<RefreshCcw className="h-3 w-3 text-brand-amber" aria-hidden />)}
                       {task.company?.score != null && grade && (
                         <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium", scoreBadgeClasses(task.company.score))}>
                           {tScoring("scoreBadge", { score: task.company.score, grade })}

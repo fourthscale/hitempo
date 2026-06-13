@@ -540,8 +540,11 @@ async function main() {
       organizationId: lg.id,
       companyId: westminster.id,
       contactId: sophieDurand.id,
-      type: "follow_up",
-      title: "Envoyer catalogue tarifaire",
+      // Sprint 14 — task_type no longer has a `follow_up` value
+      // (intent vs channel — see schema comment). The relance demo
+      // becomes a plain email task ; the title carries the intent.
+      type: "email",
+      title: "Envoyer catalogue tarifaire (relance)",
       description: "Sophie a demandé le catalogue suite à la relance email.",
       status: "pending",
       priority: "high",

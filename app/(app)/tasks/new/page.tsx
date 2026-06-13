@@ -37,7 +37,7 @@ export default async function NewTaskPage({
     prefilledCompanyId ? getSitesForTaskForm(orgId, prefilledCompanyId) : Promise.resolve([]),
   ]);
 
-  const taskTypes = ["email", "linkedin", "phone", "visit", "follow_up", "research", "other"] as const;
+  const taskTypes = ["email", "linkedin", "phone", "visit", "research", "other"] as const;
   const priorities = ["low", "medium", "high", "urgent"] as const;
 
   return (

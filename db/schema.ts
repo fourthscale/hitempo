@@ -74,7 +74,12 @@ export const interactionStatus = pgEnum("interaction_status", [
 ]);
 
 export const taskType = pgEnum("task_type", [
-  "email", "linkedin", "phone", "visit", "follow_up", "research", "other",
+  // Sprint 14 — dropped `follow_up`. It was an *intent* ("relance"), not
+  // a channel : "follow up on what" required the channel to be set too.
+  // The relance information now lives on the AI generation side (the
+  // `message_intent` enum has `follow_up`, which is the right place :
+  // it's an instruction to the LLM, not a task channel).
+  "email", "linkedin", "phone", "visit", "research", "other",
 ]);
 
 export const taskStatus = pgEnum("task_status", [

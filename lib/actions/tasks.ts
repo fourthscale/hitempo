@@ -13,7 +13,7 @@ import { recomputeCompanyScore } from "@/lib/scoring/recompute";
 import { InvalidInputError } from "./user-facing-action-error";
 import { withActionError } from "./wrap-action-error";
 
-const taskTypeEnum = z.enum(["email", "linkedin", "phone", "visit", "follow_up", "research", "other"]);
+const taskTypeEnum = z.enum(["email", "linkedin", "phone", "visit", "research", "other"]);
 const taskPriorityEnum = z.enum(["low", "medium", "high", "urgent"]);
 
 // Shared by create + update — the 4 Sprint 12.5 fields, plus a coercer for

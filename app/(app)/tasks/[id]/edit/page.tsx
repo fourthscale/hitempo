@@ -52,7 +52,7 @@ export default async function EditTaskPage({
   const tTaskType = await getTranslations("taskType");
   const tPriority = await getTranslations("taskPriority");
 
-  const taskTypes = ["email", "linkedin", "phone", "visit", "follow_up", "research", "other"] as const;
+  const taskTypes = ["email", "linkedin", "phone", "visit", "research", "other"] as const;
   const priorities = ["low", "medium", "high", "urgent"] as const;
 
   const dueAtValue = toDateTimeLocal(task.dueAt);

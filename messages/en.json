@@ -4,7 +4,6 @@
     "linkedin": "LinkedIn",
     "phone": "Phone",
     "visit": "Visit",
-    "follow_up": "Follow-up",
     "research": "Research",
     "other": "Other"
   },
@@ -739,6 +738,7 @@
       },
       "filters": {
         "type": "Type",
+        "allTypes": "All types",
         "microZone": "Micro-zone",
         "me": "Me",
         "allMembers": "All",

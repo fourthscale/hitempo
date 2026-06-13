@@ -24,7 +24,7 @@ import { getWorkPatternWindowsForDay, type WorkPattern } from "./work-pattern";
 const BUFFER_MIN = 5;
 const SEARCH_HORIZON_DAYS = 14;
 
-export type TaskTypeKey = "email" | "phone" | "linkedin" | "visit" | "follow_up" | "research" | "other";
+export type TaskTypeKey = "email" | "phone" | "linkedin" | "visit" | "research" | "other";
 
 export type ExistingTask = {
   scheduledFor: Date;

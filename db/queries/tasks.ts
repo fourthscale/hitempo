@@ -9,6 +9,11 @@ export async function getTasksByOrg(
   orgId: string,
   assigneeId?: string | null,
   status?: "active" | "pending" | "in_progress" | "completed" | "agent_failed",
+  /** Sprint 14 — task_type enum filter on the listing page. Caller is
+   *  responsible for validating against the enum ; we trust the value
+   *  here and let pg coerce, so an unknown string returns an empty set
+   *  rather than a DB error (still safer than throwing). */
+  type?: (typeof tasks.$inferSelect)["type"],
 ) {
   // Sprint 12 phase 4 — "agent_failed" is a cross-cut over the agent
   // state machine (auto_execution_status), not the task lifecycle, so
@@ -25,6 +30,7 @@ export async function getTasksByOrg(
       eq(tasks.organizationId, orgId),
       statusFilter,
       assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
+      type ? eq(tasks.type, type) : undefined,
     ),
     with: {
       company: {

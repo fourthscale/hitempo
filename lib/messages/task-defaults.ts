@@ -3,11 +3,13 @@ import type { ChannelIntent, MessageLocale } from "./types";
 /**
  * Pure helper : given a task, returns the dialog defaults for generation.
  *
- * The task's `type` is a mix of channel and intent (email/linkedin = channel,
- * follow_up = intent). We map both to a canonical (channel, intent) tuple.
- *
  * Returns null when the task isn't a message-generation candidate
  * (phone, visit, research…) — callers use that as a feature gate.
+ *
+ * Sprint 14 — the legacy `follow_up` task type was removed (intent, not
+ * channel — see schema comment). The relance information now lives only
+ * on the AI side via the `message_intent` enum, which the dialog exposes
+ * as a dropdown the user can flip without help from a task-type hint.
  */
 export function getMessageDefaultsFromTask(task: {
   type: string;
@@ -23,8 +25,6 @@ export function getMessageDefaultsFromTask(task: {
       return { channelIntent: "email-first_contact" };
     case "linkedin":
       return { channelIntent: "linkedin-first_contact" };
-    case "follow_up":
-      return { channelIntent: "email-follow_up" };
     default:
       return null;
   }

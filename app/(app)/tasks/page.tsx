@@ -130,11 +130,20 @@ function buildHref(period: Period, assignee: string, status: StatusFilter) {
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; assignee?: string; status?: string }>;
+  searchParams: Promise<{ period?: string; assignee?: string; status?: string; type?: string }>;
 }) {
-  const { period: rawPeriod, assignee: rawAssignee, status: rawStatus } = await searchParams;
+  const { period: rawPeriod, assignee: rawAssignee, status: rawStatus, type: rawType } = await searchParams;
   const period = parsePeriod(rawPeriod);
   const status = parseStatus(rawStatus);
+
+  // task_type enum allow-list ; unknown values fall back to "all" so a
+  // stale or mistyped URL param doesn't trap the user on an empty page.
+  const TASK_TYPES = ["email", "linkedin", "phone", "visit", "research", "other"] as const;
+  type TaskType = (typeof TASK_TYPES)[number];
+  const type: TaskType | null =
+    rawType && (TASK_TYPES as readonly string[]).includes(rawType)
+      ? (rawType as TaskType)
+      : null;
 
   const { activeOrganization, user, userTimezone } = await getActiveOrg();
   const orgId = activeOrganization.id;
@@ -157,7 +166,7 @@ export default async function TasksPage({
 
   const [allTasks, overdueCount, todayCount, totalPending, doneThisWeek, interactionStats, brandBriefStatus] =
     await Promise.all([
-      getTasksByOrg(orgId, assigneeIdFilter, status),
+      getTasksByOrg(orgId, assigneeIdFilter, status, type ?? undefined),
       countOverdueTasksByOrg(orgId),
       countTodayTasksByOrg(orgId),
       countPendingTasksByOrg(orgId),
@@ -284,7 +293,7 @@ export default async function TasksPage({
           <FilterSelect
             name="assignee"
             value={assigneeParam}
-            params={{ ...(period !== "all" && { period }), ...(status !== "active" && { status }) }}
+            params={{ ...(period !== "all" && { period }), ...(status !== "active" && { status }), ...(type && { type }) }}
             options={[
               ...(isMember ? [{ value: "me", label: t("filters.me") }] : []),
               { value: "all", label: t("filters.allMembers") },
@@ -297,7 +306,7 @@ export default async function TasksPage({
           <FilterSelect
             name="status"
             value={status}
-            params={{ ...(period !== "all" && { period }), ...(assigneeParam !== "me" && { assignee: assigneeParam }) }}
+            params={{ ...(period !== "all" && { period }), ...(assigneeParam !== "me" && { assignee: assigneeParam }), ...(type && { type }) }}
             options={[
               { value: "active", label: t("filters.statusActive") },
               { value: "pending", label: t("filters.statusPending") },
@@ -307,17 +316,34 @@ export default async function TasksPage({
             ]}
           />
 
-          {[t("filters.type"), t("filters.microZone")].map((label) => (
-            <button
-              key={label}
-              type="button"
-              disabled
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-xs text-muted-foreground disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {label}
-              <ChevronDown className="h-3 w-3" />
-            </button>
-          ))}
+          {/* Sprint 14 — `type` chip wired to the task_type enum. Empty
+              string means "all types" so the URL stays clean (we just
+              omit the param). The `all` option label is reused from the
+              existing filters.allTypes key — added in i18n alongside. */}
+          <FilterSelect
+            name="type"
+            value={type ?? ""}
+            params={{
+              ...(period !== "all" && { period }),
+              ...(status !== "active" && { status }),
+              ...(assigneeParam !== "me" && { assignee: assigneeParam }),
+            }}
+            options={[
+              { value: "", label: t("filters.allTypes") },
+              ...TASK_TYPES.map((tt) => ({ value: tt, label: tTaskType(tt) })),
+            ]}
+          />
+
+          {/* Micro-zone stays placeholder until the micro_zones table
+              ships (see /companies brief for the same reasoning). */}
+          <button
+            type="button"
+            disabled
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-background text-xs text-muted-foreground disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {t("filters.microZone")}
+            <ChevronDown className="h-3 w-3" />
+          </button>
         </div>
       </div>
 
