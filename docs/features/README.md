@@ -24,6 +24,7 @@ Features are implemented in order. Each one builds on the previous. The number i
 | 13 | Sequence versioning & in-flight enrolment isolation | `13-sequence-versioning.md` | 📝 brief drafted (not urgent — fallback by step_order mitigates the worst symptoms today) |
 | 14 | Agent auto-execution resilience (idempotence + retry + scavenger) | `14-agent-execution-resilience.md` | 📝 brief drafted (urgent once dogfood scales — transient DB pool failures silently drop tasks today) |
 | 15 | Sequence email threading (reply in previous Gmail thread) | `15-sequences-email-threading.md` | 📝 brief drafted (high impact — reply rates drop 2-3x without it ; standard across all cold-outreach tools) |
+| 16 | Outlook integration (Microsoft Graph + MailService unification) | `16-outlook-integration.md` | 📝 brief drafted (unlocks the second customer if they're on Office 365 — half of European SMBs) |
 
 Briefs are written one at a time, just before starting that sprint. Each brief incorporates lessons learned from previous sprints.
 
