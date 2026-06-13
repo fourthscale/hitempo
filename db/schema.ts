@@ -95,6 +95,22 @@ export const taskAutoExecutionStatus = pgEnum("task_auto_execution_status", [
   "pending", "succeeded", "failed",
 ]);
 
+/**
+ * Sprint 14 — credential lifecycle for a user's connected Gmail OAuth.
+ *
+ *   - `active`  : refresh + send work nominally. Default after `upsert`.
+ *   - `revoked` : the refresh token died (Google returned `invalid_grant`),
+ *                 OR the user revoked access in their Google account, OR
+ *                 the OAuth app's Testing window expired, etc. We can't
+ *                 distinguish causes — only that the next refresh failed.
+ *                 The UI surfaces this as "Reconnect Gmail" ; on reconnect
+ *                 the OAuth callback replays the gmail_auth-failed agent
+ *                 tasks for this user.
+ */
+export const gmailCredentialStatus = pgEnum("gmail_credential_status", [
+  "active", "revoked",
+]);
+
 export const taskPriority = pgEnum("task_priority", [
   "low", "medium", "high", "urgent",
 ]);
@@ -546,6 +562,18 @@ export const tasks = pgTable(
     autoExecutionStatus: taskAutoExecutionStatus("auto_execution_status"),
     autoExecutionError: text("auto_execution_error"),
     autoExecutionAt: timestamp("auto_execution_at", { withTimezone: true }),
+    /**
+     * Sprint 14 — failure classification when `auto_execution_status = 'failed'`.
+     *
+     * Kept as free-text (not pgEnum) so we can add new kinds without a
+     * schema migration. Today :
+     *   - `gmail_auth` : refresh token revoked / no creds. The OAuth
+     *     callback bulk-replays these on next reconnect.
+     *   - `other`      : any other failure (LLM, network, malformed step,
+     *     race condition). Retry requires user intervention.
+     *   - NULL when not failed (or when failed before this column shipped).
+     */
+    autoExecutionFailureKind: text("auto_execution_failure_kind"),
 
     // Sprint 15 — email threading context resolved at task creation by the
     // sequence engine. Filled when the source `send_email` step's
@@ -888,8 +916,21 @@ export const userGmailCredentials = pgTable("user_gmail_credentials", {
   scopes: text("scopes").array().notNull(),
   connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  /** Sprint 14 — credential lifecycle. Default `active` ; the GmailService
+   *  flips this to `revoked` when a refresh fails with `invalid_grant`. */
+  status: gmailCredentialStatus("status").notNull().default("active"),
+  /** When the credential was first observed dead. Cleared on reconnect
+   *  (upsert resets status to `active` + this to NULL). */
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  /** Last refresh error payload (truncated). Surfaced verbatim on the
+   *  profile page so the user understands what happened. */
+  lastRefreshError: text("last_refresh_error"),
+  /** Timestamp of the last refresh attempt (success or failure).
+   *  Useful for "your last sync was X minutes ago" UI + debug. */
+  lastRefreshAttemptAt: timestamp("last_refresh_attempt_at", { withTimezone: true }),
 }, (t) => ({
   byOrg: index("idx_gmail_creds_org").on(t.organizationId),
+  byStatus: index("idx_gmail_creds_status").on(t.status),
 }));
 
 // ===========================================================================

@@ -7,6 +7,7 @@ import {
   getGoogleOAuthConfig,
 } from "@/lib/gmail/google-oauth";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
+import { replayGmailAuthFailedTasksForUser } from "@/lib/sequences/agents/replay-gmail-auth-failed-tasks";
 
 const STATE_COOKIE = "gmail_oauth_state";
 
@@ -63,14 +64,36 @@ export async function GET(request: NextRequest) {
       scopes,
     });
 
-    return redirectToProfile("connected");
+    // Sprint 14 — replay any agent tasks that failed because the
+    // previous credential died. The replay scope is intentionally
+    // narrow : only the rep's OWN failed tasks, with failure_kind =
+    // 'gmail_auth', in 'pending' overall status. Non-auth failures
+    // (LLM, malformed step, etc.) require a manual decision.
+    //
+    // Best-effort : an error here must NOT block the reconnect itself.
+    // Worst case the user reconnects and still sees the failed tasks ;
+    // they can relaunch one-by-one via the existing "Relancer l'agent"
+    // CTA we shipped earlier.
+    let replayedCount = 0;
+    try {
+      replayedCount = await replayGmailAuthFailedTasksForUser(
+        membership.organizationId,
+        user.id,
+      );
+    } catch (err) {
+      console.error("[gmail oauth callback] replay failed (non-fatal)", err);
+    }
+
+    return redirectToProfile("connected", replayedCount);
   } catch (err) {
     console.error("[gmail oauth callback] failed", err);
     return redirectToProfile("exchange_failed");
   }
 }
 
-function redirectToProfile(result: string): NextResponse {
+function redirectToProfile(result: string, replayed?: number): NextResponse {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  return NextResponse.redirect(`${siteUrl}/settings/profile?gmail=${result}`);
+  const qs = new URLSearchParams({ gmail: result });
+  if (replayed && replayed > 0) qs.set("gmail_replayed", String(replayed));
+  return NextResponse.redirect(`${siteUrl}/settings/profile?${qs.toString()}`);
 }

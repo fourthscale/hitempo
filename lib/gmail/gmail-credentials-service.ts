@@ -51,16 +51,41 @@ export class GmailCredentialsService {
    * Lightweight "is this user connected ?" check for UI gating. Avoids the
    * decrypt cost of `getForUser` when the caller only needs the connection
    * state + the Gmail address to display.
+   *
+   * Sprint 14 — `status` is included so callers can distinguish a healthy
+   * connection from a revoked one (refresh token died, user needs to
+   * reconnect). Older callers that only inspect `connected` keep working
+   * unchanged — a revoked credential row still returns `connected: true`
+   * because the row exists, the `status` field carries the nuance.
    */
   public async getConnectionStatus(
     userId: string,
-  ): Promise<{ connected: boolean; address: string | null }> {
+  ): Promise<{
+    connected: boolean;
+    address: string | null;
+    status: "active" | "revoked" | null;
+    revokedAt: Date | null;
+    lastRefreshError: string | null;
+  }> {
     const row = await this.db.query.userGmailCredentials.findFirst({
       where: eq(userGmailCredentials.userId, userId),
-      columns: { gmailAddress: true },
+      columns: {
+        gmailAddress: true,
+        status: true,
+        revokedAt: true,
+        lastRefreshError: true,
+      },
     });
-    if (!row) return { connected: false, address: null };
-    return { connected: true, address: row.gmailAddress };
+    if (!row) {
+      return { connected: false, address: null, status: null, revokedAt: null, lastRefreshError: null };
+    }
+    return {
+      connected: true,
+      address: row.gmailAddress,
+      status: row.status,
+      revokedAt: row.revokedAt,
+      lastRefreshError: row.lastRefreshError,
+    };
   }
 
   public async getForUser(userId: string): Promise<DecryptedGmailCredentials | null> {
@@ -111,8 +136,57 @@ export class GmailCredentialsService {
           refreshTokenEncrypted,
           expiresAt: input.expiresAt,
           scopes: input.scopes,
+          // Sprint 14 — reconnect clears the revoked state. A user who
+          // hit Reconnect-Gmail after a refresh-token death lands here ;
+          // we restore `active` + wipe the failure breadcrumbs so the
+          // UI flips back to the green "connected" card and the OAuth
+          // callback can safely replay the failed agent tasks.
+          status: "active",
+          revokedAt: null,
+          lastRefreshError: null,
         },
       });
+  }
+
+  /**
+   * Sprint 14 — flag a credential as revoked. Called by GmailService when
+   * Google returns `invalid_grant` on a refresh attempt. We deliberately
+   * keep the encrypted tokens around : the user might re-grant the
+   * exact same authorization (rare but possible), and even if not, the
+   * row is the canonical "this user had a Gmail connection" record that
+   * the executor + UI need to gate auto-execution off until reconnect.
+   *
+   * Idempotent : safe to call repeatedly for the same user — `revokedAt`
+   * only set on the first transition (subsequent calls keep the original
+   * timestamp), the error message is overwritten each time so we always
+   * see the most recent failure mode.
+   */
+  public async markRevoked(userId: string, error: string): Promise<void> {
+    const truncated = error.slice(0, 500);
+    const now = new Date();
+    // Pull the existing row to preserve `revokedAt` on repeat calls — we
+    // want to show "revoked since X" in the UI, not "revoked since just
+    // now" after every failed cron tick.
+    const existing = await this.db
+      .select({ status: userGmailCredentials.status, revokedAt: userGmailCredentials.revokedAt })
+      .from(userGmailCredentials)
+      .where(eq(userGmailCredentials.userId, userId))
+      .limit(1)
+      .then((rows) => rows[0]);
+    if (!existing) return; // No credential row — nothing to mark.
+    const revokedAt =
+      existing.status === "revoked" && existing.revokedAt
+        ? existing.revokedAt
+        : now;
+    await this.db
+      .update(userGmailCredentials)
+      .set({
+        status: "revoked",
+        revokedAt,
+        lastRefreshError: truncated,
+        lastRefreshAttemptAt: now,
+      })
+      .where(eq(userGmailCredentials.userId, userId));
   }
 
   /**
@@ -129,6 +203,11 @@ export class GmailCredentialsService {
       .set({
         accessTokenEncrypted: this.cipher.encrypt(accessToken),
         expiresAt,
+        // Sprint 14 — record the successful refresh. Mirrors the
+        // failure path (markRevoked sets `lastRefreshAttemptAt` too),
+        // so both branches converge on a single "when did we last try
+        // to keep this credential alive" timestamp.
+        lastRefreshAttemptAt: new Date(),
       })
       .where(eq(userGmailCredentials.userId, userId));
   }

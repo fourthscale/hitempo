@@ -15,7 +15,10 @@ import {
 } from "@/lib/actions/profile";
 import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
 import { GmailIcon } from "@/components/app/gmail-icon";
-import { CheckCircle2, AlertCircle, Mail } from "lucide-react";
+import { CheckCircle2, AlertCircle, Mail, RefreshCw } from "lucide-react";
+import { getDb } from "@/db/client";
+import { tasks } from "@/db/schema";
+import { and, count, eq } from "drizzle-orm";
 import { COMMON_TIMEZONES } from "@/lib/i18n/timezones";
 import { WorkScheduleForm } from "@/components/app/work-schedule-form";
 import type { WorkPattern } from "@/lib/sequences/work-pattern";
@@ -25,11 +28,38 @@ const LOCALE_OPTIONS = ["fr", "en"] as const;
 export default async function ProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string; error?: string; gmail?: string }>;
+  searchParams: Promise<{
+    saved?: string;
+    error?: string;
+    gmail?: string;
+    gmail_replayed?: string;
+  }>;
 }) {
   const { user, membership, organization } = await getCurrentOrg();
-  const { saved, error, gmail } = await searchParams;
-  const gmailCreds = await GmailCredentialsServiceFactory.getInstance().getForUser(user.id);
+  const { saved, error, gmail, gmail_replayed: gmailReplayedRaw } = await searchParams;
+  const gmailCredsService = GmailCredentialsServiceFactory.getInstance();
+  const [gmailCreds, gmailStatus, gmailAuthFailedTaskCount] = await Promise.all([
+    gmailCredsService.getForUser(user.id),
+    gmailCredsService.getConnectionStatus(user.id),
+    // Count of agent tasks waiting for a Gmail reconnect — surfaces a
+    // proactive "X tâches en attente" when the user lands on the page,
+    // even before they hit "Reconnect Gmail".
+    getDb()
+      .select({ c: count() })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.organizationId, membership.organizationId),
+          eq(tasks.assigneeId, user.id),
+          eq(tasks.status, "pending"),
+          eq(tasks.autoExecutionStatus, "failed"),
+          eq(tasks.autoExecutionFailureKind, "gmail_auth"),
+        ),
+      )
+      .then((rows) => rows[0]?.c ?? 0),
+  ]);
+  const gmailReplayed = Number(gmailReplayedRaw ?? 0);
+  const isGmailRevoked = gmailStatus.status === "revoked";
 
   const locale = await getLocale();
   const t = await getTranslations("pages.settings.profile");
@@ -73,6 +103,15 @@ export default async function ProfilePage({
         <div className="mb-6 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span>{t(`gmailSaved.${gmail}`)}</span>
+        </div>
+      )}
+      {gmail === "connected" && gmailReplayed > 0 && (
+        // Sprint 14 — surface the post-reconnect replay outcome. Distinct
+        // banner (different colour + icon) so the user reads both flashes :
+        // "Gmail connected" AND "X tasks relaunched".
+        <div className="mb-6 flex items-center gap-2 rounded-md border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm text-sky-800">
+          <RefreshCw className="h-4 w-4 shrink-0" />
+          <span>{t("gmailReplayed", { count: gmailReplayed })}</span>
         </div>
       )}
 
@@ -153,7 +192,53 @@ export default async function ProfilePage({
         <h2 className="font-serif text-base font-bold mb-1">{t("gmailTitle")}</h2>
         <p className="text-sm text-muted-foreground mb-4">{t("gmailDescription")}</p>
 
-        {gmailCreds ? (
+        {gmailCreds && isGmailRevoked ? (
+          // Sprint 14 — credential row still exists but the refresh token
+          // died. We show a clear amber-warning card with the diagnosis,
+          // the date of death, and a prominent Reconnect CTA. The
+          // Disconnect button stays available so the user can wipe the
+          // credential entirely if they want to switch addresses.
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3">
+              <AlertCircle className="h-5 w-5 shrink-0 text-amber-700 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-amber-900">
+                  {t("gmailRevokedTitle", { address: gmailCreds.gmailAddress })}
+                </div>
+                <div className="text-xs text-amber-800 mt-1">
+                  {gmailStatus.revokedAt
+                    ? t("gmailRevokedSince", {
+                        date: formatDateInTz(gmailStatus.revokedAt, locale, {
+                          timeZone: memberTimezone,
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        }),
+                      })
+                    : t("gmailRevokedGeneric")}
+                </div>
+                {gmailAuthFailedTaskCount > 0 && (
+                  <div className="text-xs text-amber-800 mt-1">
+                    {t("gmailRevokedTaskWaiting", { count: gmailAuthFailedTaskCount })}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/api/auth/gmail/connect"
+                className="inline-flex items-center gap-3 h-10 pl-3 pr-4 rounded-md bg-white border border-[#dadce0] text-[#3c4043] text-sm font-medium hover:shadow-md hover:bg-[#f8faff] transition-all"
+              >
+                <GmailIcon className="h-[18px] w-[18px] shrink-0" />
+                <span>{t("gmailReconnect")}</span>
+              </Link>
+              <form action={disconnectGmailAction}>
+                <SubmitButton size="sm" variant="outline" className="text-red-600 hover:bg-red-50">
+                  {t("gmailDisconnect")}
+                </SubmitButton>
+              </form>
+            </div>
+          </div>
+        ) : gmailCreds ? (
           <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-secondary/30 px-4 py-3">
             <div className="flex items-center gap-3 min-w-0">
               <Mail className="h-4 w-4 shrink-0 text-emerald-700" />

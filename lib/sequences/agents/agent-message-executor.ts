@@ -22,7 +22,11 @@ import type { MessageGenerationOrchestrator } from "@/lib/messages/message-gener
 import type { GmailService } from "@/lib/gmail/gmail-service";
 import type { AttachmentStorageService } from "@/lib/gmail/attachment-storage-service";
 import { prefixRe, type MimeAttachment } from "@/lib/gmail/mime-message-strategy";
-import { GmailCredentialsNotFoundError, GmailApiError } from "@/lib/gmail/gmail-errors";
+import {
+  GmailCredentialsNotFoundError,
+  GmailApiError,
+  GmailCredentialRevokedError,
+} from "@/lib/gmail/gmail-errors";
 import { insertMessage } from "@/db/queries/messages";
 import { insertMessageAttachment } from "@/db/queries/message-attachments";
 import { logInteraction } from "@/db/queries/interactions";
@@ -87,7 +91,25 @@ export class AgentMessageExecutor {
       return result;
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      await this.markTaskAutoExecutionFailed(input.taskId, reason).catch(
+      // Sprint 14 — classify the failure so the OAuth reconnect callback
+      // can replay only the tasks that died for an auth reason (no point
+      // replaying an LLM crash or a malformed step config).
+      //
+      // Both error types map to `gmail_auth` :
+      //   - GmailCredentialRevokedError : refresh failed with invalid_grant
+      //   - GmailCredentialsNotFoundError : user disconnected mid-flight, or
+      //     never had Gmail connected when the task was scheduled. The
+      //     remediation in both cases is "Reconnect Gmail" — so they share
+      //     the replay path.
+      //
+      // Anything else is `other` — the user has to inspect the error
+      // message and decide whether to relaunch manually.
+      const failureKind: "gmail_auth" | "other" =
+        err instanceof GmailCredentialRevokedError ||
+        err instanceof GmailCredentialsNotFoundError
+          ? "gmail_auth"
+          : "other";
+      await this.markTaskAutoExecutionFailed(input.taskId, reason, failureKind).catch(
         (markErr) => {
           // The mark-failed itself failed — log and let the original error
           // surface. Operationally this means the task stays at
@@ -563,6 +585,7 @@ export class AgentMessageExecutor {
   private async markTaskAutoExecutionFailed(
     taskId: string,
     reason: string,
+    failureKind: "gmail_auth" | "other",
   ): Promise<void> {
     // Defensive — should be caught by execute()'s upfront guard, but a
     // belt-and-braces check here prevents an UNDEFINED_VALUE blast from a
@@ -577,6 +600,7 @@ export class AgentMessageExecutor {
         autoExecutionStatus: "failed",
         autoExecutionAt: new Date(),
         autoExecutionError: truncated,
+        autoExecutionFailureKind: failureKind,
         updatedAt: new Date(),
       })
       .where(and(eq(tasks.id, taskId)));

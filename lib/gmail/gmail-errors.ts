@@ -20,6 +20,24 @@ export class GmailCredentialsNotFoundError extends GmailError {
 /** OAuth-related failures (state mismatch, code exchange, refresh, etc.). */
 export class GmailOAuthError extends GmailError {}
 
+/**
+ * Sprint 14 — the refresh token has died (Google `invalid_grant`).
+ * Distinct from `GmailOAuthError` because callers handle it differently :
+ * the agent executor classifies the failing task as `gmail_auth` so the
+ * OAuth callback can replay it on next reconnect ; the UI surfaces a
+ * "Reconnect Gmail" banner instead of a generic error.
+ *
+ * Thrown only by `GmailService.ensureFreshAccessToken` after we've
+ * confirmed the refresh died (not on transient HTTP / network errors,
+ * which surface as plain GmailOAuthError and don't poison the credential
+ * row).
+ */
+export class GmailCredentialRevokedError extends GmailError {
+  constructor(public readonly userId: string, public readonly raw: string) {
+    super(`Gmail refresh token revoked for user ${userId}: ${raw}`);
+  }
+}
+
 /** A required Gmail env var is missing. */
 export class MissingGmailEnvError extends GmailError {
   constructor(varName: string) {

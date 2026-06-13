@@ -5,7 +5,11 @@ import {
   type DecryptedGmailCredentials,
 } from "./gmail-credentials-service";
 import { getGoogleOAuthConfig, refreshAccessToken } from "./google-oauth";
-import { GmailApiError } from "./gmail-errors";
+import {
+  GmailApiError,
+  GmailCredentialRevokedError,
+  GmailOAuthError,
+} from "./gmail-errors";
 import { MimeMessageBuilder, type MimeAttachment } from "./mime-message-strategy";
 
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
@@ -190,7 +194,38 @@ export class GmailService {
       return creds.accessToken;
     }
     const config = getGoogleOAuthConfig(this.siteUrl);
-    const refreshed = await refreshAccessToken(config, creds.refreshToken);
+    let refreshed: Awaited<ReturnType<typeof refreshAccessToken>>;
+    try {
+      refreshed = await refreshAccessToken(config, creds.refreshToken);
+    } catch (err) {
+      // Sprint 14 — distinguish "refresh token is dead" (Google
+      // `invalid_grant`) from a transient HTTP / network failure.
+      //
+      // `invalid_grant` covers : refresh token expired (Testing mode
+      // 7-day window), user revoked access in their Google account,
+      // password change, workspace admin force-disconnect, > 50 tokens
+      // issued for the same (client, user) pair, etc. None of these
+      // are recoverable without a fresh OAuth consent — so we mark the
+      // credential row revoked + throw a typed error that the executor
+      // catches and classifies as `gmail_auth`. The OAuth callback
+      // replays those tasks on next reconnect.
+      //
+      // Anything else (5xx, network timeout, malformed response) is
+      // re-raised as-is so the call site retries naturally on the next
+      // attempt without poisoning the credential row.
+      if (err instanceof GmailOAuthError && /invalid_grant/i.test(err.message)) {
+        await this.credentials
+          .markRevoked(creds.userId, err.message)
+          .catch((markErr) =>
+            console.error(
+              "[GmailService] markRevoked failed (non-fatal)",
+              markErr,
+            ),
+          );
+        throw new GmailCredentialRevokedError(creds.userId, err.message);
+      }
+      throw err;
+    }
     const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000);
     await this.credentials.updateAccessToken(
       creds.userId,
