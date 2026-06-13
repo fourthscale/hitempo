@@ -14,6 +14,14 @@ export async function getTasksByOrg(
    *  here and let pg coerce, so an unknown string returns an empty set
    *  rather than a DB error (still safer than throwing). */
   type?: (typeof tasks.$inferSelect)["type"],
+  /**
+   * Sprint 14 — `false` (the default) hides agent-pipeline tasks that
+   * are currently in the system's hands (`auto_execution_status =
+   * 'pending'`). Failed agent tasks stay visible regardless because the
+   * user has to act on them. Set to true to include in-flight agent
+   * tasks too (useful as a debug / monitoring view).
+   */
+  withAgents: boolean = false,
 ) {
   // Sprint 12 phase 4 — "agent_failed" is a cross-cut over the agent
   // state machine (auto_execution_status), not the task lifecycle, so
@@ -25,12 +33,23 @@ export async function getTasksByOrg(
     status === "completed"    ? eq(tasks.status, "completed") :
     or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress"));
 
+  // Sprint 14 — agent-visibility filter. We exclude only
+  // `auto_execution_status='pending'` rows (the system currently owns
+  // these). Failed agent rows still need user action and are kept.
+  // Skipped when the user explicitly asked for `agent_failed` status —
+  // that view is dedicated to those rows so we'd contradict ourselves.
+  const agentFilter =
+    !withAgents && status !== "agent_failed"
+      ? sql`(${tasks.autoExecutionStatus} is null or ${tasks.autoExecutionStatus} != 'pending')`
+      : undefined;
+
   const rows = await getDb().query.tasks.findMany({
     where: and(
       eq(tasks.organizationId, orgId),
       statusFilter,
       assigneeId ? eq(tasks.assigneeId, assigneeId) : undefined,
       type ? eq(tasks.type, type) : undefined,
+      agentFilter,
     ),
     with: {
       company: {

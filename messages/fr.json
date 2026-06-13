@@ -752,9 +752,16 @@
         "list": "Liste",
         "kanban": "Kanban",
         "calendar": "Calendrier",
-        "kanbanSoon": "Kanban — bientôt disponible",
         "calendarSoon": "Calendrier — bientôt disponible"
       },
+      "kanban": {
+        "columnPending": "À faire",
+        "columnInProgress": "En cours",
+        "columnCompleted": "Terminées",
+        "agentLocked": "Tâche agent — non déplaçable manuellement",
+        "dropHint": "Déposer une tâche ici"
+      },
+      "showAgents": "Afficher",
       "groups": {
         "overdue": "EN RETARD",
         "today": "AUJOURD'HUI",

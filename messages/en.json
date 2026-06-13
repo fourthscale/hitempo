@@ -752,9 +752,16 @@
         "list": "List",
         "kanban": "Kanban",
         "calendar": "Calendar",
-        "kanbanSoon": "Kanban — coming soon",
         "calendarSoon": "Calendar — coming soon"
       },
+      "kanban": {
+        "columnPending": "To do",
+        "columnInProgress": "In progress",
+        "columnCompleted": "Done",
+        "agentLocked": "Agent task — cannot be moved manually",
+        "dropHint": "Drop a task here"
+      },
+      "showAgents": "Show",
       "groups": {
         "overdue": "OVERDUE",
         "today": "TODAY",

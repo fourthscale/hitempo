@@ -13,6 +13,7 @@ import { getOrgMembersWithNames } from "@/db/queries/members";
 import { getBrandBriefStatus, type BrandBriefStatus } from "@/db/queries/brand";
 import { FilterSelect } from "@/components/app/filter-select";
 import { TaskRowActions, type TaskGenerateContext } from "@/components/app/task-row-actions";
+import { TasksKanban } from "@/components/app/tasks/tasks-kanban";
 import {
   getMessageDefaultsFromTask,
   getMessageDefaultLocale,
@@ -127,14 +128,57 @@ function buildHref(period: Period, assignee: string, status: StatusFilter) {
   return qs ? `/tasks?${qs}` : "/tasks";
 }
 
+// Sprint 14 — same as `buildHref` but preserves the kanban view + agent
+// toggle. Used by the view switcher and the showAgents toggle so each
+// link round-trips through the existing filters.
+function buildHrefWithView(
+  view: "list" | "kanban",
+  ctx: {
+    period: Period;
+    assignee: string;
+    status: StatusFilter;
+    type: string | null;
+    withAgents: boolean;
+  },
+) {
+  const params = new URLSearchParams();
+  if (ctx.period !== "all") params.set("period", ctx.period);
+  if (ctx.assignee !== "me") params.set("assignee", ctx.assignee);
+  if (ctx.status !== "active") params.set("status", ctx.status);
+  if (ctx.type) params.set("type", ctx.type);
+  if (view !== "list") params.set("view", view);
+  if (ctx.withAgents) params.set("withAgents", "true");
+  const qs = params.toString();
+  return qs ? `/tasks?${qs}` : "/tasks";
+}
+
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; assignee?: string; status?: string; type?: string }>;
+  searchParams: Promise<{
+    period?: string;
+    assignee?: string;
+    status?: string;
+    type?: string;
+    view?: string;
+    withAgents?: string;
+  }>;
 }) {
-  const { period: rawPeriod, assignee: rawAssignee, status: rawStatus, type: rawType } = await searchParams;
+  const {
+    period: rawPeriod,
+    assignee: rawAssignee,
+    status: rawStatus,
+    type: rawType,
+    view: rawView,
+    withAgents: rawWithAgents,
+  } = await searchParams;
   const period = parsePeriod(rawPeriod);
   const status = parseStatus(rawStatus);
+
+  // Sprint 14 — view + agent-visibility toggle. Both serialize cleanly
+  // to the URL so a deep link reproduces the exact same render.
+  const view: "list" | "kanban" = rawView === "kanban" ? "kanban" : "list";
+  const withAgents = rawWithAgents === "true";
 
   // task_type enum allow-list ; unknown values fall back to "all" so a
   // stale or mistyped URL param doesn't trap the user on an empty page.
@@ -164,9 +208,17 @@ export default async function TasksPage({
     assigneeParam === "me" ? user.id :
     assigneeParam;
 
-  const [allTasks, overdueCount, todayCount, totalPending, doneThisWeek, interactionStats, brandBriefStatus] =
+  // Kanban view needs `completed` rows too (so user can drag a card
+  // back from Done to To do, and so the just-dropped card stays visible
+  // in the Done column on router.refresh). We fetch them as a second
+  // query in parallel ; the list view only fetches what the status
+  // filter implies.
+  const [allTasks, kanbanCompleted, overdueCount, todayCount, totalPending, doneThisWeek, interactionStats, brandBriefStatus] =
     await Promise.all([
-      getTasksByOrg(orgId, assigneeIdFilter, status, type ?? undefined),
+      getTasksByOrg(orgId, assigneeIdFilter, status, type ?? undefined, withAgents),
+      view === "kanban"
+        ? getTasksByOrg(orgId, assigneeIdFilter, "completed", type ?? undefined, withAgents)
+        : Promise.resolve([] as Awaited<ReturnType<typeof getTasksByOrg>>),
       countOverdueTasksByOrg(orgId),
       countTodayTasksByOrg(orgId),
       countPendingTasksByOrg(orgId),
@@ -236,22 +288,30 @@ export default async function TasksPage({
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <div className="flex items-center rounded-md border border-border bg-background divide-x divide-border">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-secondary text-foreground rounded-l-md"
+            <Link
+              href={buildHrefWithView("list", { period, assignee: assigneeParam, status, type, withAgents })}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-l-md",
+                view === "list"
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/60",
+              )}
             >
               <LayoutList className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t("views.list")}</span>
-            </button>
-            <button
-              type="button"
-              disabled
-              title={t("views.kanbanSoon")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+            </Link>
+            <Link
+              href={buildHrefWithView("kanban", { period, assignee: assigneeParam, status, type, withAgents })}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium",
+                view === "kanban"
+                  ? "bg-secondary text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary/60",
+              )}
             >
               <LayoutGrid className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t("views.kanban")}</span>
-            </button>
+            </Link>
             <button
               type="button"
               disabled
@@ -302,6 +362,35 @@ export default async function TasksPage({
                 .map((m) => ({ value: m.userId, label: m.displayName })),
             ]}
           />
+
+          {/* Sprint 14 — agent visibility toggle, sits right after the
+              owner filter (which is what users tweak first). Off by
+              default ; failed agent rows always show regardless because
+              the user has to act on them (see getTasksByOrg's
+              agentFilter). Rendered as an iOS-style toggle inside a
+              link that flips the URL param. */}
+          <Link
+            href={buildHrefWithView(view, { period, assignee: assigneeParam, status, type, withAgents: !withAgents })}
+            aria-pressed={withAgents}
+            className="inline-flex items-center gap-2 h-8 px-3 rounded-md border border-border bg-background text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Bot className="h-3.5 w-3.5" />
+            <span>{t("showAgents")}</span>
+            <span
+              aria-hidden
+              className={cn(
+                "relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors",
+                withAgents ? "bg-brand-teal" : "bg-muted-foreground/30",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform",
+                  withAgents ? "translate-x-3.5" : "translate-x-0.5",
+                )}
+              />
+            </span>
+          </Link>
 
           <FilterSelect
             name="status"
@@ -358,8 +447,35 @@ export default async function TasksPage({
         />
       </div>
 
-      {/* Task groups */}
-      {filteredTasks.length === 0 ? (
+      {/* Kanban view : 3 columns (pending / in_progress / completed),
+          drag-and-drop status updates, agent-pipeline tasks immobile. */}
+      {view === "kanban" ? (
+        <TasksKanban
+          tasks={[...allTasks, ...kanbanCompleted].map((task) => ({
+            id: task.id,
+            title: task.title,
+            type: task.type,
+            status: task.status as "pending" | "in_progress" | "completed",
+            priority: task.priority ?? null,
+            autoExecutionStatus: task.autoExecutionStatus,
+            autoExecutionFailureKind: task.autoExecutionFailureKind,
+            company: task.company ? { id: task.company.id, name: task.company.name } : null,
+            contact: task.contact
+              ? {
+                  id: task.contact.id,
+                  kind: task.contact.kind,
+                  firstName: task.contact.firstName,
+                  lastName: task.contact.lastName,
+                  jobTitle: task.contact.jobTitle,
+                }
+              : null,
+            assigneeId: task.assigneeId,
+          }))}
+          memberMap={memberMap}
+          currentUserId={user.id}
+        />
+      ) : /* Task groups */
+      filteredTasks.length === 0 ? (
         <Card className="p-12 text-center text-sm text-muted-foreground">
           {t("empty")}
           {status !== "completed" && (
