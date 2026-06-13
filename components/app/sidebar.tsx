@@ -5,6 +5,7 @@ import { SidebarNav, type NavItem } from "./sidebar-nav";
 import { Logo } from "./logo";
 import { OrgSwitcher } from "./org-switcher";
 import { signOutAction } from "@/lib/auth/actions";
+import { getSenderName } from "@/lib/auth/sender-name";
 import { LogOut, ArrowLeftRight, ShieldCheck } from "lucide-react";
 import { countCompaniesByOrg, countCompaniesOwnedBy } from "@/db/queries/companies";
 import { countContactsByOrg, countContactsOwnedBy } from "@/db/queries/contacts";
@@ -19,15 +20,31 @@ type Organization = {
 
 type OrgOption = { id: string; name: string };
 
-function initialsFromEmail(email: string | null | undefined): string {
-  if (!email) return "?";
-  const [local] = email.split("@");
-  if (!local) return "?";
-  const parts = local.split(/[._-]/);
-  if (parts.length >= 2 && parts[0] && parts[1]) {
-    return (parts[0][0]! + parts[1][0]!).toUpperCase();
+/**
+ * Initials shown in the sidebar avatar circle. Routes through the
+ * shared `getSenderName` resolver so it picks up
+ * `user_metadata.firstName/lastName` first, falls back to splitting
+ * `full_name` from OAuth, and finally to the email local-part. Always
+ * returns 2 characters when possible (initial of firstName + initial
+ * of lastName) ; falls back to the first 2 chars of whatever single
+ * name we have, or `?` for truly missing input.
+ */
+function initialsForUser(user: {
+  email: string | null | undefined;
+  user_metadata?: Record<string, unknown> | null;
+}): string {
+  const { firstName, lastName } = getSenderName({
+    email: user.email,
+    user_metadata: user.user_metadata ?? null,
+  });
+  const first = firstName.trim();
+  const last = lastName.trim();
+  if (first && last) {
+    return (first.charAt(0) + last.charAt(0)).toUpperCase();
   }
-  return local.slice(0, 2).toUpperCase();
+  if (first) return first.slice(0, 2).toUpperCase();
+  if (last) return last.slice(0, 2).toUpperCase();
+  return "?";
 }
 
 export async function Sidebar({
@@ -108,7 +125,10 @@ export async function Sidebar({
     { href: "/settings", label: t("settings"), icon: "settings" },
   ];
 
-  const initials = initialsFromEmail(user.email);
+  const initials = initialsForUser({
+    email: user.email,
+    user_metadata: (user.user_metadata as Record<string, unknown> | null) ?? null,
+  });
   const localPart = user.email?.split("@")[0] ?? "";
   const displayName = localPart.charAt(0).toUpperCase() + localPart.slice(1);
 
