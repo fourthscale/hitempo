@@ -149,7 +149,7 @@ export default async function NewTaskPage({
                 name="estimatedDurationMinutes"
                 min={1}
                 max={480}
-                step={5}
+                step={1}
                 className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm"
                 placeholder={t("fields.estimatedDurationPlaceholder")}
               />
