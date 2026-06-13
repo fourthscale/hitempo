@@ -381,6 +381,29 @@
     "newCompany": "Nouvelle entreprise"
   },
   "pages": {
+    "field": {
+      "pinCount": "{count, plural, =0 {Aucun site sur la carte} one {1 site} other {# sites}}",
+      "missingGeoHint": "{count, plural, one {# site sans coordonnées non affiché} other {# sites sans coordonnées non affichés}}.",
+      "filters": {
+        "owner": "Propriétaire",
+        "ownerAll": "Tous (organisation)",
+        "ownerMeOption": "{name} (moi)",
+        "ownerUnassigned": "Non attribué",
+        "industry": "Secteur",
+        "signal": "Signal",
+        "status": "Statut",
+        "companyScoped": "Filtré sur une entreprise"
+      },
+      "popup": {
+        "viewCompany": "Fiche entreprise",
+        "viewContacts": "Contacts"
+      },
+      "backfill": {
+        "action": "{count, plural, one {Géocoder # site} other {Géocoder # sites}}",
+        "inFlight": "{count, plural, one {Géocodage de # site…} other {Géocodage de # sites…}}",
+        "result": "{geocoded} traités · {failed} échecs"
+      }
+    },
     "inboxPendingReview": {
       "title": "Inbox · à valider",
       "subtitle": "Réponses classées par l'IA mais sans confiance suffisante pour valider seule. Confirme sa suggestion ou choisis un autre résultat.",

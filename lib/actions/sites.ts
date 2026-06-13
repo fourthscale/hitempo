@@ -10,6 +10,7 @@ import { getActiveOrg } from "@/lib/auth/context";
 import { InvalidInputError } from "./user-facing-action-error";
 import { withActionError } from "./wrap-action-error";
 import { emptyStringsToNull } from "./normalize";
+import { persistSiteGeocode } from "@/lib/geocoding/persist-site-geocode";
 
 const siteSchemaBase = {
   companyId: z.string().uuid(),
@@ -72,21 +73,44 @@ async function _createSiteAction(formData: FormData) {
       );
   }
 
-  await db.insert(sites).values({
-    organizationId: activeOrganization.id,
-    companyId: data.companyId as string,
-    name: data.name as string,
-    type: (data.type as "office" | "hotel" | "showroom" | "store" | "restaurant" | "warehouse" | "other") ?? "office",
-    addressLine1: (data.addressLine1 as string | null) ?? null,
-    postalCode: (data.postalCode as string | null) ?? null,
-    city: (data.city as string | null) ?? null,
-    region: (data.region as string | null) ?? null,
-    country: ((data.country as string) || "FR").toUpperCase(),
-    timezone: (data.timezone as string | null) ?? null,
-    isPrimary: willBePrimary,
-    standing: (data.standing as number | null) ?? null,
-    notes: (data.notes as string | null) ?? null,
-  });
+  const addressLine1 = (data.addressLine1 as string | null) ?? null;
+  const postalCode = (data.postalCode as string | null) ?? null;
+  const city = (data.city as string | null) ?? null;
+  const region = (data.region as string | null) ?? null;
+  const country = ((data.country as string) || "FR").toUpperCase();
+
+  const [inserted] = await db
+    .insert(sites)
+    .values({
+      organizationId: activeOrganization.id,
+      companyId: data.companyId as string,
+      name: data.name as string,
+      type: (data.type as "office" | "hotel" | "showroom" | "store" | "restaurant" | "warehouse" | "other") ?? "office",
+      addressLine1,
+      postalCode,
+      city,
+      region,
+      country,
+      timezone: (data.timezone as string | null) ?? null,
+      isPrimary: willBePrimary,
+      standing: (data.standing as number | null) ?? null,
+      notes: (data.notes as string | null) ?? null,
+    })
+    .returning({ id: sites.id });
+
+  // Sprint 14 — fire-and-forget geocode. We don't await the result so
+  // the user-facing action stays snappy ; the lat/lng is persisted
+  // when the provider answers. The backfill action recovers any rows
+  // we missed (e.g. provider down at write time).
+  if (inserted?.id) {
+    void persistSiteGeocode(activeOrganization.id, inserted.id, {
+      addressLine1,
+      postalCode,
+      city,
+      region,
+      country,
+    });
+  }
 
   revalidatePath(`/companies/${parsed.data.companyId}`);
 }
@@ -114,16 +138,22 @@ async function _updateSiteAction(formData: FormData) {
       );
   }
 
+  const addressLine1 = (data.addressLine1 as string | null) ?? null;
+  const postalCode = (data.postalCode as string | null) ?? null;
+  const city = (data.city as string | null) ?? null;
+  const region = (data.region as string | null) ?? null;
+  const country = ((data.country as string) || "FR").toUpperCase();
+
   await db
     .update(sites)
     .set({
       name: data.name as string,
       type: (data.type as "office" | "hotel" | "showroom" | "store" | "restaurant" | "warehouse" | "other") ?? "office",
-      addressLine1: (data.addressLine1 as string | null) ?? null,
-      postalCode: (data.postalCode as string | null) ?? null,
-      city: (data.city as string | null) ?? null,
-      region: (data.region as string | null) ?? null,
-      country: ((data.country as string) || "FR").toUpperCase(),
+      addressLine1,
+      postalCode,
+      city,
+      region,
+      country,
       timezone: (data.timezone as string | null) ?? null,
       isPrimary: wantsPrimary,
       standing: (data.standing as number | null) ?? null,
@@ -133,6 +163,18 @@ async function _updateSiteAction(formData: FormData) {
     .where(
       and(eq(sites.id, parsed.data.id), eq(sites.organizationId, activeOrganization.id)),
     );
+
+  // Sprint 14 — re-geocode on every save. Simpler than diffing the
+  // address fields and the BAN/Nominatim calls are cheap. Fire-and-
+  // forget so the action returns quickly ; failures fall through to
+  // the backfill safety net.
+  void persistSiteGeocode(activeOrganization.id, parsed.data.id, {
+    addressLine1,
+    postalCode,
+    city,
+    region,
+    country,
+  });
 
   revalidatePath(`/companies/${parsed.data.companyId}`);
   revalidatePath(`/sites/${parsed.data.id}`);
@@ -183,7 +225,71 @@ async function _deleteSiteAction(formData: FormData) {
 // Wrapped exports — see lib/actions/wrap-action-error.ts
 // ---------------------------------------------------------------------------
 
+/**
+ * Sprint 14 — one-shot backfill for sites without coordinates.
+ * Idempotent : finds every site of the active org where lat OR lng is
+ * NULL but at least one address field is set, then runs them through
+ * the GeocodingService. FR rows go fast (BAN unlimited) ; non-FR rows
+ * serialize at 1 req/sec to honour Nominatim's ToS.
+ *
+ * The action returns a summary that the field page surfaces ("X sites
+ * geocoded, Y failed"). Errors per-row are swallowed (logged) so a
+ * single bad address doesn't kill the whole batch.
+ */
+async function _backfillSiteGeocodesAction(): Promise<{
+  total: number;
+  geocoded: number;
+  failed: number;
+}> {
+  const { activeOrganization } = await getActiveOrg();
+  const orgId = activeOrganization.id;
+  const { isNull, or, sql } = await import("drizzle-orm");
+  const db = getDb();
+
+  // Pull only the columns we need ; skip sites with absolutely no
+  // address material (geocoder would just throw EmptyAddress anyway).
+  const rows = await db
+    .select({
+      id: sites.id,
+      addressLine1: sites.addressLine1,
+      postalCode: sites.postalCode,
+      city: sites.city,
+      region: sites.region,
+      country: sites.country,
+    })
+    .from(sites)
+    .where(
+      and(
+        eq(sites.organizationId, orgId),
+        or(isNull(sites.lat), isNull(sites.lng)),
+        sql`(${sites.addressLine1} is not null or ${sites.postalCode} is not null or ${sites.city} is not null)`,
+      ),
+    );
+
+  let geocoded = 0;
+  let failed = 0;
+  // Process sequentially so the Nominatim rate-limit gate works as
+  // expected (concurrent calls would serialize anyway but blow up
+  // the call stack). FR rows still go fast in practice because BAN
+  // has no rate limit and the await is cheap.
+  for (const row of rows) {
+    const result = await persistSiteGeocode(orgId, row.id, {
+      addressLine1: row.addressLine1,
+      postalCode: row.postalCode,
+      city: row.city,
+      region: row.region,
+      country: row.country ?? "FR",
+    });
+    if (result.success) geocoded++;
+    else failed++;
+  }
+
+  revalidatePath("/field");
+  return { total: rows.length, geocoded, failed };
+}
+
 export const createSiteAction = withActionError(_createSiteAction);
 export const updateSiteAction = withActionError(_updateSiteAction);
+export const backfillSiteGeocodesAction = withActionError(_backfillSiteGeocodesAction);
 export const setSitePrimaryContactAction = withActionError(_setSitePrimaryContactAction);
 export const deleteSiteAction = withActionError(_deleteSiteAction);
