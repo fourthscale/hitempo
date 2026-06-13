@@ -45,46 +45,52 @@ type FlowInstanceLite = {
  * const { onInit } = useAnchorTopViewport(nodes);
  * return <ReactFlow ... onInit={onInit} fitView />;
  * ```
- * Pass the same `nodes` array you give to `<ReactFlow nodes={nodes}>` —
- * the effect re-anchors whenever React Flow re-lays the diagram out.
+ * Pass the same `nodes` array you give to `<ReactFlow nodes={nodes}>`.
+ *
+ * Anchors ONCE per mount, the moment React Flow has produced a non-empty
+ * relayouted node set. Subsequent node changes — editing a step's title,
+ * inserting/removing a node, etc. — do NOT re-anchor : the user is
+ * working on a specific spot in the diagram and a sudden jump back to
+ * the top would be jarring. Client-side navigation between sequences
+ * unmounts the component, so the `hasAnchored` ref resets and the new
+ * mount anchors fresh — which is what the original brief asked for.
  */
 export function useAnchorTopViewport<N extends { position: { x: number; y: number } }>(
   nodes: ReadonlyArray<N>,
 ) {
   const instanceRef = useRef<FlowInstanceLite | null>(null);
+  const hasAnchoredRef = useRef(false);
 
-  useEffect(() => {
-    const instance = instanceRef.current;
-    if (!instance) return;
+  function anchorOnce(instance: FlowInstanceLite): () => void {
     const handle = setTimeout(() => {
+      if (hasAnchoredRef.current) return;
       const live = instance.getNodes();
       if (live.length === 0) return;
       const topY = Math.min(...live.map((n) => n.position.y));
       const { x, zoom } = instance.getViewport();
       instance.setViewport({ x, y: PAD_TOP_PX - topY * zoom, zoom });
+      hasAnchoredRef.current = true;
     }, POST_FIT_DELAY_MS);
     return () => clearTimeout(handle);
-    // We want this to re-run whenever the nodes set changes — that's the
-    // signal React Flow has just relayouted. Identity-based dep is fine
-    // because `useSequenceLayout` returns a fresh array each computation.
+  }
+
+  // The first effect run usually has `instanceRef.current === null`
+  // because React Flow's `onInit` fires AFTER the first render's effects.
+  // We re-run on every nodes change as a fallback : if `onInit` somehow
+  // already populated the ref (cached instance across reconciliation),
+  // we anchor here ; otherwise we wait for onInit to do it.
+  useEffect(() => {
+    const instance = instanceRef.current;
+    if (!instance) return;
+    if (hasAnchoredRef.current) return;
+    return anchorOnce(instance);
   }, [nodes]);
 
   return {
     onInit(instance: FlowInstanceLite): void {
       instanceRef.current = instance;
-      // Also do an immediate anchor on first init — covers the initial
-      // hard-refresh case where the effect hasn't had its nodes changed
-      // yet (deps array identical to the previous render).
-      const handle = setTimeout(() => {
-        const live = instance.getNodes();
-        if (live.length === 0) return;
-        const topY = Math.min(...live.map((n) => n.position.y));
-        const { x, zoom } = instance.getViewport();
-        instance.setViewport({ x, y: PAD_TOP_PX - topY * zoom, zoom });
-      }, POST_FIT_DELAY_MS);
-      // Best-effort cleanup if the instance is recreated before the
-      // timeout fires.
-      void handle;
+      if (hasAnchoredRef.current) return;
+      anchorOnce(instance);
     },
   };
 }
