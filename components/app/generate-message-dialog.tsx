@@ -83,7 +83,7 @@ export type GenerateMessageDialogProps = {
   brandBriefStatus: { fr: { configured: boolean; excerpt: string | null }; en: { configured: boolean; excerpt: string | null } };
 
   /** Gmail OAuth state for this user — drives the "Envoyer via Gmail" button. */
-  gmail: { connected: boolean; address: string | null };
+  gmail: { connected: boolean; address: string | null; provider?: "gmail" | "outlook" | null };
 
   /**
    * Sprint 12 — when set, the task comes from a sequence. The dialog
@@ -666,7 +666,7 @@ type ResultColumnProps = {
   mode: "task" | "contact";
   // Gmail send state — when connected & channel=email, primary action shifts
   // from "Log interaction" to "Send via Gmail" (which also logs + closes task).
-  gmail: { connected: boolean; address: string | null };
+  gmail: { connected: boolean; address: string | null; provider?: "gmail" | "outlook" | null };
   gmailSent: boolean;
   gmailSending: boolean;
   gmailError: string | null;
@@ -888,6 +888,8 @@ function ResultColumn(p: ResultColumnProps) {
                       ? p.t("actions.gmailSending")
                       : p.gmailSent
                       ? p.t("actions.gmailSent")
+                      : p.gmail.provider === "outlook"
+                      ? p.t("actions.sendViaOutlook")
                       : p.t("actions.sendViaGmail")}
                   </span>
                 </button>

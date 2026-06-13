@@ -97,7 +97,7 @@ export class GmailReplyPoller {
       where: and(
         eq(messages.userId, userId),
         eq(messages.status, "sent"),
-        isNotNull(messages.gmailThreadId),
+        isNotNull(messages.mailThreadId),
         isNull(messages.replyReceivedAt),
         isNotNull(messages.sentAt),
         // sentAt cutoff — drop very old messages we'll never see a reply on
@@ -120,7 +120,7 @@ export class GmailReplyPoller {
         const got = await this.checkOneMessage({
           messageRow: msg,
           accessToken,
-          ownAddress: creds.gmailAddress,
+          ownAddress: creds.emailAddress,
         });
         if (got) detected += 1;
       } catch (err) {
@@ -129,7 +129,7 @@ export class GmailReplyPoller {
         // either way so we don't get stuck on one bad message.
         console.error("[gmail-reply-poller] message failed", {
           messageId: msg.id,
-          threadId: msg.gmailThreadId,
+          threadId: msg.mailThreadId,
           err: err instanceof Error ? err.message : String(err),
         });
       } finally {
@@ -156,9 +156,9 @@ export class GmailReplyPoller {
     ownAddress: string;
   }): Promise<boolean> {
     const { messageRow, accessToken, ownAddress } = args;
-    if (!messageRow.gmailThreadId || !messageRow.sentAt) return false;
+    if (!messageRow.mailThreadId || !messageRow.sentAt) return false;
 
-    const thread = await this.fetchThread(messageRow.gmailThreadId, accessToken);
+    const thread = await this.fetchThread(messageRow.mailThreadId, accessToken);
     if (!thread.messages || thread.messages.length === 0) return false;
 
     const reply = thread.messages.find((m) => {
@@ -178,7 +178,7 @@ export class GmailReplyPoller {
 
     await this.recordReply({
       messageRow,
-      gmailMessageId: reply.id,
+      mailMessageId: reply.id,
       snippet: cleanSnippet,
       receivedAtMs: Number(reply.internalDate),
     });
@@ -192,11 +192,11 @@ export class GmailReplyPoller {
    */
   private async recordReply(args: {
     messageRow: typeof messages.$inferSelect;
-    gmailMessageId: string;
+    mailMessageId: string;
     snippet: string | null;
     receivedAtMs: number;
   }): Promise<void> {
-    const { messageRow, gmailMessageId, snippet, receivedAtMs } = args;
+    const { messageRow, mailMessageId, snippet, receivedAtMs } = args;
     const receivedAt = new Date(receivedAtMs);
 
     await this.db
@@ -223,8 +223,8 @@ export class GmailReplyPoller {
         messageId: messageRow.id,
         metadata: {
           kind: "gmail_reply",
-          gmail_thread_id: messageRow.gmailThreadId,
-          gmail_message_id: gmailMessageId,
+          gmail_thread_id: messageRow.mailThreadId,
+          gmail_message_id: mailMessageId,
           original_message_id: messageRow.id,
         },
       },

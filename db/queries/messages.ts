@@ -54,8 +54,8 @@ export type InsertMessageInput = {
    *  Kept as a parameter so the caller is explicit about it. */
   status?: "sent";
   sentAt?: Date;
-  gmailThreadId?: string | null;
-  gmailMessageId?: string | null;
+  mailThreadId?: string | null;
+  mailMessageId?: string | null;
 };
 
 /**
@@ -93,8 +93,8 @@ export async function insertMessage(
       llmUsageId: input.llmUsageId,
       status: input.status ?? "sent",
       sentAt: input.sentAt ?? new Date(),
-      gmailThreadId: input.gmailThreadId ?? null,
-      gmailMessageId: input.gmailMessageId ?? null,
+      mailThreadId: input.mailThreadId ?? null,
+      mailMessageId: input.mailMessageId ?? null,
     })
     .returning({
       id: messages.id,

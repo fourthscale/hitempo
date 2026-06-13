@@ -7,7 +7,7 @@ import { EVENT_TASK_AUTO_EXECUTE } from "@/lib/sequences/engine/events";
 
 /**
  * Sprint 14 — bulk re-arm + replay every agent task for `userId` that
- * died with `auto_execution_failure_kind = 'gmail_auth'`.
+ * died with `auto_execution_failure_kind = 'mail_auth'`.
  *
  * Called from the Gmail OAuth callback right after a successful reconnect.
  * The flow :
@@ -51,7 +51,7 @@ export async function replayGmailAuthFailedTasksForUser(
         eq(tasks.assigneeId, userId),
         eq(tasks.status, "pending"),
         eq(tasks.autoExecutionStatus, "failed"),
-        eq(tasks.autoExecutionFailureKind, "gmail_auth"),
+        eq(tasks.autoExecutionFailureKind, "mail_auth"),
         // Guard against orphan rows from before the failure_kind column
         // shipped : without `isNotNull`, the next .where matches NULL via
         // the eq check but we want exact-kind match.

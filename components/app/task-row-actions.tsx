@@ -45,7 +45,7 @@ export type TaskGenerateContext = {
   preferredLocaleHint: string;
   detectedSignal: { type: string; daysAgo: number; isFresh: boolean } | null;
   brandBriefStatus: BrandBriefStatus;
-  gmail: { connected: boolean; address: string | null };
+  gmail: { connected: boolean; address: string | null; provider?: "gmail" | "outlook" | null };
   /**
    * Sprint 12 — when set, the task comes from a sequence and the dialog
    * shows the "message context scope" selector. The `resolvedScope` is

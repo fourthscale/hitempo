@@ -101,18 +101,21 @@ export const taskAutoExecutionStatus = pgEnum("task_auto_execution_status", [
 ]);
 
 /**
- * Sprint 14 — credential lifecycle for a user's connected Gmail OAuth.
+ * Sprint 14 — credential lifecycle for a user's connected mail OAuth
+ * (renamed from gmail_credential_status in sprint 16, same shape — the
+ * enum is provider-agnostic).
  *
  *   - `active`  : refresh + send work nominally. Default after `upsert`.
- *   - `revoked` : the refresh token died (Google returned `invalid_grant`),
- *                 OR the user revoked access in their Google account, OR
- *                 the OAuth app's Testing window expired, etc. We can't
- *                 distinguish causes — only that the next refresh failed.
- *                 The UI surfaces this as "Reconnect Gmail" ; on reconnect
- *                 the OAuth callback replays the gmail_auth-failed agent
- *                 tasks for this user.
+ *   - `revoked` : the refresh token died (provider returned
+ *                 `invalid_grant`), OR the user revoked access in their
+ *                 Google/Microsoft account, OR a provider-side window
+ *                 expired (Google Testing 7-day, Outlook 90-day
+ *                 inactivity). The UI surfaces this as "Reconnect
+ *                 Gmail" / "Reconnect Outlook" ; on reconnect the OAuth
+ *                 callback replays the mail_auth-failed agent tasks for
+ *                 this user.
  */
-export const gmailCredentialStatus = pgEnum("gmail_credential_status", [
+export const mailCredentialStatus = pgEnum("mail_credential_status", [
   "active", "revoked",
 ]);
 
@@ -585,11 +588,18 @@ export const tasks = pgTable(
     // `threadingMode` asks to reply to a previous thread ; all three stay
     // null for fresh-thread sends and non-email tasks. The send-side path
     // (agent executor + manual dialogs) reads these and passes them to the
-    // Gmail API + MIME builder — no sequence knowledge needed downstream.
-    // `subject` mirrors the thread's reference subject so the send picks
-    // it up with "Re: " prefix without an extra join on messages.
-    gmailThreadId: text("gmail_thread_id"),
-    gmailReplyToMessageId: text("gmail_reply_to_message_id"),
+    // Mail API (Gmail/Outlook) + MIME builder — no sequence knowledge
+    // needed downstream. `subject` mirrors the thread's reference subject
+    // so the send picks it up with "Re: " prefix without an extra join on
+    // messages.
+    //
+    // Sprint 16 — column renamed from `gmail_thread_id` /
+    // `gmail_reply_to_message_id` to `mail_thread_id` /
+    // `mail_reply_to_message_id` as part of the provider unification
+    // (the value is the Gmail threadId for Gmail users, Outlook
+    // conversationId for Outlook users — same role, both providers).
+    mailThreadId: text("mail_thread_id"),
+    mailReplyToMessageId: text("mail_reply_to_message_id"),
     subject: text("subject"),
     // Sprint 15 — full RFC 5322 References chain (space-separated message-ids
     // with angle brackets, oldest → newest, INCLUDING the parent at the end).
@@ -691,14 +701,16 @@ export const messages = pgTable(
 
     status: messageStatus("status").notNull().default("draft"),
 
-    // Gmail send + reply tracking (sprint 10).
-    // sentAt set when status flips to 'sent'. gmail_thread_id / gmail_message_id
-    // captured from the Gmail API send response. reply_received_at flipped by
-    // the polling job (Slice C). last_polled_at drives the partial index used
-    // to keep the polling query cheap.
+    // Mail send + reply tracking (sprint 10, renamed sprint 16).
+    // sentAt set when status flips to 'sent'. mail_thread_id /
+    // mail_message_id captured from the provider's send response
+    // (Gmail threadId/Message-ID, Outlook conversationId/internetMessageId).
+    // reply_received_at flipped by the polling job (Slice C).
+    // last_polled_at drives the partial index used to keep the polling
+    // query cheap.
     sentAt:            timestamp("sent_at",            { withTimezone: true }),
-    gmailThreadId:     text("gmail_thread_id"),
-    gmailMessageId:    text("gmail_message_id"),
+    mailThreadId:      text("mail_thread_id"),
+    mailMessageId:     text("mail_message_id"),
     replyReceivedAt:   timestamp("reply_received_at",  { withTimezone: true }),
     lastPolledAt:      timestamp("last_polled_at",     { withTimezone: true }),
 
@@ -709,8 +721,8 @@ export const messages = pgTable(
     byContact: index("idx_messages_contact").on(t.contactId, t.createdAt),
     byCompany: index("idx_messages_company").on(t.companyId, t.createdAt),
     byOrg:     index("idx_messages_org").on(t.organizationId, t.createdAt),
-    // Partial index keeps the reply-polling scan cheap: only sent messages with a Gmail
-    // thread and no reply yet are candidates.
+    // Partial index keeps the reply-polling scan cheap : only sent
+    // messages with a mail_thread_id and no reply yet are candidates.
     pendingReply: index("idx_messages_pending_reply").on(t.lastPolledAt),
   }),
 );
@@ -905,25 +917,39 @@ export const platformAdminAudit = pgTable(
 );
 
 /**
- * Gmail OAuth credentials — one row per user (Gmail is global to a person,
- * not org-scoped). organizationId tracks where they connected from, for audit.
- * Tokens are AES-256-GCM-encrypted at rest with a server-side key.
+ * Mail OAuth credentials — one row per user (the mailbox is global to a
+ * person, not org-scoped). organizationId tracks where they connected
+ * from, for audit. Tokens are AES-256-GCM-encrypted at rest with a
+ * server-side key.
  *
- * See docs/features/10-gmail-integration.md for the full design.
+ * Sprint 16 — formerly `user_gmail_credentials`. Renamed during the
+ * provider unification ; `provider` column now distinguishes 'gmail'
+ * from 'outlook' (a DB-level CHECK constraint pins the allowed values).
+ * Per-user uniqueness is preserved via the `userId` primary key — a
+ * user can only have ONE connected mailbox at a time. Switching
+ * provider replaces the row.
+ *
+ * See docs/features/{10-gmail-integration,16-outlook-integration}.md.
  */
-export const userGmailCredentials = pgTable("user_gmail_credentials", {
+export const userMailCredentials = pgTable("user_mail_credentials", {
   userId: uuid("user_id").primaryKey(),
   organizationId: uuid("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-  gmailAddress: text("gmail_address").notNull(),
+  /** 'gmail' | 'outlook'. CHECK constraint enforces at the DB layer. */
+  provider: text("provider").notNull(),
+  /** The user's email address on the connected provider — Gmail address
+   *  for Gmail users, Outlook address (or whatever they signed in with
+   *  on the Microsoft side) for Outlook users. */
+  emailAddress: text("email_address").notNull(),
   accessTokenEncrypted: text("access_token_encrypted").notNull(),
   refreshTokenEncrypted: text("refresh_token_encrypted").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   scopes: text("scopes").array().notNull(),
   connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-  /** Sprint 14 — credential lifecycle. Default `active` ; the GmailService
-   *  flips this to `revoked` when a refresh fails with `invalid_grant`. */
-  status: gmailCredentialStatus("status").notNull().default("active"),
+  /** Sprint 14 — credential lifecycle. Default `active` ; the
+   *  MailService flips this to `revoked` when a refresh fails with
+   *  `invalid_grant`. */
+  status: mailCredentialStatus("status").notNull().default("active"),
   /** When the credential was first observed dead. Cleared on reconnect
    *  (upsert resets status to `active` + this to NULL). */
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
@@ -934,8 +960,8 @@ export const userGmailCredentials = pgTable("user_gmail_credentials", {
    *  Useful for "your last sync was X minutes ago" UI + debug. */
   lastRefreshAttemptAt: timestamp("last_refresh_attempt_at", { withTimezone: true }),
 }, (t) => ({
-  byOrg: index("idx_gmail_creds_org").on(t.organizationId),
-  byStatus: index("idx_gmail_creds_status").on(t.status),
+  byOrg: index("idx_mail_creds_org").on(t.organizationId),
+  byStatus: index("idx_mail_creds_status").on(t.status),
 }));
 
 // ===========================================================================
@@ -1150,8 +1176,8 @@ export const sequenceStepExecutions = pgTable(
     // next send_email step in the enrolment resolve "what thread are we in"
     // with one indexed lookup. Null on non-email executions and on email
     // steps that haven't sent yet (status pending).
-    gmailThreadId:  text("gmail_thread_id"),
-    gmailMessageId: text("gmail_message_id"),
+    mailThreadId:  text("gmail_thread_id"),
+    mailMessageId: text("gmail_message_id"),
     subject:        text("subject"),
   },
   (t) => ({

@@ -691,8 +691,8 @@ export async function insertTaskForEnrolment(
      *  (agent executor + manual dialogs). All three travel together :
      *  thread id + the message id we'll reply to + the previous subject
      *  (used to build a "Re: ..." subject without an extra join). */
-    gmailThreadId?: string | null;
-    gmailReplyToMessageId?: string | null;
+    mailThreadId?: string | null;
+    mailReplyToMessageId?: string | null;
     subject?: string | null;
     /** Sprint 15 — full RFC 5322 References chain (space-separated message
      *  ids with angle brackets, oldest → newest, includes parent at end). */
@@ -716,8 +716,8 @@ export async function insertTaskForEnrolment(
       companyId: data.companyId ?? null,
       contactId: data.contactId ?? null,
       status: "pending",
-      gmailThreadId: data.gmailThreadId ?? null,
-      gmailReplyToMessageId: data.gmailReplyToMessageId ?? null,
+      mailThreadId: data.mailThreadId ?? null,
+      mailReplyToMessageId: data.mailReplyToMessageId ?? null,
       subject: data.subject ?? null,
       mailReferences: data.mailReferences ?? null,
     })

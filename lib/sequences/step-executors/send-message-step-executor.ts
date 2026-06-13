@@ -72,8 +72,8 @@ export class SendMessageStepExecutor implements SequenceStepExecutor {
       title,
       description,
       scheduling: config.scheduling,
-      gmailThreadId: threadContext?.threadId ?? null,
-      gmailReplyToMessageId: threadContext?.replyToMessageId ?? null,
+      mailThreadId: threadContext?.threadId ?? null,
+      mailReplyToMessageId: threadContext?.replyToMessageId ?? null,
       subject: threadContext?.subject ?? null,
       mailReferences: threadContext?.references ?? null,
     });

@@ -3,27 +3,26 @@ import { cookies } from "next/headers";
 import { getCurrentOrg } from "@/lib/auth/context";
 import {
   exchangeCodeForTokens,
-  fetchGoogleUserInfo,
-  getGoogleOAuthConfig,
-} from "@/lib/gmail/google-oauth";
-import { GmailCredentialsServiceFactory } from "@/lib/gmail/gmail-credentials-service-factory";
+  fetchMsGraphUserInfo,
+  getMsGraphOAuthConfig,
+} from "@/lib/outlook/ms-graph-oauth";
+import { MailCredentialsServiceFactory } from "@/lib/mail/mail-credentials-service-factory";
 import { replayGmailAuthFailedTasksForUser } from "@/lib/sequences/agents/replay-gmail-auth-failed-tasks";
 
-const STATE_COOKIE = "gmail_oauth_state";
+const STATE_COOKIE = "mail_oauth_state";
 
 /**
- * OAuth callback :
+ * Outlook OAuth callback. Sprint 16 — mirrors the Gmail callback for
+ * the Microsoft Graph flow.
  *
- *   GET /api/auth/gmail/callback?code=...&state=...
+ *   GET /api/auth/mail/callback?code=...&state=...
  *
  * 1. Validate state vs cookie (CSRF).
- * 2. Exchange code → tokens.
- * 3. Fetch the user's Google email (userinfo).
- * 4. Encrypt + persist via GmailCredentialsService (service-role DB write).
- * 5. Redirect to /settings/profile with a result flag.
- *
- * All error paths redirect back with `?gmail_error=<code>` so the page can
- * surface a clear FR/EN message via the i18n catalog.
+ * 2. Exchange code → tokens via the MS token endpoint.
+ * 3. Fetch the user's identity from Graph /me.
+ * 4. Persist into `user_mail_credentials` with provider='outlook'.
+ * 5. Replay any agent tasks that failed with mail_auth.
+ * 6. Redirect to /settings/profile with a result flag.
  */
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -36,7 +35,6 @@ export async function GET(request: NextRequest) {
   cookieStore.delete(STATE_COOKIE);
 
   if (userDeniedError) {
-    // User clicked "Cancel" on the consent screen — not a real error.
     return redirectToProfile("denied");
   }
   if (!code || !state || !expectedState || state !== expectedState) {
@@ -46,18 +44,18 @@ export async function GET(request: NextRequest) {
   try {
     const { user, membership } = await getCurrentOrg();
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-    const config = getGoogleOAuthConfig(siteUrl);
+    const config = getMsGraphOAuthConfig(siteUrl);
 
     const tokens = await exchangeCodeForTokens(config, code);
-    const userInfo = await fetchGoogleUserInfo(tokens.access_token);
+    const userInfo = await fetchMsGraphUserInfo(tokens.access_token);
 
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
     const scopes = tokens.scope.split(" ");
 
-    await GmailCredentialsServiceFactory.getInstance().upsert({
+    await MailCredentialsServiceFactory.getInstance().upsert({
       userId: user.id,
       organizationId: membership.organizationId,
-      provider: "gmail",
+      provider: "outlook",
       emailAddress: userInfo.email,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token!, // exchangeCode throws if missing
@@ -65,16 +63,6 @@ export async function GET(request: NextRequest) {
       scopes,
     });
 
-    // Sprint 14 — replay any agent tasks that failed because the
-    // previous credential died. The replay scope is intentionally
-    // narrow : only the rep's OWN failed tasks, with failure_kind =
-    // 'mail_auth', in 'pending' overall status. Non-auth failures
-    // (LLM, malformed step, etc.) require a manual decision.
-    //
-    // Best-effort : an error here must NOT block the reconnect itself.
-    // Worst case the user reconnects and still sees the failed tasks ;
-    // they can relaunch one-by-one via the existing "Relancer l'agent"
-    // CTA we shipped earlier.
     let replayedCount = 0;
     try {
       replayedCount = await replayGmailAuthFailedTasksForUser(
@@ -82,18 +70,22 @@ export async function GET(request: NextRequest) {
         user.id,
       );
     } catch (err) {
-      console.error("[gmail oauth callback] replay failed (non-fatal)", err);
+      console.error("[mail oauth callback] replay failed (non-fatal)", err);
     }
 
     return redirectToProfile("connected", replayedCount);
   } catch (err) {
-    console.error("[gmail oauth callback] failed", err);
+    console.error("[mail oauth callback] failed", err);
     return redirectToProfile("exchange_failed");
   }
 }
 
 function redirectToProfile(result: string, replayed?: number): NextResponse {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  // Reuse the same `gmail` / `gmail_replayed` query params as the Gmail
+  // callback so the existing profile page banner logic handles both
+  // providers without branching. Sprint 17 — rename to `mail` /
+  // `mail_replayed` once the existing handler is generalised.
   const qs = new URLSearchParams({ gmail: result });
   if (replayed && replayed > 0) qs.set("gmail_replayed", String(replayed));
   return NextResponse.redirect(`${siteUrl}/settings/profile?${qs.toString()}`);

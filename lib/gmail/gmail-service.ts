@@ -1,16 +1,22 @@
 import "server-only";
 
 import {
-  GmailCredentialsService,
-  type DecryptedGmailCredentials,
-} from "./gmail-credentials-service";
-import { getGoogleOAuthConfig, refreshAccessToken } from "./google-oauth";
+  MailCredentialsService,
+  type DecryptedMailCredentials,
+} from "@/lib/mail/mail-credentials-service";
+import type {
+  MailService,
+  MailSendInput,
+  MailSendResult,
+  MailThreadMessage,
+} from "@/lib/mail/mail-service";
 import {
-  GmailApiError,
-  GmailCredentialRevokedError,
-  GmailOAuthError,
-} from "./gmail-errors";
-import { MimeMessageBuilder, type MimeAttachment } from "./mime-message-strategy";
+  MailApiError,
+  MailCredentialRevokedError,
+  MailOAuthError,
+} from "@/lib/mail/mail-errors";
+import { getGoogleOAuthConfig, refreshAccessToken } from "./google-oauth";
+import { MimeMessageBuilder } from "./mime-message-strategy";
 
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const GMAIL_GET_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
@@ -22,77 +28,30 @@ const GMAIL_GET_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages";
  */
 const EXPIRY_BUFFER_MS = 60_000;
 
-export type GmailSendInput = {
-  userId: string;
-  to: string;
-  subject: string;
-  body: string;
-  /** When set, sends the message inside the existing thread (used for
-   *  follow-ups). The first send leaves this undefined and lets Gmail
-   *  create a new thread. */
-  replyToThreadId?: string;
-  /**
-   * Sprint 15 — Gmail RFC 5322 Message-ID of the message we're replying
-   * to. Injected as the `In-Reply-To` and (V1) `References` MIME header
-   * so the recipient's client renders this email as a real reply in the
-   * same conversation. Required by the threading flow ; ignored when
-   * `replyToThreadId` is omitted.
-   */
-  inReplyToMessageId?: string;
-  /**
-   * Sprint 15 — full RFC 5322 References chain. Space-separated message-ids
-   * (with angle brackets), oldest → newest, INCLUDING the parent at the end.
-   * Forwarded verbatim to the MIME builder so the recipient's client can
-   * splice the message into the right conversation when there are 2+ hops.
-   * Falls back to a single-id References header when omitted.
-   */
-  references?: string;
-  /** Optional PDF attachments. Caller is responsible for enforcing size
-   *  and type limits (see lib/gmail/attachment-limits.ts) — this layer
-   *  trusts the bytes it's handed and only encodes them into MIME. */
-  attachments?: MimeAttachment[];
-};
-
-export type GmailSendResult = {
-  threadId: string;
-  /** RFC 5322 Message-ID Gmail assigned to the outgoing message
-   *  (`<CABc...@mail.gmail.com>` style). Fetched via a follow-up
-   *  `messages.get` call right after the send because Gmail rewrites
-   *  any caller-supplied Message-ID server-side. This is what the
-   *  recipient's mail client actually sees in `Message-ID:` — and what
-   *  follow-up sends MUST reference in `In-Reply-To` / `References`
-   *  for cross-account threading to work. NOT to be confused with
-   *  Gmail's internal short id (`json.id` from the send response),
-   *  which is per-account and useless for threading.
-   *
-   *  On failure of the canonical fetch, this falls back to the
-   *  internal short id — threading will be broken on that follow-up
-   *  but the row is still populated (failure mode logged client-side). */
-  messageId: string;
-  fromAddress: string;
-};
-
 /**
- * Send + (later, Slice C) read facade for the Gmail API. Strategy-ready :
- * an OutlookService / SmtpService with the same surface can be added when
- * we support multiple senders, without changing call sites.
+ * Send + read facade for the Gmail API. Sprint 16 — implements the
+ * provider-agnostic `MailService` interface so call sites can target
+ * the interface and the `MailServiceFactory` routes to this impl or
+ * `OutlookService` based on the user's stored provider.
  *
- * Token refresh is handled here, not in `GmailCredentialsService`, because
- * it belongs to the "use the credentials" lifecycle — the credentials
- * service stays a pure CRUD layer.
+ * Token refresh is handled here, not in `MailCredentialsService`,
+ * because it belongs to the "use the credentials" lifecycle — the
+ * credentials service stays a pure CRUD layer.
  */
-export class GmailService {
+export class GmailService implements MailService {
+  public readonly providerName = "gmail" as const;
+
   constructor(
-    private readonly credentials: GmailCredentialsService,
+    private readonly credentials: MailCredentialsService,
     private readonly siteUrl: string,
   ) {}
 
-  public async send(input: GmailSendInput): Promise<GmailSendResult> {
+  public async send(input: MailSendInput): Promise<MailSendResult> {
     const creds = await this.credentials.requireForUser(input.userId);
     const accessToken = await this.ensureFreshAccessToken(creds);
 
     const mimeInput = {
-      from: creds.gmailAddress,
+      from: creds.emailAddress,
       to: input.to,
       subject: input.subject,
       body: input.body,
@@ -116,7 +75,7 @@ export class GmailService {
 
     if (!res.ok) {
       const errBody = await res.text();
-      throw new GmailApiError(`Gmail send failed (${res.status}): ${errBody}`, res.status);
+      throw new MailApiError(`Gmail send failed (${res.status}): ${errBody}`, res.status);
     }
 
     const json = (await res.json()) as { id: string; threadId: string };
@@ -146,7 +105,7 @@ export class GmailService {
       threadId: json.threadId,
       messageId: canonicalMessageId ?? json.id, // fall back to the internal id ;
       // threading will be broken in that case but the row still has a value.
-      fromAddress: creds.gmailAddress,
+      fromAddress: creds.emailAddress,
     };
   }
 
@@ -182,13 +141,63 @@ export class GmailService {
   }
 
   /**
+   * Sprint 16 — MailService.fetchThread implementation. Returns the
+   * messages of a Gmail thread normalised to the provider-agnostic
+   * `MailThreadMessage` shape. Used by the reply poller.
+   */
+  public async fetchThread(
+    userId: string,
+    threadId: string,
+  ): Promise<MailThreadMessage[]> {
+    const creds = await this.credentials.requireForUser(userId);
+    const accessToken = await this.ensureFreshAccessToken(creds);
+    const url = `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}`;
+    const res = await fetch(url, {
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new MailApiError(
+        `Gmail thread fetch failed (${res.status}): ${body}`,
+        res.status,
+      );
+    }
+    const json = (await res.json()) as {
+      messages?: Array<{
+        id?: string;
+        internalDate?: string;
+        snippet?: string;
+        payload?: { headers?: Array<{ name?: string; value?: string }> };
+      }>;
+    };
+    return (json.messages ?? []).map((m) => {
+      const headers = m.payload?.headers ?? [];
+      const find = (name: string): string | null => {
+        const lower = name.toLowerCase();
+        const h = headers.find(
+          (x) => typeof x.name === "string" && x.name.toLowerCase() === lower,
+        );
+        return h?.value ?? null;
+      };
+      const internalMs = Number(m.internalDate ?? 0);
+      return {
+        internalId: m.id ?? "",
+        messageId: find("message-id"),
+        from: find("from"),
+        snippet: m.snippet ?? null,
+        receivedAtMs: Number.isFinite(internalMs) ? internalMs : 0,
+      };
+    });
+  }
+
+  /**
    * Returns a valid access token. Refreshes proactively if we're within
    * `EXPIRY_BUFFER_MS` of expiry. The refreshed token is persisted before
    * being returned, so the next call (this request or a concurrent one)
    * sees the updated `expires_at` on the row.
    */
   private async ensureFreshAccessToken(
-    creds: DecryptedGmailCredentials,
+    creds: DecryptedMailCredentials,
   ): Promise<string> {
     if (creds.expiresAt.getTime() - Date.now() > EXPIRY_BUFFER_MS) {
       return creds.accessToken;
@@ -213,7 +222,7 @@ export class GmailService {
       // Anything else (5xx, network timeout, malformed response) is
       // re-raised as-is so the call site retries naturally on the next
       // attempt without poisoning the credential row.
-      if (err instanceof GmailOAuthError && /invalid_grant/i.test(err.message)) {
+      if (err instanceof MailOAuthError && /invalid_grant/i.test(err.message)) {
         await this.credentials
           .markRevoked(creds.userId, err.message)
           .catch((markErr) =>
@@ -222,7 +231,7 @@ export class GmailService {
               markErr,
             ),
           );
-        throw new GmailCredentialRevokedError(creds.userId, err.message);
+        throw new MailCredentialRevokedError(creds.userId, err.message);
       }
       throw err;
     }

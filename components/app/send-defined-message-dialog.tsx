@@ -46,7 +46,7 @@ export type SendDefinedMessageDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   taskId: string;
-  gmail: { connected: boolean; address: string | null };
+  gmail: { connected: boolean; address: string | null; provider?: "gmail" | "outlook" | null };
 };
 
 type State =
@@ -607,6 +607,8 @@ export function SendDefinedMessageDialog(p: SendDefinedMessageDialogProps) {
                       ? t("actions.gmailSending")
                       : gmailSent
                       ? t("actions.gmailSent")
+                      : p.gmail.provider === "outlook"
+                      ? t("actions.sendViaOutlook")
                       : t("actions.sendViaGmail")}
                   </span>
                 </button>

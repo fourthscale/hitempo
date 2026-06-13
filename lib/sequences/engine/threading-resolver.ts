@@ -90,13 +90,13 @@ export class ThreadingResolver {
     const row = await this.db.query.sequenceStepExecutions.findFirst({
       where: and(
         eq(sequenceStepExecutions.enrolmentId, enrolmentId),
-        isNotNull(sequenceStepExecutions.gmailThreadId),
-        isNotNull(sequenceStepExecutions.gmailMessageId),
+        isNotNull(sequenceStepExecutions.mailThreadId),
+        isNotNull(sequenceStepExecutions.mailMessageId),
       ),
       orderBy: [desc(sequenceStepExecutions.executedAt)],
       columns: {
-        gmailThreadId: true,
-        gmailMessageId: true,
+        mailThreadId: true,
+        mailMessageId: true,
         subject: true,
         executionCounter: true,
       },
@@ -110,13 +110,13 @@ export class ThreadingResolver {
     const row = await this.db.query.sequenceStepExecutions.findFirst({
       where: and(
         eq(sequenceStepExecutions.enrolmentId, enrolmentId),
-        isNotNull(sequenceStepExecutions.gmailThreadId),
-        isNotNull(sequenceStepExecutions.gmailMessageId),
+        isNotNull(sequenceStepExecutions.mailThreadId),
+        isNotNull(sequenceStepExecutions.mailMessageId),
       ),
       orderBy: [asc(sequenceStepExecutions.executionCounter)],
       columns: {
-        gmailThreadId: true,
-        gmailMessageId: true,
+        mailThreadId: true,
+        mailMessageId: true,
         subject: true,
         executionCounter: true,
       },
@@ -136,7 +136,7 @@ export class ThreadingResolver {
    *     → messages (interactions.message_id → messages.id)
    *     → tasks   (messages.task_id → tasks.id, sequence_enrolment_id = enrolment)
    *
-   * From that we read `messages.gmailThreadId` and look up the
+   * From that we read `messages.mailThreadId` and look up the
    * `sequence_step_executions` row whose thread matches.
    */
   private async findLastAnsweredStepThread(input: {
@@ -146,7 +146,7 @@ export class ThreadingResolver {
   }): Promise<ThreadContext | null> {
     const rows = await this.db
       .select({
-        threadId: messages.gmailThreadId,
+        threadId: messages.mailThreadId,
       })
       .from(interactions)
       .innerJoin(messages, eq(messages.id, interactions.messageId))
@@ -157,7 +157,7 @@ export class ThreadingResolver {
           eq(interactions.contactId, input.contactId),
           eq(interactions.type, "email_received"),
           eq(tasks.sequenceEnrolmentId, input.enrolmentId),
-          isNotNull(messages.gmailThreadId),
+          isNotNull(messages.mailThreadId),
         ),
       )
       .orderBy(desc(interactions.occurredAt))
@@ -182,13 +182,13 @@ export class ThreadingResolver {
     const row = await this.db.query.sequenceStepExecutions.findFirst({
       where: and(
         eq(sequenceStepExecutions.enrolmentId, enrolmentId),
-        eq(sequenceStepExecutions.gmailThreadId, threadId),
-        isNotNull(sequenceStepExecutions.gmailMessageId),
+        eq(sequenceStepExecutions.mailThreadId, threadId),
+        isNotNull(sequenceStepExecutions.mailMessageId),
       ),
       orderBy: [desc(sequenceStepExecutions.executedAt)],
       columns: {
-        gmailThreadId: true,
-        gmailMessageId: true,
+        mailThreadId: true,
+        mailMessageId: true,
         subject: true,
         executionCounter: true,
       },
@@ -215,19 +215,19 @@ export class ThreadingResolver {
   ): Promise<string> {
     const rows = await this.db
       .select({
-        gmailMessageId: sequenceStepExecutions.gmailMessageId,
+        mailMessageId: sequenceStepExecutions.mailMessageId,
       })
       .from(sequenceStepExecutions)
       .where(
         and(
           eq(sequenceStepExecutions.enrolmentId, enrolmentId),
-          isNotNull(sequenceStepExecutions.gmailMessageId),
+          isNotNull(sequenceStepExecutions.mailMessageId),
           lte(sequenceStepExecutions.executionCounter, targetExecutionCounter),
         ),
       )
       .orderBy(asc(sequenceStepExecutions.executionCounter));
     return rows
-      .map((r) => r.gmailMessageId)
+      .map((r) => r.mailMessageId)
       .filter((id): id is string => Boolean(id))
       .map(wrapAngles)
       .join(" ");
@@ -242,27 +242,27 @@ export class ThreadingResolver {
     enrolmentId: string,
     row:
       | {
-          gmailThreadId: string | null;
-          gmailMessageId: string | null;
+          mailThreadId: string | null;
+          mailMessageId: string | null;
           subject: string | null;
           executionCounter: number;
         }
       | null
       | undefined,
   ): Promise<ThreadContext | null> {
-    if (!row || !row.gmailThreadId || !row.gmailMessageId) return null;
+    if (!row || !row.mailThreadId || !row.mailMessageId) return null;
     const references = await this.buildReferencesChain(
       enrolmentId,
       row.executionCounter,
     );
     return {
-      threadId: row.gmailThreadId,
-      replyToMessageId: row.gmailMessageId,
+      threadId: row.mailThreadId,
+      replyToMessageId: row.mailMessageId,
       subject: row.subject ?? "",
       // Defensive : if the chain came back empty (shouldn't happen since
       // the target row itself is in the set), fall back to the parent id
       // alone so the header is still well-formed.
-      references: references || wrapAngles(row.gmailMessageId),
+      references: references || wrapAngles(row.mailMessageId),
     };
   }
 }

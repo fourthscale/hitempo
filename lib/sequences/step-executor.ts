@@ -38,8 +38,8 @@ export interface SequenceExecutorServices {
      * Sprint 15 — pre-resolved Gmail thread context (set by the
      * SendMessageStepExecutor when the step's `threadingMode` asked to
      * reply to a previous thread). All three travel together :
-     *   - `gmailThreadId`         : the thread Gmail should reuse.
-     *   - `gmailReplyToMessageId` : the message id we'll reply to (for the
+     *   - `mailThreadId`         : the thread Gmail should reuse.
+     *   - `mailReplyToMessageId` : the message id we'll reply to (for the
      *                                In-Reply-To / References headers).
      *   - `subject`               : the previous subject so the sender can
      *                                build a "Re: <prev>" without joining
@@ -50,8 +50,8 @@ export interface SequenceExecutorServices {
      *                                the MIME `References:` header.
      * Stays null on fresh-thread sends and on non-email tasks.
      */
-    gmailThreadId?: string | null;
-    gmailReplyToMessageId?: string | null;
+    mailThreadId?: string | null;
+    mailReplyToMessageId?: string | null;
     subject?: string | null;
     mailReferences?: string | null;
   }): Promise<{

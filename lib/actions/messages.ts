@@ -670,8 +670,8 @@ async function persistSentMessage(args: {
     content: data.content,
     llmUsageId,
     sentAt: new Date(),
-    gmailThreadId: gmail?.threadId ?? null,
-    gmailMessageId: gmail?.messageId ?? null,
+    mailThreadId: gmail?.threadId ?? null,
+    mailMessageId: gmail?.messageId ?? null,
   });
 
   // 2. Patch the llm_usage backref — best-effort, never blocks the commit.
@@ -830,7 +830,7 @@ export async function logSentInteractionAction(
 export type SendMessageViaGmailResult = {
   messageId: string;
   threadId: string;
-  gmailMessageId: string;
+  mailMessageId: string;
   interactionId: string;
   taskCompleted: boolean;
   fromAddress: string;
@@ -954,7 +954,7 @@ export async function sendMessageViaGmailAction(
     void captureThreadOnStepExecution({
       taskId: data.taskId,
       threadId: sendResult.threadId,
-      gmailMessageId: sendResult.messageId,
+      mailMessageId: sendResult.messageId,
       subject: isThreaded ? effectiveSubject : subject,
     });
   }
@@ -967,7 +967,7 @@ export async function sendMessageViaGmailAction(
   return {
     messageId: persisted.messageId,
     threadId: sendResult.threadId,
-    gmailMessageId: sendResult.messageId,
+    mailMessageId: sendResult.messageId,
     interactionId: persisted.interactionId,
     taskCompleted: persisted.taskCompleted,
     fromAddress: sendResult.fromAddress,
@@ -997,8 +997,8 @@ async function loadTaskThreadContext(
   if (!taskId) return null;
   const row = await getDb()
     .select({
-      gmailThreadId: tasksTable.gmailThreadId,
-      gmailReplyToMessageId: tasksTable.gmailReplyToMessageId,
+      mailThreadId: tasksTable.mailThreadId,
+      mailReplyToMessageId: tasksTable.mailReplyToMessageId,
       subject: tasksTable.subject,
       mailReferences: tasksTable.mailReferences,
     })
@@ -1006,10 +1006,10 @@ async function loadTaskThreadContext(
     .where(and(eq(tasksTable.id, taskId), eq(tasksTable.organizationId, orgId)))
     .limit(1);
   const r = row[0];
-  if (!r || !r.gmailThreadId || !r.gmailReplyToMessageId) return null;
+  if (!r || !r.mailThreadId || !r.mailReplyToMessageId) return null;
   return {
-    threadId: r.gmailThreadId,
-    replyToMessageId: r.gmailReplyToMessageId,
+    threadId: r.mailThreadId,
+    replyToMessageId: r.mailReplyToMessageId,
     subject: r.subject ?? "",
     references: r.mailReferences ?? "",
   };
@@ -1025,15 +1025,15 @@ async function loadTaskThreadContext(
 async function captureThreadOnStepExecution(input: {
   taskId: string;
   threadId: string;
-  gmailMessageId: string;
+  mailMessageId: string;
   subject: string;
 }): Promise<void> {
   try {
     await getDb()
       .update(sequenceStepExecutions)
       .set({
-        gmailThreadId: input.threadId,
-        gmailMessageId: input.gmailMessageId,
+        mailThreadId: input.threadId,
+        mailMessageId: input.mailMessageId,
         subject: input.subject || null,
       })
       .where(eq(sequenceStepExecutions.taskId, input.taskId));

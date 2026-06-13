@@ -1,10 +1,11 @@
 import { inngest } from "@/lib/inngest/client";
-import { GmailReplyPollerFactory } from "@/lib/gmail/gmail-reply-poller-factory";
+import { MailReplyPollerFactory } from "@/lib/mail/mail-reply-poller-factory";
 
 /**
- * Inngest cron functions that scan connected Gmail mailboxes for replies
- * to messages we sent. All seven cron definitions share the same handler
- * `handleTick` — only the schedule differs.
+ * Inngest cron functions that scan connected mailboxes (Gmail or
+ * Outlook, routed per user by the unified MailReplyPoller) for replies
+ * to messages we sent. All seven cron definitions share the same
+ * handler `handleTick` — only the schedule differs.
  *
  * Cadence per Ludovic (2026-05-28) :
  *   - 9h-12h     → every 10 min   (peak morning)
@@ -28,15 +29,19 @@ const HANDLER_ID = "gmail/poll-replies";
 
 async function handleTick({ step }: { step: import("inngest").GetStepTools<typeof inngest> }) {
   const userIds = await step.run("list-connected-users", async () => {
-    return GmailReplyPollerFactory.getInstance().listConnectedUserIds();
+    return MailReplyPollerFactory.getInstance().listConnectedUserIds();
   });
 
   // Fan out : one step per user. If one fails, the others still run and
-  // Inngest retries the failed step independently with exponential backoff.
+  // Inngest retries the failed step independently with exponential
+  // backoff. Each user step routes internally to either
+  // GmailService.fetchThread or OutlookService.fetchThread depending
+  // on the user's stored provider — handled by MailReplyPoller via the
+  // MailServiceFactory.
   await Promise.all(
     userIds.map((userId) =>
       step.run(`poll-${userId}`, async () => {
-        return GmailReplyPollerFactory.getInstance().pollUser(userId);
+        return MailReplyPollerFactory.getInstance().pollUser(userId);
       }),
     ),
   );

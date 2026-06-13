@@ -53,7 +53,7 @@ export default async function ProfilePage({
           eq(tasks.assigneeId, user.id),
           eq(tasks.status, "pending"),
           eq(tasks.autoExecutionStatus, "failed"),
-          eq(tasks.autoExecutionFailureKind, "gmail_auth"),
+          eq(tasks.autoExecutionFailureKind, "mail_auth"),
         ),
       )
       .then((rows) => rows[0]?.c ?? 0),
@@ -187,7 +187,7 @@ export default async function ProfilePage({
         />
       </Card>
 
-      {/* Email d'envoi — Gmail OAuth */}
+      {/* Sending mailbox — Gmail or Outlook (one provider at a time per user). */}
       <Card className="p-6 mb-6">
         <h2 className="font-serif text-base font-bold mb-1">{t("gmailTitle")}</h2>
         <p className="text-sm text-muted-foreground mb-4">{t("gmailDescription")}</p>
@@ -195,15 +195,13 @@ export default async function ProfilePage({
         {gmailCreds && isGmailRevoked ? (
           // Sprint 14 — credential row still exists but the refresh token
           // died. We show a clear amber-warning card with the diagnosis,
-          // the date of death, and a prominent Reconnect CTA. The
-          // Disconnect button stays available so the user can wipe the
-          // credential entirely if they want to switch addresses.
+          // the date of death, and a provider-aware Reconnect CTA.
           <div className="space-y-3">
             <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3">
               <AlertCircle className="h-5 w-5 shrink-0 text-amber-700 mt-0.5" />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-amber-900">
-                  {t("gmailRevokedTitle", { address: gmailCreds.gmailAddress })}
+                  {t("gmailRevokedTitle", { address: gmailCreds.emailAddress })}
                 </div>
                 <div className="text-xs text-amber-800 mt-1">
                   {gmailStatus.revokedAt
@@ -225,11 +223,17 @@ export default async function ProfilePage({
             </div>
             <div className="flex items-center gap-2">
               <Link
-                href="/api/auth/gmail/connect"
+                href={gmailCreds.provider === "outlook" ? "/api/auth/mail/connect?provider=outlook" : "/api/auth/gmail/connect"}
                 className="inline-flex items-center gap-3 h-10 pl-3 pr-4 rounded-md bg-white border border-[#dadce0] text-[#3c4043] text-sm font-medium hover:shadow-md hover:bg-[#f8faff] transition-all"
               >
-                <GmailIcon className="h-[18px] w-[18px] shrink-0" />
-                <span>{t("gmailReconnect")}</span>
+                {gmailCreds.provider === "outlook"
+                  ? <Mail className="h-[18px] w-[18px] shrink-0 text-[#0078d4]" />
+                  : <GmailIcon className="h-[18px] w-[18px] shrink-0" />}
+                <span>
+                  {gmailCreds.provider === "outlook"
+                    ? t("outlookReconnect")
+                    : t("gmailReconnect")}
+                </span>
               </Link>
               <form action={disconnectGmailAction}>
                 <SubmitButton size="sm" variant="outline" className="text-red-600 hover:bg-red-50">
@@ -241,9 +245,16 @@ export default async function ProfilePage({
         ) : gmailCreds ? (
           <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-secondary/30 px-4 py-3">
             <div className="flex items-center gap-3 min-w-0">
-              <Mail className="h-4 w-4 shrink-0 text-emerald-700" />
+              {gmailCreds.provider === "outlook"
+                ? <Mail className="h-4 w-4 shrink-0 text-[#0078d4]" />
+                : <Mail className="h-4 w-4 shrink-0 text-emerald-700" />}
               <div className="min-w-0">
-                <div className="text-sm font-medium truncate">{gmailCreds.gmailAddress}</div>
+                <div className="text-sm font-medium truncate">
+                  {gmailCreds.emailAddress}
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {gmailCreds.provider === "outlook" ? "Outlook" : "Gmail"}
+                  </span>
+                </div>
                 <div className="text-xs text-muted-foreground">
                   {t("gmailConnectedSince", {
                     date: formatDateInTz(gmailCreds.connectedAt, locale, { timeZone: memberTimezone, dateStyle: "medium" }),
@@ -258,14 +269,25 @@ export default async function ProfilePage({
             </form>
           </div>
         ) : (
+          // Not connected — show both provider buttons. The user picks one.
+          // Switching providers later goes through Disconnect + Connect again.
           <div className="space-y-3">
-            <Link
-              href="/api/auth/gmail/connect"
-              className="inline-flex items-center gap-3 h-10 pl-3 pr-4 rounded-md bg-white border border-[#dadce0] text-[#3c4043] text-sm font-medium hover:shadow-md hover:bg-[#f8faff] transition-all"
-            >
-              <GmailIcon className="h-[18px] w-[18px] shrink-0" />
-              <span>{t("gmailConnect")}</span>
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/api/auth/gmail/connect"
+                className="inline-flex items-center gap-3 h-10 pl-3 pr-4 rounded-md bg-white border border-[#dadce0] text-[#3c4043] text-sm font-medium hover:shadow-md hover:bg-[#f8faff] transition-all"
+              >
+                <GmailIcon className="h-[18px] w-[18px] shrink-0" />
+                <span>{t("gmailConnect")}</span>
+              </Link>
+              <Link
+                href="/api/auth/mail/connect?provider=outlook"
+                className="inline-flex items-center gap-3 h-10 pl-3 pr-4 rounded-md bg-white border border-[#dadce0] text-[#3c4043] text-sm font-medium hover:shadow-md hover:bg-[#f8faff] transition-all"
+              >
+                <Mail className="h-[18px] w-[18px] shrink-0 text-[#0078d4]" />
+                <span>{t("outlookConnect")}</span>
+              </Link>
+            </div>
             <p className="text-xs text-muted-foreground">{t("gmailScopeNotice")}</p>
           </div>
         )}

@@ -18,8 +18,8 @@ import { ThreadingResolver } from "@/lib/sequences/engine/threading-resolver";
  */
 
 type FindFirstResult = {
-  gmailThreadId: string | null;
-  gmailMessageId: string | null;
+  mailThreadId: string | null;
+  mailMessageId: string | null;
   subject: string | null;
   executionCounter: number;
 } | null;
@@ -109,8 +109,8 @@ describe("ThreadingResolver.resolve", () => {
   it("last_email_step returns the most recent thread row with a chain", async () => {
     const db = makeDb({
       findFirst: {
-        gmailThreadId: "t-last",
-        gmailMessageId: "m-last",
+        mailThreadId: "t-last",
+        mailMessageId: "m-last",
         subject: "Bonjour",
         executionCounter: 3,
       },
@@ -118,9 +118,9 @@ describe("ThreadingResolver.resolve", () => {
       // ordered oldest → newest. Bare ids — the resolver wraps angles.
       selectResultSequence: [
         [
-          { gmailMessageId: "m-0" },
-          { gmailMessageId: "m-1" },
-          { gmailMessageId: "m-last" },
+          { mailMessageId: "m-0" },
+          { mailMessageId: "m-1" },
+          { mailMessageId: "m-last" },
         ],
       ],
     });
@@ -148,13 +148,13 @@ describe("ThreadingResolver.resolve", () => {
   it("entry_email_step returns the earliest thread row with a single-id chain", async () => {
     const db = makeDb({
       findFirst: {
-        gmailThreadId: "t-entry",
-        gmailMessageId: "m-entry",
+        mailThreadId: "t-entry",
+        mailMessageId: "m-entry",
         subject: "Pitch",
         executionCounter: 1,
       },
       // Only the entry message itself is in the chain (it is the first).
-      selectResultSequence: [[{ gmailMessageId: "m-entry" }]],
+      selectResultSequence: [[{ mailMessageId: "m-entry" }]],
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const out = await new ThreadingResolver(db as any).resolve({
@@ -172,13 +172,13 @@ describe("ThreadingResolver.resolve", () => {
   it("preserves existing angle brackets when the DB stored them", async () => {
     const db = makeDb({
       findFirst: {
-        gmailThreadId: "t-x",
-        gmailMessageId: "<m-3>",
+        mailThreadId: "t-x",
+        mailMessageId: "<m-3>",
         subject: "Sujet",
         executionCounter: 3,
       },
       selectResultSequence: [
-        [{ gmailMessageId: "m-1" }, { gmailMessageId: "<m-2>" }, { gmailMessageId: "<m-3>" }],
+        [{ mailMessageId: "m-1" }, { mailMessageId: "<m-2>" }, { mailMessageId: "<m-3>" }],
       ],
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -195,14 +195,14 @@ describe("ThreadingResolver.resolve", () => {
     //   2. References chain builder for the last_email fallback
     const db = makeDb({
       findFirst: {
-        gmailThreadId: "t-last",
-        gmailMessageId: "m-last",
+        mailThreadId: "t-last",
+        mailMessageId: "m-last",
         subject: "Bonjour",
         executionCounter: 2,
       },
       selectResultSequence: [
         [], // no inbound
-        [{ gmailMessageId: "m-0" }, { gmailMessageId: "m-last" }],
+        [{ mailMessageId: "m-0" }, { mailMessageId: "m-last" }],
       ],
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -226,14 +226,14 @@ describe("ThreadingResolver.resolve", () => {
       // findFirst (called by findExecutionByThreadId) returns the
       // execution row owning that thread.
       findFirst: {
-        gmailThreadId: "t-answered",
-        gmailMessageId: "m-answered",
+        mailThreadId: "t-answered",
+        mailMessageId: "m-answered",
         subject: "Re: Bonjour",
         executionCounter: 2,
       },
       selectResultSequence: [
         [{ threadId: "t-answered" }],
-        [{ gmailMessageId: "m-0" }, { gmailMessageId: "m-answered" }],
+        [{ mailMessageId: "m-0" }, { mailMessageId: "m-answered" }],
       ],
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

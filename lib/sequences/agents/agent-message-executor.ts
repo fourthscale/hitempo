@@ -19,14 +19,14 @@ import {
 } from "@/lib/messages/types";
 import type { SequenceStepAttachmentRef } from "@/lib/sequences/types";
 import type { MessageGenerationOrchestrator } from "@/lib/messages/message-generation-orchestrator";
-import type { GmailService } from "@/lib/gmail/gmail-service";
+import { MailServiceFactory } from "@/lib/mail/mail-service-factory";
 import type { AttachmentStorageService } from "@/lib/gmail/attachment-storage-service";
 import { prefixRe, type MimeAttachment } from "@/lib/gmail/mime-message-strategy";
 import {
-  GmailCredentialsNotFoundError,
-  GmailApiError,
-  GmailCredentialRevokedError,
-} from "@/lib/gmail/gmail-errors";
+  MailCredentialsNotFoundError,
+  MailApiError,
+  MailCredentialRevokedError,
+} from "@/lib/mail/mail-errors";
 import { insertMessage } from "@/db/queries/messages";
 import { insertMessageAttachment } from "@/db/queries/message-attachments";
 import { logInteraction } from "@/db/queries/interactions";
@@ -69,7 +69,6 @@ export class AgentMessageExecutor {
   constructor(
     private readonly db: Db,
     private readonly orchestrator: MessageGenerationOrchestrator,
-    private readonly gmail: GmailService,
     private readonly storage: AttachmentStorageService,
   ) {}
 
@@ -95,19 +94,19 @@ export class AgentMessageExecutor {
       // can replay only the tasks that died for an auth reason (no point
       // replaying an LLM crash or a malformed step config).
       //
-      // Both error types map to `gmail_auth` :
-      //   - GmailCredentialRevokedError : refresh failed with invalid_grant
-      //   - GmailCredentialsNotFoundError : user disconnected mid-flight, or
+      // Both error types map to `mail_auth` (provider-agnostic) :
+      //   - MailCredentialRevokedError : refresh failed with invalid_grant
+      //   - MailCredentialsNotFoundError : user disconnected mid-flight, or
       //     never had Gmail connected when the task was scheduled. The
       //     remediation in both cases is "Reconnect Gmail" — so they share
       //     the replay path.
       //
       // Anything else is `other` — the user has to inspect the error
       // message and decide whether to relaunch manually.
-      const failureKind: "gmail_auth" | "other" =
-        err instanceof GmailCredentialRevokedError ||
-        err instanceof GmailCredentialsNotFoundError
-          ? "gmail_auth"
+      const failureKind: "mail_auth" | "other" =
+        err instanceof MailCredentialRevokedError ||
+        err instanceof MailCredentialsNotFoundError
+          ? "mail_auth"
           : "other";
       await this.markTaskAutoExecutionFailed(input.taskId, reason, failureKind).catch(
         (markErr) => {
@@ -146,8 +145,8 @@ export class AgentMessageExecutor {
         status: true,
         autoExecutionStatus: true,
         sequenceEnrolmentId: true,
-        gmailThreadId: true,
-        gmailReplyToMessageId: true,
+        mailThreadId: true,
+        mailReplyToMessageId: true,
         subject: true,
         mailReferences: true,
       },
@@ -246,7 +245,7 @@ export class AgentMessageExecutor {
         sequenceEnrolmentId: ctx.sequenceEnrolmentId,
         // Sprint 15 — when the engine has stamped a thread on the task,
         // the prompt switches to "body-only follow-up" mode.
-        isThreadFollowUp: Boolean(task.gmailThreadId && task.gmailReplyToMessageId),
+        isThreadFollowUp: Boolean(task.mailThreadId && task.mailReplyToMessageId),
       });
       subject = generated.subject ?? "";
       body = generated.body;
@@ -269,30 +268,35 @@ export class AgentMessageExecutor {
     // pass the thread id + In-Reply-To message id through to Gmail. With
     // both null we send as a fresh thread (the legacy path).
     const isThreaded = Boolean(
-      task.gmailThreadId && task.gmailReplyToMessageId,
+      task.mailThreadId && task.mailReplyToMessageId,
     );
     const effectiveSubject = isThreaded
       ? prefixRe(task.subject ?? subject ?? "")
       : subject || (locale === "fr" ? "(sans objet)" : "(no subject)");
     let sendResult;
     try {
-      sendResult = await this.gmail.send({
+      // Sprint 16 — resolve the right provider per user. MailServiceFactory
+      // throws MailCredentialsNotFoundError when the user has no
+      // connected mailbox, which the outer catch classifies as
+      // `mail_auth` so the OAuth callback replays it on next reconnect.
+      const mail = await MailServiceFactory.forUser(task.assigneeId);
+      sendResult = await mail.send({
         userId: task.assigneeId,
         to: contact.email,
         subject: effectiveSubject,
         body,
         attachments: stepAttachments.length > 0 ? stepAttachments : undefined,
-        replyToThreadId: task.gmailThreadId ?? undefined,
-        inReplyToMessageId: task.gmailReplyToMessageId ?? undefined,
+        replyToThreadId: task.mailThreadId ?? undefined,
+        inReplyToMessageId: task.mailReplyToMessageId ?? undefined,
         references: task.mailReferences ?? undefined,
       });
     } catch (err) {
-      if (err instanceof GmailCredentialsNotFoundError) {
+      if (err instanceof MailCredentialsNotFoundError) {
         throw new Error(
           "Assignee has not connected Gmail — agent cannot send on their behalf",
         );
       }
-      if (err instanceof GmailApiError) {
+      if (err instanceof MailApiError) {
         throw new Error(`Gmail send failed: ${err.message}`);
       }
       throw err;
@@ -322,8 +326,8 @@ export class AgentMessageExecutor {
         content: fullContent,
         llmUsageId,
         sentAt: new Date(),
-        gmailThreadId: sendResult.threadId,
-        gmailMessageId: sendResult.messageId,
+        mailThreadId: sendResult.threadId,
+        mailMessageId: sendResult.messageId,
       },
       this.db,
     );
@@ -383,7 +387,7 @@ export class AgentMessageExecutor {
     void this.captureThreadOnStepExecution({
       taskId,
       threadId: sendResult.threadId,
-      gmailMessageId: sendResult.messageId,
+      mailMessageId: sendResult.messageId,
       subject: finalSubject,
     });
 
@@ -550,15 +554,15 @@ export class AgentMessageExecutor {
   private async captureThreadOnStepExecution(input: {
     taskId: string;
     threadId: string;
-    gmailMessageId: string;
+    mailMessageId: string;
     subject: string;
   }): Promise<void> {
     try {
       await this.db
         .update(sequenceStepExecutions)
         .set({
-          gmailThreadId: input.threadId,
-          gmailMessageId: input.gmailMessageId,
+          mailThreadId: input.threadId,
+          mailMessageId: input.mailMessageId,
           subject: input.subject || null,
         })
         .where(eq(sequenceStepExecutions.taskId, input.taskId));
@@ -585,7 +589,7 @@ export class AgentMessageExecutor {
   private async markTaskAutoExecutionFailed(
     taskId: string,
     reason: string,
-    failureKind: "gmail_auth" | "other",
+    failureKind: "mail_auth" | "other",
   ): Promise<void> {
     // Defensive — should be caught by execute()'s upfront guard, but a
     // belt-and-braces check here prevents an UNDEFINED_VALUE blast from a

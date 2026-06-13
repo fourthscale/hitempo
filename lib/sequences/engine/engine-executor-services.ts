@@ -63,8 +63,8 @@ export class EngineExecutorServices implements SequenceExecutorServices {
     scheduling?: TaskScheduling;
     /** Sprint 15 — pre-resolved Gmail thread context. See
      *  SequenceExecutorServices.createTask doc. */
-    gmailThreadId?: string | null;
-    gmailReplyToMessageId?: string | null;
+    mailThreadId?: string | null;
+    mailReplyToMessageId?: string | null;
     subject?: string | null;
     mailReferences?: string | null;
   }): Promise<{ taskId: string; scheduledFor: Date | null }> {
@@ -138,8 +138,8 @@ export class EngineExecutorServices implements SequenceExecutorServices {
       dueAtAllDay,
       estimatedDurationMinutes:
         merged.estimatedDurationMinutes ?? DEFAULT_SCHEDULING.estimatedDurationMinutes,
-      gmailThreadId: input.gmailThreadId ?? null,
-      gmailReplyToMessageId: input.gmailReplyToMessageId ?? null,
+      mailThreadId: input.mailThreadId ?? null,
+      mailReplyToMessageId: input.mailReplyToMessageId ?? null,
       subject: input.subject ?? null,
       mailReferences: input.mailReferences ?? null,
     });
